@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import urllib.request
 from pathlib import Path
 
@@ -58,12 +59,53 @@ def git_diff(base: str, head: str) -> list[str]:
     return [line for line in output.splitlines() if line]
 
 
+def commit_exists(rev: str) -> bool:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+        capture_output=True,
+        text=True,
+    )
+    return completed.returncode == 0
+
+
+def ensure_pr_base() -> str:
+    """Return a revision that `git diff` can read.
+
+    A container checkout of the pull request merge ref has failed to resolve
+    `pull_request.base.sha` even after `fetch-depth: 0`. Fetch the base branch,
+    then the commit itself, before falling back to that SHA.
+    """
+    sha = os.environ.get("PR_BASE_SHA", "")
+    ref = os.environ.get("PR_BASE_REF") or "main"
+    remote_ref = f"origin/{ref}"
+    if sha and commit_exists(sha):
+        return sha
+    if not commit_exists(remote_ref):
+        subprocess.run(["git", "fetch", "--no-tags", "origin", ref], check=False)
+    if commit_exists(remote_ref):
+        return remote_ref
+    if not sha:
+        return remote_ref
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "origin", f"{sha}:refs/remotes/origin/pr-base"],
+        check=True,
+    )
+    return "refs/remotes/origin/pr-base"
+
+
 def changed_files() -> list[str]:
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     if event == "workflow_dispatch":
         return ["Packages/GlassfinCore/Package.swift"]
     if event == "pull_request":
-        return pull_request_files()
+        if not os.environ.get("GITHUB_TOKEN"):
+            print("GITHUB_TOKEN is empty; using git diff", file=sys.stderr)
+        else:
+            try:
+                return pull_request_files()
+            except Exception as error:
+                print(f"pulls files API failed ({error}); falling back to git diff", file=sys.stderr)
+        return git_diff(ensure_pr_base(), "HEAD")
     base = os.environ.get("PUSH_BEFORE", "")
     head = os.environ.get("GITHUB_SHA", "HEAD")
     if not base or set(base) == {"0"}:
@@ -94,7 +136,7 @@ def main() -> None:
         Path(output).open("a", encoding="utf-8").write(lines)
     else:
         print(lines, end="")
-        print(f"# {len(files)} changed files", file=__import__("sys").stderr)
+    print(f"# {len(files)} changed files", file=sys.stderr)
 
 
 if __name__ == "__main__":

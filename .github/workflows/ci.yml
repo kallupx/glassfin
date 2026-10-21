@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -39,7 +40,10 @@ jobs:
           fetch-depth: 0
       - id: filter
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: python3 scripts/ci-path-filter.py
       - uses: actions/cache@v4
