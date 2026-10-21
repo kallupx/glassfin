@@ -17,11 +17,23 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    container: swift:6.2
     timeout-minutes: 10
     outputs:
       macos: ${{ steps.filter.outputs.macos }}
       ios: ${{ steps.filter.outputs.ios }}
     steps:
+      - name: Install git, Python, and SwiftLint
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git curl unzip ca-certificates python3
+          curl -fsSL -o /tmp/swiftlint.zip \
+            https://github.com/realm/SwiftLint/releases/download/0.65.1/swiftlint_linux_amd64.zip
+          unzip -o /tmp/swiftlint.zip -d /tmp/swiftlint
+          install -m 755 /tmp/swiftlint/swiftlint-static /usr/local/bin/swiftlint
+          swift --version
+          swiftlint version
+          swift-format --version
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -30,15 +42,6 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: python3 scripts/ci-path-filter.py
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.2.4"
-      - name: Install SwiftLint
-        run: |
-          curl -fsSL -o /tmp/swiftlint.zip \
-            https://github.com/realm/SwiftLint/releases/download/0.65.1/swiftlint_linux_amd64.zip
-          sudo unzip -o /tmp/swiftlint.zip -d /usr/local/bin
-          swiftlint version
       - uses: actions/cache@v4
         with:
           path: |

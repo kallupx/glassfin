@@ -17,10 +17,14 @@ concurrency:
 jobs:
   docker-matrix:
     runs-on: ubuntu-latest
+    container: swift:6.2
     timeout-minutes: 10
     steps:
+      - name: Swift from the official image
+        run: swift --version
       - name: Deferred
         run: |
           echo "TODO: jellyfin/jellyfin 10.10.7, 10.11.11, and 12.2"
           echo "Use throwaway credentials from GitHub Secrets. Do not commit them."
+          echo "Containers are not started. WebSocket follow-up, per version: open /socket with only the Authorization header and wait for the first KeepAlive or ForceKeepAlive."
           echo "Integration is not implemented in this workflow yet."

@@ -63,22 +63,30 @@ final class AuthorizationHeaderTests: XCTestCase {
         XCTAssertFalse(header.contains("Living \""))
     }
 
-    func testControlCharactersAreRejected() {
-        XCTAssertThrowsError(
-            try AuthorizationHeader.value(
-                client: "Glassfin",
-                device: "Living\nRoom",
-                deviceID: "device-1",
-                version: "1",
-                token: nil
-            )
-        ) { error in
-            XCTAssertEqual(error as? AuthorizationHeaderError, .controlCharacter)
+    /// T01-28. CR, LF, and CRLF in a header value are rejected so they cannot inject another header line.
+    func testT01_28_rejectsControlCharactersAndCRLFInjection() {
+        for device in ["Living\nRoom", "Living\rRoom", "Living\r\nX-Injected: yes"] {
+            XCTAssertThrowsError(
+                try AuthorizationHeader.value(
+                    client: "Glassfin",
+                    device: device,
+                    deviceID: "device-1",
+                    version: "1",
+                    token: nil
+                )
+            ) { error in
+                XCTAssertEqual(error as? AuthorizationHeaderError, .controlCharacter)
+            }
         }
-        let identity = ClientIdentity(deviceName: "Living\rRoom", deviceID: "device-1", version: "1", token: "abc")
+        let identity = ClientIdentity(
+            deviceName: "Living\r\nRoom",
+            deviceID: "device-1",
+            version: "1",
+            token: "abc"
+        )
         do {
             _ = try identity.authorizationHeader()
-            XCTFail("Expected the header builder to reject CR")
+            XCTFail("Expected the header builder to reject CRLF")
         } catch let error as APIError {
             XCTAssertEqual(error, .headerRejected)
         } catch {
@@ -88,7 +96,8 @@ final class AuthorizationHeaderTests: XCTestCase {
 }
 
 final class RedactionTests: XCTestCase {
-    func testSecretsAreRedactedBeforeLogging() {
+    /// T01-29. The same redaction covers logs and CI text artifacts (`scripts/redact_artifacts.py`).
+    func testT01_29_redactsSecretsInLogsAndCIArtifacts() {
         let legacy = "api" + "_key"
         let raw = """
             https://media.example/Videos/1/stream?\(legacy)=legacy-secret&static=true
