@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 0
       - id: filter
         env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: python3 scripts/ci-path-filter.py
       - uses: actions/cache@v4
