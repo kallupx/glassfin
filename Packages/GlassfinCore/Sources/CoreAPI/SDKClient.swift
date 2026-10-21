@@ -46,13 +46,13 @@ import Foundation
             )
         }
 
-        public func send(_ request: APIRequest) async throws(APIError) -> Data {
+        public func send(_ request: APIRequest) async throws(CoreModels.APIError) -> Data {
             do {
                 headerDelegate.header = try identity.authorizationHeader()
-            } catch let error as APIError {
+            } catch let error as CoreModels.APIError {
                 throw error
             } catch {
-                throw APIError.headerRejected
+                throw CoreModels.APIError.headerRejected
             }
             let query = request.query.map { ($0.name, $0.value) }
             let method = HTTPMethod(rawValue: request.method)
@@ -68,19 +68,19 @@ import Foundation
                     throw failure
                 }
                 return response.data
-            } catch let error as APIError {
+            } catch let error as CoreModels.APIError {
                 throw error
             } catch let error as Get.APIError {
                 if case .unacceptableStatusCode(let status) = error {
-                    throw HTTPStatusMapper.failure(for: status) ?? APIError.server(status: status)
+                    throw HTTPStatusMapper.failure(for: status) ?? CoreModels.APIError.server(status: status)
                 }
-                throw APIError.network
+                throw CoreModels.APIError.network
             } catch let error as URLError {
                 throw URLErrorMapper.map(error)
             } catch is CancellationError {
-                throw APIError.cancelled
+                throw CoreModels.APIError.cancelled
             } catch {
-                throw APIError.network
+                throw CoreModels.APIError.network
             }
         }
     }
