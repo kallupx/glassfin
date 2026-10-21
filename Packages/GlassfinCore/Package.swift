@@ -17,7 +17,9 @@ let externalDependencies: [Package.Dependency] = [
 #else
     let packageDependencies = externalDependencies
     let coreAPIExternal: [Target.Dependency] = [
-        .product(name: "JellyfinAPI", package: "JellyfinAPI"),
+        // Identity is the repository name. The manifest's `name` is "JellyfinAPI", which
+        // SwiftPM does not accept in `.product(package:)`.
+        .product(name: "JellyfinAPI", package: "jellyfin-sdk-swift"),
         .product(name: "Get", package: "Get"),
     ]
 #endif
