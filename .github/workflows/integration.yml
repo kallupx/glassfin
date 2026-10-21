@@ -1,0 +1,26 @@
+name: integration
+
+# TODO: Docker integration is confirmed but deferred until after M00 and M01.
+# When implemented, this workflow starts throwaway jellyfin/jellyfin containers for
+# 10.10.7, 10.11.11, and 12.2. Credentials come from GitHub Secrets only.
+# It must stay workflow_dispatch-only so it does not spend minutes on every PR.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Deferred
+        run: |
+          echo "TODO: jellyfin/jellyfin 10.10.7, 10.11.11, and 12.2"
+          echo "Use throwaway credentials from GitHub Secrets. Do not commit them."
+          echo "Integration is not implemented in this workflow yet."

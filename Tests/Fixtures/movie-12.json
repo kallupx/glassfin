@@ -1,0 +1,32 @@
+{
+  "Id": "movie-12",
+  "Name": "North Sea",
+  "Type": "Movie",
+  "Overview": "A quiet film.",
+  "RunTimeTicks": 72000000000,
+  "ProductionYear": 2024,
+  "OfficialRating": "PG-13",
+  "CommunityRating": 7.5,
+  "ImageTags": { "Primary": "primary-tag", "Logo": "logo-tag", "Thumb": "thumb-tag" },
+  "BackdropImageTags": ["backdrop-tag"],
+  "ImageBlurHashes": { "Primary": { "primary-tag": "LGF5]+Yk^6#M@-5c,1J5@[or[Q6." } },
+  "UserData": {
+    "Played": false,
+    "PlaybackPositionTicks": 10000000,
+    "IsFavorite": true,
+    "PlayedPercentage": 1.2
+  },
+  "Trickplay": {
+    "source-1": {
+      "320": {
+        "Width": 320,
+        "Height": 180,
+        "TileWidth": 10,
+        "TileHeight": 10,
+        "ThumbnailCount": 40,
+        "Interval": 100000000
+      }
+    }
+  },
+  "Chapters": [{ "Name": "Opening", "StartPositionTicks": 0 }]
+}

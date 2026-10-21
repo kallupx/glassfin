@@ -1,0 +1,17 @@
+{
+  "PlaySessionId": "play-1",
+  "MediaSources": [
+    {
+      "Id": "source-1",
+      "SupportsDirectPlay": false,
+      "SupportsDirectStream": true,
+      "SupportsTranscoding": true,
+      "DirectStreamUrl": "/Videos/movie-12/stream?static=true",
+      "MediaStreams": [
+        { "Index": 1, "Type": "Audio", "DisplayTitle": "English", "Language": "eng", "Codec": "aac" },
+        { "Index": 2, "Type": "Subtitle", "DisplayTitle": "Finnish", "Language": "fin", "Codec": "subrip" }
+      ],
+      "TranscodeReasons": []
+    }
+  ]
+}
