@@ -17,28 +17,27 @@ public enum RedirectApplication: Sendable, Equatable {
 
 /// S4.6 for Glassfin's own `URLSession`.
 ///
-/// Authorization never crosses hosts. Any HTTPS→HTTP redirect is rejected.
-/// A request URL that contains `ApiKey` (or the legacy query name) is rejected,
-/// not merely stripped, when the target is a different host or HTTP.
-/// Same-host HTTPS redirects are allowed.
+/// Authorization stays on the same origin (scheme, host, and port). Any HTTPS→HTTP
+/// redirect is rejected. A request URL that contains an API key query is rejected,
+/// not merely stripped, when the target is a different origin or HTTP.
 ///
 /// AVPlayer follows redirects itself and does not use this delegate. Callers must
 /// hand AVPlayer the server's already-resolved media URL (see `ResolvedMediaURL`).
 public enum RedirectPolicy {
     public static func decide(originalURL: URL, redirectURL: URL) -> RedirectFollow {
         let downgrade = isHTTPSDowngrade(originalURL, redirectURL)
-        let sameHost = hostsMatch(originalURL, redirectURL)
+        let sameOrigin = originsMatch(originalURL, redirectURL)
         let credential = containsCredentialQuery(originalURL)
-        if credential && !sameHost {
-            return .reject(.credentialQueryCrossHost)
-        }
         if credential && downgrade {
             return .reject(.credentialQueryDowngrade)
         }
         if downgrade {
             return .reject(.httpsDowngrade)
         }
-        if !sameHost {
+        if credential && !sameOrigin {
+            return .reject(.credentialQueryCrossHost)
+        }
+        if !sameOrigin {
             return .follow(stripAuthorization: true)
         }
         return .follow(stripAuthorization: false)
@@ -61,14 +60,44 @@ public enum RedirectPolicy {
     }
 
     static func containsCredentialQuery(_ url: URL) -> Bool {
-        let legacy = "api" + "_key"
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        return items.contains { $0.name == "ApiKey" || $0.name == legacy }
+        return items.contains { isCredentialQueryName($0.name) }
     }
 
-    private static func hostsMatch(_ lhs: URL, _ rhs: URL) -> Bool {
-        guard let left = lhs.host, let right = rhs.host else { return false }
-        return left.caseInsensitiveCompare(right) == .orderedSame
+    static func isCredentialQueryName(_ name: String) -> Bool {
+        let folded = name.lowercased()
+        return folded == "apikey" || folded == "api" + "_key"
+    }
+
+    private struct Origin: Equatable {
+        var scheme: String
+        var host: String
+        var port: Int
+    }
+
+    /// Scheme, host, and port. Default ports are filled in so `:443` matches an omitted HTTPS port.
+    private static func originsMatch(_ lhs: URL, _ rhs: URL) -> Bool {
+        guard let left = origin(lhs), let right = origin(rhs) else { return false }
+        return left == right
+    }
+
+    private static func origin(_ url: URL) -> Origin? {
+        guard let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased(), !host.isEmpty else {
+            return nil
+        }
+        guard let port = url.port ?? defaultPort(scheme) else { return nil }
+        return Origin(scheme: scheme, host: host, port: port)
+    }
+
+    private static func defaultPort(_ scheme: String) -> Int? {
+        switch scheme {
+        case "https":
+            443
+        case "http":
+            80
+        default:
+            nil
+        }
     }
 
     private static func isHTTPSDowngrade(_ original: URL, _ redirect: URL) -> Bool {

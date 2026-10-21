@@ -2,8 +2,8 @@
 @_exported import CoreModels
 @_exported import CoreNetworking
 @_exported import CorePlayback
-@_exported import CoreServices
 @_exported import CoreState
+@_exported import GlassfinServices
 
 #if DEBUG
     @_exported import CoreTestSupport

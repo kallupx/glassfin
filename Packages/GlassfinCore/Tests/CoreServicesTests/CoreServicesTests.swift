@@ -1,13 +1,18 @@
 import CoreModels
 import CoreNetworking
 import CorePlayback
-import CoreServices
 import CoreTestSupport
 import Foundation
+import GlassfinServices
 import XCTest
 
 final class ServiceEndpointTests: XCTestCase {
     private let server = URL(string: "http://127.0.0.1:8096")!
+    private let itemGUID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    private let seriesGUID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    private let seasonGUID = "cccccccccccccccccccccccccccccccc"
+    private let movieGUID = "dddddddddddddddddddddddddddddddd"
+    private let sourceGUID = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 
     func testP0EndpointMatrix() async {
         let names = [
@@ -56,7 +61,7 @@ final class ServiceEndpointTests: XCTestCase {
         try await reporting.progress(itemID: "item", position: .seconds(-3), playSessionID: "play", paused: true)
         try await reporting.stopped(itemID: "item", position: .seconds(-3), playSessionID: "play", failed: false)
         let library = JellyfinLibraryService(client: client)
-        try await library.updateUserData(id: "item", position: .seconds(-9), played: false)
+        try await library.updateUserData(id: itemGUID, position: .seconds(-9), played: false)
         let playback = JellyfinPlaybackInfoService(client: client, server: server)
         let playbackBody = Data(
             "{\"MediaSources\":[{\"Id\":\"source\",\"SupportsDirectPlay\":true}],\"PlaySessionId\":\"play\"}".utf8
@@ -64,7 +69,7 @@ final class ServiceEndpointTests: XCTestCase {
         await client.setHandler { request in
             request.path.contains("PlaybackInfo") ? playbackBody : Data()
         }
-        _ = try await playback.playbackInfo(itemID: "item", start: .seconds(-2), maxBitrate: 20_000_000)
+        _ = try await playback.playbackInfo(itemID: itemGUID, start: .seconds(-2), maxBitrate: 20_000_000)
         let calls = await client.calls
         for call in calls {
             let body = call.body ?? Data()
@@ -82,15 +87,16 @@ final class ServiceEndpointTests: XCTestCase {
         let identity = ClientIdentity(
             deviceName: "Living Room", deviceID: "device-1", version: "0.1.0", token: "token-secret")
         let media = JellyfinMediaURLService(server: server, identity: identity)
-        let header = try media.stream(itemID: "movie", mediaSourceID: "source", playSessionID: "play", mode: .header)
+        let header = try media.stream(
+            itemID: movieGUID, mediaSourceID: sourceGUID, playSessionID: "play", mode: .header)
         XCTAssertNotNil(header.authorizationHeader)
         XCTAssertFalse(header.url.absoluteString.contains("ApiKey"))
         let query = try media.stream(
-            itemID: "movie", mediaSourceID: "source", playSessionID: "play", mode: .apiKeyQuery)
+            itemID: movieGUID, mediaSourceID: sourceGUID, playSessionID: "play", mode: .apiKeyQuery)
         XCTAssertNil(query.authorizationHeader)
         XCTAssertTrue(query.usesAPIKeyQuery)
         let image = try JellyfinImageService(server: server, identity: identity).imageRequest(
-            itemID: "movie",
+            itemID: movieGUID,
             imageType: "Primary",
             maxWidth: 400
         )
@@ -99,8 +105,27 @@ final class ServiceEndpointTests: XCTestCase {
         XCTAssertTrue(handoff.headerFields.isEmpty)
         XCTAssertEqual(ResolvedMediaURL.httpHeaderFieldsKey, "AVURLAssetHTTPHeaderFieldsKey")
         XCTAssertFalse(String(describing: handoff).contains("token-secret"))
-        _ = try media.trickplay(itemID: "movie", width: 320, index: 0, mediaSourceID: "source")
-        _ = try media.subtitles(itemID: "movie", mediaSourceID: "source", index: 1)
+        _ = try media.trickplay(itemID: movieGUID, width: 320, index: 0, mediaSourceID: sourceGUID)
+        _ = try media.subtitles(itemID: movieGUID, mediaSourceID: sourceGUID, index: 1)
+        XCTAssertTrue(header.url.path.contains(movieGUID))
+        XCTAssertThrowsError(
+            try media.stream(itemID: "../Admin", mediaSourceID: sourceGUID, playSessionID: "play", mode: .header)
+        ) {
+            XCTAssertEqual($0 as? APIError, .invalidItemID)
+        }
+    }
+
+    func testInvalidItemIDIsNotSent() async {
+        let client = MockAPIClient { _ in Data() }
+        let library = JellyfinLibraryService(client: client)
+        do {
+            _ = try await library.item(id: "item/../../Users")
+            XCTFail("Expected invalidItemID")
+        } catch {
+            XCTAssertEqual(error, .invalidItemID)
+        }
+        let calls = await client.calls
+        XCTAssertTrue(calls.isEmpty)
     }
 
     func testCancellationIsNotUnauthorized() async {
@@ -209,18 +234,19 @@ final class ServiceEndpointTests: XCTestCase {
         case "resume": _ = try await library.resume(limit: 10)
         case "nextUp": _ = try await library.nextUp(limit: 10)
         case "latest": _ = try await library.latest(in: "lib", limit: 10)
-        case "seasons": _ = try await library.seasons(series: "series")
-        case "episodes": _ = try await library.episodes(series: "series", season: "season")
-        case "item": _ = try await library.item(id: "item")
-        case "similar": _ = try await library.similar(id: "item", limit: 5)
+        case "seasons": _ = try await library.seasons(series: seriesGUID)
+        case "episodes": _ = try await library.episodes(series: seriesGUID, season: seasonGUID)
+        case "item": _ = try await library.item(id: itemGUID)
+        case "similar": _ = try await library.similar(id: itemGUID, limit: 5)
         case "filters": _ = try await library.filters(in: "lib")
-        case "setPlayed": try await library.setPlayed("item", true)
-        case "setFavorite": try await library.setFavorite("item", false)
-        case "userData": _ = try await library.userData(id: "item")
-        case "updateUserData": try await library.updateUserData(id: "item", position: .seconds(2), played: false)
+        case "setPlayed": try await library.setPlayed(itemGUID, true)
+        case "setFavorite": try await library.setFavorite(itemGUID, false)
+        case "userData": _ = try await library.userData(id: itemGUID)
+        case "updateUserData": try await library.updateUserData(id: itemGUID, position: .seconds(2), played: false)
         case "hints": _ = try await search.hints(term: "north", limit: 5)
-        case "playbackInfo": _ = try await playback.playbackInfo(itemID: "item", start: .zero, maxBitrate: 8_000_000)
-        case "mediaSegments": _ = try await playback.mediaSegments(itemID: "item")
+        case "playbackInfo":
+            _ = try await playback.playbackInfo(itemID: itemGUID, start: .zero, maxBitrate: 8_000_000)
+        case "mediaSegments": _ = try await playback.mediaSegments(itemID: itemGUID)
         case "bitrateTest": _ = try await playback.bitrateTest(size: 1_000_000)
         case "started": try await reporting.started(itemID: "item", position: .seconds(1), playSessionID: "play")
         case "progress":

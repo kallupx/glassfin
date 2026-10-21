@@ -111,5 +111,5 @@ if [[ -d "$root/artifacts/screenshots" ]]; then
   mkdir -p "$artifacts/readable/screenshots"
   cp -R "$root/artifacts/screenshots/." "$artifacts/readable/screenshots/" || true
 fi
-python3 "$root/scripts/redact_artifacts.py" "$artifacts" || true
+python3 "$root/scripts/redact_artifacts.py" "$artifacts"
 exit "$status"

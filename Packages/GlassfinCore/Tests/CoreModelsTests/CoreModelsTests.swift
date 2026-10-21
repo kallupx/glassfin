@@ -183,6 +183,25 @@ final class MapperTests: XCTestCase {
         XCTAssertEqual(DTOMapper.serverInfo(old, url: URL(string: "http://old.example")!)?.version.patch, 7)
     }
 
+    func testItemIDAcceptsGUIDsAndRejectsPathText() throws {
+        let plain = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        let dashed = "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"
+        XCTAssertEqual(ItemID(plain)?.value, plain)
+        XCTAssertEqual(ItemID(dashed)?.value, dashed)
+        XCTAssertNil(ItemID("item"))
+        XCTAssertNil(ItemID("../Admin"))
+        XCTAssertNil(ItemID("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+        XCTAssertNil(ItemID(plain + "/Extra"))
+        XCTAssertEqual(try ItemID.require(plain).value, plain)
+        do {
+            _ = try ItemID.require("item/../../etc")
+            XCTFail("Expected invalidItemID")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .invalidItemID)
+            XCTAssertFalse(LogoutPolicy.shouldLogOut(error))
+        }
+    }
+
     private func decodeItem(_ name: String) throws -> MediaItem {
         let dto = try JSONDecoder().decode(BaseItemDTO.self, from: Fixtures.data(name))
         return try XCTUnwrap(DTOMapper.mediaItem(dto, log: SilentLog()))

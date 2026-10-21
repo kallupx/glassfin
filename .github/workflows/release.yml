@@ -13,6 +13,7 @@ permissions:
 jobs:
   testflight:
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 10
     steps:
       - name: Write App Store Connect key

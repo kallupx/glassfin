@@ -33,6 +33,8 @@ public enum APIError: Error, Sendable, Equatable {
     case redirectRejected(RedirectRejection)
     case invalidURL
     case headerRejected
+    /// A path segment was not a 32-hex GUID (dashes optional).
+    case invalidItemID
 }
 
 public enum LogoutPolicy {

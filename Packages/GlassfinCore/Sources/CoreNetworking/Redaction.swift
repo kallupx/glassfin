@@ -2,30 +2,32 @@ import Foundation
 
 /// Removes secrets before a string is logged or written to a CI artifact.
 public enum SensitiveRedactor {
+    /// Query names, longest first so accesstoken and the underscored legacy name are not cut short.
+    static let credentialQueryNames =
+        "(?:accesstoken|" + ("api" + "_key") + "|apikey|token|secret|pw)"
+
     public static func redact(_ input: String) -> String {
         var text = input
-        let legacyQuery = "api" + "_key"
-        let keys = ["ApiKey", legacyQuery, "Token", "secret", "Pw", "AccessToken"]
-        for key in keys {
-            text = redactQuery(text, name: key)
-            text = redactJSON(text, name: key)
-        }
+        text = redactQuery(text)
+        text = redactJSON(text)
         text = redactAuthorizationHeader(text)
         text = redactTokenQuotes(text)
         return text
     }
 
-    private static func redactQuery(_ text: String, name: String) -> String {
-        let pattern = "((?:^|[?&\\s])" + NSRegularExpression.escapedPattern(for: name) + "=)[^&#\\s]*"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+    private static func redactQuery(_ text: String) -> String {
+        let pattern = "((?:^|[?&\\s])" + credentialQueryNames + "=)[^&#\\s]*"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return text
         }
         return replace(regex, in: text, template: "$1REDACTED")
     }
 
-    private static func redactJSON(_ text: String, name: String) -> String {
-        let pattern = "(\"" + NSRegularExpression.escapedPattern(for: name) + "\"\\s*:\\s*\")[^\"]*\""
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+    private static func redactJSON(_ text: String) -> String {
+        let pattern = "(\"" + credentialQueryNames + "\"\\s*:\\s*\")[^\"]*\""
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return text
+        }
         return replace(regex, in: text, template: "$1REDACTED\"")
     }
 

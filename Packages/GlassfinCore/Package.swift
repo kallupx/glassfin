@@ -42,17 +42,25 @@ let package = Package(
     targets: [
         .target(name: "CoreModels", swiftSettings: debugSettings),
         .target(name: "CoreNetworking", dependencies: ["CoreModels"], swiftSettings: debugSettings),
-        .target(name: "CoreServices", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),
+        // GlassfinServices, not CoreServices: that module name collides with the system
+        // CoreServices framework Foundation imports, and `swift test` on macOS then
+        // reports a Foundation -> CoreServices -> CoreModels cycle.
+        .target(
+            name: "GlassfinServices",
+            dependencies: ["CoreModels", "CoreNetworking"],
+            path: "Sources/CoreServices",
+            swiftSettings: debugSettings
+        ),
         .target(
             name: "CoreAPI",
-            dependencies: ["CoreModels", "CoreNetworking", "CoreServices"] + coreAPIExternal,
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"] + coreAPIExternal,
             swiftSettings: debugSettings
         ),
         .target(name: "CoreState", dependencies: ["CoreModels"], swiftSettings: debugSettings),
         .target(name: "CorePlayback", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),
         .target(
             name: "CoreTestSupport",
-            dependencies: ["CoreModels", "CoreNetworking", "CoreServices"],
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"],
             swiftSettings: debugSettings
         ),
         .target(
@@ -60,7 +68,7 @@ let package = Package(
             dependencies: [
                 "CoreModels",
                 "CoreNetworking",
-                "CoreServices",
+                "GlassfinServices",
                 "CoreAPI",
                 "CoreState",
                 "CorePlayback",
@@ -72,11 +80,11 @@ let package = Package(
         .testTarget(name: "CoreNetworkingTests", dependencies: ["CoreNetworking", "CoreModels"]),
         .testTarget(
             name: "CoreServicesTests",
-            dependencies: ["CoreServices", "CoreNetworking", "CoreModels", "CoreTestSupport", "CorePlayback"]
+            dependencies: ["GlassfinServices", "CoreNetworking", "CoreModels", "CoreTestSupport", "CorePlayback"]
         ),
         .testTarget(
             name: "IntegrationTests",
-            dependencies: ["CoreNetworking", "CoreServices", "CoreModels"]
+            dependencies: ["CoreNetworking", "GlassfinServices", "CoreModels"]
         ),
     ]
 )

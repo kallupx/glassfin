@@ -117,6 +117,12 @@ final class RedactionTests: XCTestCase {
         let bare = SensitiveRedactor.redact("server Glassfin Home version 12.2.0 ApiKey=query-secret")
         XCTAssertFalse(bare.contains("query-secret"))
         GlassfinLogger().infoPublic(bare)
+        for name in ["apikey", "APIKEY", "ApiKey", legacy, legacy.uppercased()] {
+            let line = "https://media.example/v?\(name)=case-secret&x=1"
+            let redactedLine = SensitiveRedactor.redact(line)
+            XCTAssertFalse(redactedLine.contains("case-secret"), name)
+            XCTAssertTrue(redactedLine.contains("REDACTED"), name)
+        }
     }
 }
 
@@ -146,6 +152,32 @@ final class RedirectPolicyTests: XCTestCase {
 
         let credentialSame = try decide("https://media.example/v?ApiKey=secret", "https://media.example/v2")
         XCTAssertEqual(credentialSame, .follow(stripAuthorization: false))
+
+        let defaultPort = try decide("https://media.example/a", "https://media.example:443/b")
+        XCTAssertEqual(defaultPort, .follow(stripAuthorization: false))
+
+        let differentPort = try decide("http://media.example:8096/a", "http://media.example:8080/a")
+        XCTAssertEqual(differentPort, .follow(stripAuthorization: true))
+
+        let credentialPort = try decide(
+            "http://media.example:8096/v?ApiKey=secret", "http://media.example:8080/v")
+        XCTAssertEqual(credentialPort, .reject(.credentialQueryCrossHost))
+
+        for name in ["apikey", "APIKEY", "ApiKey", legacy, legacy.uppercased()] {
+            let url = try XCTUnwrap(URL(string: "https://media.example/v?\(name)=secret"))
+            XCTAssertTrue(RedirectPolicy.containsCredentialQuery(url), name)
+        }
+    }
+
+    func testAuthorizationDoesNotFollowADifferentPort() throws {
+        var original = URLRequest(url: URL(string: "http://media.example:8096/Items")!)
+        original.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
+        var proposed = URLRequest(url: URL(string: "http://media.example:8080/Items")!)
+        proposed.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
+        guard case .follow(let next) = RedirectPolicy.apply(original: original, proposed: proposed) else {
+            return XCTFail("Expected a stripped follow")
+        }
+        XCTAssertNil(next.value(forHTTPHeaderField: "Authorization"))
     }
 
     func testCrossHostFollowStripsTheAuthorizationHeader() throws {
@@ -200,9 +232,29 @@ final class DeviceIdentityTests: XCTestCase {
         XCTAssertEqual(first, second)
         let reset = try DeviceIdentityStore.loadOrCreate(secureStore: store, reset: true)
         XCTAssertNotEqual(first, reset)
-        XCTAssertEqual(KeychainAttributes.production.accessibility, "AfterFirstUnlockThisDeviceOnly")
-        XCTAssertFalse(KeychainAttributes.production.synchronizable)
-        XCTAssertEqual(KeychainAttributes.production.accessGroup, "org.glassfin.app")
+        let prefixed = "ABCDE12345.org.glassfin.app"
+        let attributes = KeychainAttributes.production(info: [
+            KeychainAccessGroup.infoDictionaryKey: prefixed
+        ])
+        XCTAssertEqual(attributes.accessibility, "AfterFirstUnlockThisDeviceOnly")
+        XCTAssertFalse(attributes.synchronizable)
+        XCTAssertEqual(attributes.accessGroup, prefixed)
+        XCTAssertEqual(
+            KeychainItemQuery.base(account: DeviceIdentityStore.account, accessGroup: attributes.accessGroup)["agrp"]
+                as? String,
+            prefixed
+        )
+        XCTAssertNil(
+            KeychainItemQuery.base(account: DeviceIdentityStore.account, accessGroup: "")["agrp"]
+        )
+        let unexpanded = "$(AppIdentifierPrefix)org.glassfin.app"
+        XCTAssertEqual(
+            KeychainAccessGroup.resolve([KeychainAccessGroup.infoDictionaryKey: unexpanded]),
+            ""
+        )
+        XCTAssertEqual(KeychainWritePlan.afterUpdate(status: KeychainWritePlan.success), .updated)
+        XCTAssertEqual(KeychainWritePlan.afterUpdate(status: KeychainWritePlan.itemNotFound), .add)
+        XCTAssertEqual(KeychainWritePlan.afterUpdate(status: -1), .fail(-1))
     }
 }
 

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   docker-matrix:
     runs-on: ubuntu-latest
-    container: swift:6.2
+    container: swift:6.4
     timeout-minutes: 10
     steps:
       - name: Swift from the official image

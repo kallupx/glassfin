@@ -10,6 +10,11 @@ func encodeJSON<T: Encodable>(_ value: T) throws(APIError) -> Data {
     }
 }
 
+/// Item ids are interpolated into URL paths. Reject anything that is not a GUID first.
+func validatedItemID(_ raw: String) throws(APIError) -> String {
+    try ItemID.require(raw).value
+}
+
 public protocol SystemService: Sendable {
     func publicInfo() async throws(APIError) -> ServerInfo
     func ping() async throws(APIError) -> String
@@ -247,23 +252,30 @@ public struct JellyfinLibraryService: LibraryService {
     }
 
     public func seasons(series: MediaItem.ID) async throws(APIError) -> [MediaItem] {
-        try await list(path: "/Shows/\(series)/Seasons", query: [URLQueryItem(name: "enableUserData", value: "true")])
+        try await list(
+            path: "/Shows/\(try validatedItemID(series))/Seasons",
+            query: [URLQueryItem(name: "enableUserData", value: "true")]
+        )
     }
 
     public func episodes(series: MediaItem.ID, season: MediaItem.ID?) async throws(APIError) -> [MediaItem] {
         var query: [URLQueryItem] = []
         if let season { query.append(URLQueryItem(name: "seasonId", value: season)) }
-        return try await list(path: "/Shows/\(series)/Episodes", query: query)
+        return try await list(path: "/Shows/\(try validatedItemID(series))/Episodes", query: query)
     }
 
     public func item(id: MediaItem.ID) async throws(APIError) -> MediaItem {
-        let dto = try await client.send(APIRequest(method: "GET", path: "/Items/\(id)"), as: BaseItemDTO.self)
+        let dto = try await client.send(
+            APIRequest(method: "GET", path: "/Items/\(try validatedItemID(id))"), as: BaseItemDTO.self)
         guard let item = DTOMapper.mediaItem(dto, log: log) else { throw APIError.decoding }
         return item
     }
 
     public func similar(id: MediaItem.ID, limit: Int) async throws(APIError) -> [MediaItem] {
-        try await list(path: "/Items/\(id)/Similar", query: [URLQueryItem(name: "limit", value: String(limit))])
+        try await list(
+            path: "/Items/\(try validatedItemID(id))/Similar",
+            query: [URLQueryItem(name: "limit", value: String(limit))]
+        )
     }
 
     public func filters(in library: Library.ID) async throws(APIError) -> ItemFilterSet {
@@ -276,17 +288,19 @@ public struct JellyfinLibraryService: LibraryService {
 
     public func setPlayed(_ id: MediaItem.ID, _ played: Bool) async throws(APIError) {
         let method = played ? "POST" : "DELETE"
-        _ = try await client.send(APIRequest(method: method, path: "/UserPlayedItems/\(id)"), as: EmptyResponse.self)
+        _ = try await client.send(
+            APIRequest(method: method, path: "/UserPlayedItems/\(try validatedItemID(id))"), as: EmptyResponse.self)
     }
 
     public func setFavorite(_ id: MediaItem.ID, _ favorite: Bool) async throws(APIError) {
         let method = favorite ? "POST" : "DELETE"
-        _ = try await client.send(APIRequest(method: method, path: "/UserFavoriteItems/\(id)"), as: EmptyResponse.self)
+        _ = try await client.send(
+            APIRequest(method: method, path: "/UserFavoriteItems/\(try validatedItemID(id))"), as: EmptyResponse.self)
     }
 
     public func userData(id: MediaItem.ID) async throws(APIError) -> UserItemState {
         let dto = try await client.send(
-            APIRequest(method: "GET", path: "/UserItems/\(id)/UserData"), as: UserItemDataDTO.self)
+            APIRequest(method: "GET", path: "/UserItems/\(try validatedItemID(id))/UserData"), as: UserItemDataDTO.self)
         return UserItemState(
             played: dto.Played ?? false,
             playbackPosition: Ticks.positionDuration(from: dto.PlaybackPositionTicks ?? 0, log: log),
@@ -301,7 +315,8 @@ public struct JellyfinLibraryService: LibraryService {
             UserDataWrite(PlaybackPositionTicks: Ticks.outboundPositionTicks(from: position), Played: played)
         )
         _ = try await client.send(
-            APIRequest(method: "POST", path: "/UserItems/\(id)/UserData", body: body), as: EmptyResponse.self)
+            APIRequest(method: "POST", path: "/UserItems/\(try validatedItemID(id))/UserData", body: body),
+            as: EmptyResponse.self)
     }
 
     private func list(path: String, query: [URLQueryItem]) async throws(APIError) -> [MediaItem] {
@@ -358,7 +373,7 @@ public struct JellyfinPlaybackInfoService: PlaybackInfoService {
             )
         )
         let dto = try await client.send(
-            APIRequest(method: "POST", path: "/Items/\(itemID)/PlaybackInfo", body: body),
+            APIRequest(method: "POST", path: "/Items/\(try validatedItemID(itemID))/PlaybackInfo", body: body),
             as: PlaybackInfoResponseDTO.self
         )
         guard let source = DTOMapper.playbackSource(dto, server: server) else { throw APIError.decoding }
@@ -367,7 +382,8 @@ public struct JellyfinPlaybackInfoService: PlaybackInfoService {
 
     public func mediaSegments(itemID: String) async throws(APIError) -> [MediaSegment] {
         let dto = try await client.send(
-            APIRequest(method: "GET", path: "/MediaSegments/\(itemID)"), as: [MediaSegmentDTO].self)
+            APIRequest(method: "GET", path: "/MediaSegments/\(try validatedItemID(itemID))"), as: [MediaSegmentDTO].self
+        )
         return dto.compactMap(DTOMapper.segment)
     }
 
@@ -452,7 +468,7 @@ public struct JellyfinImageService: Sendable {
         if let maxWidth { query.append(URLQueryItem(name: "maxWidth", value: String(maxWidth))) }
         return try MediaRequestBuilder.prepare(
             server: server,
-            path: "/Items/\(itemID)/Images/\(imageType)",
+            path: "/Items/\(try validatedItemID(itemID))/Images/\(imageType)",
             query: query,
             identity: identity,
             mode: .header
@@ -476,7 +492,7 @@ public struct JellyfinMediaURLService: Sendable {
     ) throws -> PreparedMediaRequest {
         try MediaRequestBuilder.prepare(
             server: server,
-            path: "/Videos/\(itemID)/stream",
+            path: "/Videos/\(try validatedItemID(itemID))/stream",
             query: [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSourceID),
@@ -492,7 +508,7 @@ public struct JellyfinMediaURLService: Sendable {
     {
         try MediaRequestBuilder.prepare(
             server: server,
-            path: "/Videos/\(itemID)/Trickplay/\(width)/\(index).jpg",
+            path: "/Videos/\(try validatedItemID(itemID))/Trickplay/\(width)/\(index).jpg",
             query: [URLQueryItem(name: "mediaSourceId", value: mediaSourceID)],
             identity: identity,
             mode: .header
@@ -502,7 +518,8 @@ public struct JellyfinMediaURLService: Sendable {
     public func subtitles(itemID: String, mediaSourceID: String, index: Int) throws -> PreparedMediaRequest {
         try MediaRequestBuilder.prepare(
             server: server,
-            path: "/Videos/\(itemID)/\(mediaSourceID)/Subtitles/\(index)/Stream.vtt",
+            path:
+                "/Videos/\(try validatedItemID(itemID))/\(try validatedItemID(mediaSourceID))/Subtitles/\(index)/Stream.vtt",
             identity: identity,
             mode: .header
         )

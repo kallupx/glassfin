@@ -4,7 +4,7 @@ public struct KeychainAttributes: Sendable, Equatable {
     /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (S1.1, confirmed in spec v1.1).
     public var accessibility: String
     public var synchronizable: Bool
-    /// Logical group. The entitlement expands `$(AppIdentifierPrefix)` at build time.
+    /// Team-prefixed group from the app Info.plist (`GlassfinKeychainAccessGroup`).
     public var accessGroup: String
 
     public init(accessibility: String, synchronizable: Bool, accessGroup: String) {
@@ -13,11 +13,66 @@ public struct KeychainAttributes: Sendable, Equatable {
         self.accessGroup = accessGroup
     }
 
-    public static let production = KeychainAttributes(
-        accessibility: "AfterFirstUnlockThisDeviceOnly",
-        synchronizable: false,
-        accessGroup: "org.glassfin.app"
-    )
+    /// Reads the access group Xcode wrote into the app Info.plist.
+    /// An unexpanded `$(...)` build setting is not a usable group.
+    public static func production(info: [String: Any]?) -> KeychainAttributes {
+        KeychainAttributes(
+            accessibility: "AfterFirstUnlockThisDeviceOnly",
+            synchronizable: false,
+            accessGroup: KeychainAccessGroup.resolve(info)
+        )
+    }
+
+    public static var production: KeychainAttributes {
+        production(info: Bundle.main.infoDictionary)
+    }
+}
+
+public enum KeychainAccessGroup {
+    public static let infoDictionaryKey = "GlassfinKeychainAccessGroup"
+
+    public static func resolve(_ info: [String: Any]?) -> String {
+        guard let value = info?[infoDictionaryKey] as? String else { return "" }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.contains("$(") { return "" }
+        return trimmed
+    }
+}
+
+/// Shared keychain lookup. `agrp` is the access group, included on every read and write.
+public enum KeychainItemQuery {
+    public static let service = "org.glassfin.app"
+
+    public static func base(account: String, accessGroup: String) -> [String: Any] {
+        var query: [String: Any] = [
+            "class": "genp",
+            "svce": service,
+            "acct": account,
+        ]
+        if !accessGroup.isEmpty {
+            query["agrp"] = accessGroup
+        }
+        return query
+    }
+}
+
+/// `SecItemUpdate` keeps the existing item. Add only when the item is missing.
+public enum KeychainWritePlan: Equatable, Sendable {
+    public static let success: Int32 = 0
+    /// `errSecItemNotFound`.
+    public static let itemNotFound: Int32 = -25300
+
+    public enum Action: Equatable, Sendable {
+        case updated
+        case add
+        case fail(Int32)
+    }
+
+    public static func afterUpdate(status: Int32) -> Action {
+        if status == success { return .updated }
+        if status == itemNotFound { return .add }
+        return .fail(status)
+    }
 }
 
 public protocol SecureStore: Sendable {
@@ -61,7 +116,7 @@ public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
         }
 
         public func data(for account: String) throws -> Data? {
-            var query = baseQuery(account: account)
+            var query = KeychainItemQuery.base(account: account, accessGroup: attributes.accessGroup)
             query[kSecReturnData as String] = true
             query[kSecMatchLimit as String] = kSecMatchLimitOne
             var item: CFTypeRef?
@@ -72,30 +127,33 @@ public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
         }
 
         public func set(_ data: Data, account: String, attributes: KeychainAttributes) throws {
-            try? remove(account: account)
-            var query = baseQuery(account: account)
-            query[kSecValueData as String] = data
-            query[kSecAttrAccessible as String] = Self.accessible(attributes.accessibility)
-            query[kSecAttrSynchronizable as String] = kCFBooleanFalse
-            if !attributes.accessGroup.isEmpty {
-                query[kSecAttrAccessGroup as String] = attributes.accessGroup
+            let query = KeychainItemQuery.base(account: account, accessGroup: attributes.accessGroup)
+            let changes: [String: Any] = [
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: Self.accessible(attributes.accessibility),
+                kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            ]
+            let status = SecItemUpdate(query as CFDictionary, changes as CFDictionary)
+            switch KeychainWritePlan.afterUpdate(status: status) {
+            case .updated:
+                return
+            case .fail(let code):
+                throw KeychainError.status(code)
+            case .add:
+                var add = query
+                for (key, value) in changes {
+                    add[key] = value
+                }
+                let addStatus = SecItemAdd(add as CFDictionary, nil)
+                guard addStatus == errSecSuccess else { throw KeychainError.status(addStatus) }
             }
-            let status = SecItemAdd(query as CFDictionary, nil)
-            guard status == errSecSuccess else { throw KeychainError.status(status) }
         }
 
         public func remove(account: String) throws {
-            let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
+            let query = KeychainItemQuery.base(account: account, accessGroup: attributes.accessGroup)
+            let status = SecItemDelete(query as CFDictionary)
             if status == errSecItemNotFound || status == errSecSuccess { return }
             throw KeychainError.status(status)
-        }
-
-        private func baseQuery(account: String) -> [String: Any] {
-            [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: "org.glassfin.app",
-                kSecAttrAccount as String: account,
-            ]
         }
 
         private static func accessible(_ name: String) -> CFString {
