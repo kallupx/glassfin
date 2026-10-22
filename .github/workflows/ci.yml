@@ -1,0 +1,175 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    # Xcode 27's compiler is Swift 6.4. The tag is pinned to the OCI index for
+    # swift:6.4 (Swift 6.4.1). linux/amd64 manifest: sha256:4ce725174432bd37b2aca74776445a79d6bb57b3e95d0800df0af66d5a0c1c33
+    container: swift:6.4@sha256:6fbd5978b56a5a9ff05a48f8f678079fc45be496ecda15b4e74e8944fab857be
+    timeout-minutes: 10
+    outputs:
+      macos: ${{ steps.filter.outputs.macos }}
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - name: Install git, Python, and SwiftLint
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git curl unzip ca-certificates python3
+          curl -fsSL -o /tmp/swiftlint.zip \
+            https://github.com/realm/SwiftLint/releases/download/0.65.1/swiftlint_linux_amd64.zip
+          echo "caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d  /tmp/swiftlint.zip" | sha256sum -c -
+          unzip -o /tmp/swiftlint.zip -d /tmp/swiftlint
+          install -m 755 /tmp/swiftlint/swiftlint-static /usr/local/bin/swiftlint
+          swift --version
+          swiftlint version
+          swift-format --version
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: python3 scripts/ci-path-filter.py
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/org.swift.swiftpm
+            Packages/GlassfinCore/.build
+          key: linux-spm-${{ hashFiles('Packages/GlassfinCore/Package.resolved') }}
+          restore-keys: linux-spm-
+      - name: SwiftLint
+        run: swiftlint lint --quiet
+      - name: swift-format
+        run: >
+          swift-format lint --recursive --strict
+          Packages/GlassfinCore/Package.swift
+          Packages/GlassfinCore/Sources
+          Packages/GlassfinCore/Tests
+          Apps
+      - name: license-check
+        run: |
+          bash scripts/license-check.sh --self-test
+          bash scripts/license-check.sh
+      - name: Source greps
+        run: bash scripts/ci-grep.sh
+      - name: Entitlements
+        run: bash scripts/check-entitlements.sh
+      - name: Debug-only strings
+        run: |
+          python3 scripts/check-debug-only-strings.py --self-test
+          python3 scripts/check-debug-only-strings.py
+      - name: Artifact redaction self-test
+        run: python3 scripts/redact_artifacts.py --self-test
+      - name: Linux package tests
+        working-directory: Packages/GlassfinCore
+        run: swift test
+
+  test-tvos:
+    needs: lint
+    if: needs.lint.result == 'success' && (needs.lint.outputs.macos == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - name: Swift version
+        run: xcrun swift --version
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            Packages/GlassfinCore/.build
+            DerivedData-tvOS
+            DerivedData-release-tvOS
+          key: macos-tvos-${{ hashFiles('Packages/GlassfinCore/Package.resolved', 'project.yml') }}
+          restore-keys: macos-tvos-
+      - name: Test and Release binary check
+        run: bash scripts/macos-ci.sh tvOS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: tvos-results
+          # xcresult bundles are not redacted. Upload the text export only.
+          path: |
+            artifacts/tvOS/readable/**
+            artifacts/tvOS/*.log
+            artifacts/tvOS/*.txt
+          retention-days: 7
+
+  test-ios:
+    needs: lint
+    if: >
+      needs.lint.result == 'success' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.lint.outputs.macos == 'true') ||
+        (github.event_name == 'pull_request' && needs.lint.outputs.ios == 'true')
+      )
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            Packages/GlassfinCore/.build
+            DerivedData-iOS
+            DerivedData-package-iOS
+            DerivedData-release-iOS
+          key: macos-ios-${{ hashFiles('Packages/GlassfinCore/Package.resolved', 'project.yml') }}
+          restore-keys: macos-ios-
+      - name: Test and Release binary check
+        run: bash scripts/macos-ci.sh iOS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: ios-results
+          path: |
+            artifacts/iOS/readable/**
+            artifacts/iOS/*.log
+            artifacts/iOS/*.txt
+          retention-days: 7
+
+  full-ui:
+    needs: lint
+    if: >
+      needs.lint.result == 'success' &&
+      needs.lint.outputs.macos == 'true' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        contains(github.event.pull_request.labels.*.name, 'full-ci')
+      )
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Full UI suite
+        run: bash scripts/macos-ci.sh tvOS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: full-ui-results
+          path: |
+            artifacts/tvOS/readable/**
+            artifacts/tvOS/*.log
+            artifacts/tvOS/*.txt
+          retention-days: 7

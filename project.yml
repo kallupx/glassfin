@@ -1,0 +1,140 @@
+name: Glassfin
+options:
+  bundleIdPrefix: org.glassfin
+  deploymentTarget:
+    iOS: "26.0"
+    tvOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: "NO"
+    DEVELOPMENT_TEAM: ""
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    Release:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
+packages:
+  GlassfinCore:
+    path: Packages/GlassfinCore
+targets:
+  Glassfin-tvOS:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Apps/Shared/Sources
+      - path: Apps/tvOS/Sources
+    dependencies:
+      - package: GlassfinCore
+        product: GlassfinCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app
+        PRODUCT_NAME: Glassfin
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Apps/tvOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Apps/tvOS/Glassfin.entitlements
+        TARGETED_DEVICE_FAMILY: "3"
+        TVOS_DEPLOYMENT_TARGET: "26.0"
+  Glassfin-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Apps/Shared/Sources
+      - path: Apps/iOS/Sources
+    dependencies:
+      - package: GlassfinCore
+        product: GlassfinCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app
+        PRODUCT_NAME: Glassfin
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Apps/iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Apps/iOS/Glassfin.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+  GlassfinTopShelf:
+    type: app-extension
+    platform: tvOS
+    sources:
+      - path: Apps/TopShelf/Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.topshelf
+        PRODUCT_NAME: GlassfinTopShelf
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Apps/TopShelf/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Apps/TopShelf/TopShelf.entitlements
+        SKIP_INSTALL: YES
+        TVOS_DEPLOYMENT_TARGET: "26.0"
+  Glassfin-tvOSUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - path: Apps/Shared/UITests
+    dependencies:
+      - target: Glassfin-tvOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.tvos.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Glassfin-tvOS
+        TVOS_DEPLOYMENT_TARGET: "26.0"
+  Glassfin-iOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Apps/Shared/UITests
+    dependencies:
+      - target: Glassfin-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Glassfin-iOS
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+schemes:
+  Glassfin-tvOS:
+    build:
+      targets:
+        Glassfin-tvOS: all
+        GlassfinTopShelf: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      coverageTargets:
+        - Glassfin-tvOS
+      environmentVariables:
+        GLASSFIN_SCREENSHOT_DIR: $(SRCROOT)/artifacts/screenshots
+      targets:
+        - name: Glassfin-tvOSUITests
+          parallelizable: false
+  Glassfin-iOS:
+    build:
+      targets:
+        Glassfin-iOS: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      coverageTargets:
+        - Glassfin-iOS
+      environmentVariables:
+        GLASSFIN_SCREENSHOT_DIR: $(SRCROOT)/artifacts/screenshots
+      targets:
+        - name: Glassfin-iOSUITests
+          parallelizable: false

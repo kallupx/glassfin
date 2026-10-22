@@ -1,0 +1,12 @@
+.build/
+DerivedData/
+DerivedData-*/
+*.xcresult
+*.xcodeproj
+xcuserdata/
+.swiftpm/
+**/.swiftpm/
+artifacts/
+*.pyc
+.DS_Store
+Package.resolved.bak

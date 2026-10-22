@@ -1,0 +1,48 @@
+# Third-party licenses
+
+Versions match `Packages/GlassfinCore/Package.resolved`. No FFmpeg, VLC, or MPV binary is linked yet. A future media binary must be LGPL (or another compatible license) with the matching source tarball and build configuration recorded here. GPL and nonfree builds are rejected by `scripts/license-check.sh`.
+
+## identity: get
+
+- Version: 2.2.1
+- License: MIT
+- Source: https://github.com/kean/Get
+- Product used by CoreAPI on Apple platforms (`import Get`).
+
+## identity: jellyfin-sdk-swift
+
+- Version: 3.3.0
+- License: MPL-2.0
+- Source: https://github.com/jellyfin/jellyfin-sdk-swift
+- Linked only from `CoreAPI`, and only on Apple platforms. Glassfin builds the MediaBrowser header itself; the SDK's unquoted header is overwritten.
+
+## identity: swift-atomics
+
+- Version: 1.3.1
+- License: Apache-2.0
+- Source: https://github.com/apple/swift-atomics
+
+## identity: swift-collections
+
+- Version: 1.7.3
+- License: Apache-2.0
+- Source: https://github.com/apple/swift-collections
+
+## identity: swift-nio
+
+- Version: 2.104.0
+- License: Apache-2.0
+- Source: https://github.com/apple/swift-nio
+
+## identity: swift-nio-transport-services
+
+- Version: 1.28.0
+- License: Apache-2.0
+- Source: https://github.com/apple/swift-nio-transport-services
+- Does not build on Linux (Network.framework). This is why `CoreAPI` does not link the SDK in the Linux manifest.
+
+## identity: swift-system
+
+- Version: 1.8.1
+- License: Apache-2.0
+- Source: https://github.com/apple/swift-system

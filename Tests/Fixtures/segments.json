@@ -1,0 +1,4 @@
+[
+  { "Type": "Intro", "StartTicks": 0, "EndTicks": 150000000 },
+  { "Type": "NotARealSegment", "StartTicks": 150000000, "EndTicks": 200000000 }
+]
