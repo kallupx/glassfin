@@ -18,7 +18,8 @@ public enum RedirectApplication: Sendable, Equatable {
 /// S4.6 for Glassfin's own `URLSession`.
 ///
 /// Authorization stays on the same origin (scheme, host, and port). Any HTTPS→HTTP
-/// redirect is rejected. A request URL that contains an API key query is rejected,
+/// redirect is rejected. A redirect from local HTTP onto public HTTP is not followed,
+/// so Authorization is not sent there. A request URL that contains an API key query is rejected,
 /// not merely stripped, when the target is a different origin or HTTP.
 ///
 /// AVPlayer follows redirects itself and does not use this delegate. Callers must
@@ -36,6 +37,9 @@ public enum RedirectPolicy {
         }
         if credential && !sameOrigin {
             return .reject(.credentialQueryCrossHost)
+        }
+        if leavesLocalHTTP(originalURL, for: redirectURL) {
+            return .reject(.notFollowed)
         }
         if !sameOrigin {
             return .follow(stripAuthorization: true)
@@ -103,6 +107,12 @@ public enum RedirectPolicy {
     private static func isHTTPSDowngrade(_ original: URL, _ redirect: URL) -> Bool {
         original.scheme?.lowercased() == "https" && redirect.scheme?.lowercased() == "http"
     }
+
+    /// Private or local HTTP must not be sent on to a public HTTP host. Authorization stays behind.
+    private static func leavesLocalHTTP(_ original: URL, for redirect: URL) -> Bool {
+        ServerTransportPolicy.evaluate(original) == .unencryptedLocal
+            && ServerTransportPolicy.evaluate(redirect) == .publicHTTPRejected
+    }
 }
 
 /// Same-origin redirects stop after 5 follows. A repeated URL is a loop and is not followed.
@@ -137,15 +147,21 @@ public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @u
     }
 
     private let lock = NSLock()
-    private var rejection: RedirectRejection?
+    private var rejections: [Int: RedirectRejection] = [:]
     private var hops: [Int: HopState] = [:]
 
+    public func consumeRejection(for taskIdentifier: Int) -> RedirectRejection? {
+        lock.lock()
+        defer { lock.unlock() }
+        return rejections.removeValue(forKey: taskIdentifier)
+    }
+
+    /// One in-flight task. Returns nil when two tasks have a rejection waiting, so they cannot be swapped.
     public func consumeRejection() -> RedirectRejection? {
         lock.lock()
         defer { lock.unlock() }
-        let value = rejection
-        rejection = nil
-        return value
+        guard rejections.count == 1, let key = rejections.keys.first else { return nil }
+        return rejections.removeValue(forKey: key)
     }
 
     public func urlSession(
@@ -176,7 +192,7 @@ public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @u
                     state.seen.append(url)
                 }
             case .reject(let reason):
-                rejection = reason
+                rejections[task.taskIdentifier] = reason
             }
             hops[task.taskIdentifier] = state
             return decision

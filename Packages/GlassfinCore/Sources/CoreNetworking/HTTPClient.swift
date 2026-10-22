@@ -92,11 +92,17 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.invalidURL
         }
         do {
-            let (data, response) = try await session.data(for: urlRequest)
+            let proxy = RedirectTaskProxy(owner: redirectDelegate)
+            let (data, response) = try await session.data(for: urlRequest, delegate: proxy)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
             if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
-                if case .redirectRejected = failure, let reason = redirectDelegate.consumeRejection() {
-                    throw APIError.redirectRejected(reason)
+                if case .redirectRejected = failure {
+                    let reason =
+                        proxy.capturedTaskIdentifier().flatMap { redirectDelegate.consumeRejection(for: $0) }
+                        ?? redirectDelegate.consumeRejection()
+                    if let reason {
+                        throw APIError.redirectRejected(reason)
+                    }
                 }
                 throw failure
             }
@@ -157,5 +163,48 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         }
         guard let url = components.url else { throw APIError.invalidURL }
         return url
+    }
+}
+
+/// Per-request delegate so a redirect rejection stays tied to that task.
+private final class RedirectTaskProxy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let owner: RedirectSessionDelegate
+    private let lock = NSLock()
+    private var identifier: Int?
+
+    init(owner: RedirectSessionDelegate) {
+        self.owner = owner
+    }
+
+    func capturedTaskIdentifier() -> Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        return identifier
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        lock.lock()
+        identifier = task.taskIdentifier
+        lock.unlock()
+        owner.urlSession(
+            session,
+            task: task,
+            willPerformHTTPRedirection: response,
+            newRequest: request,
+            completionHandler: completionHandler
+        )
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        lock.lock()
+        identifier = task.taskIdentifier
+        lock.unlock()
+        owner.urlSession(session, task: task, didCompleteWithError: error)
     }
 }

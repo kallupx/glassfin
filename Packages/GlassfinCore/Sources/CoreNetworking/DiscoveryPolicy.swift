@@ -84,7 +84,13 @@ public enum DiscoveryPolicy {
     }
 
     private static func isControl(_ scalar: Unicode.Scalar) -> Bool {
-        scalar.value <= 0x1F || scalar.value == 0x7F
+        if scalar.value <= 0x1F || scalar.value == 0x7F { return true }
+        switch scalar.value {
+        case 0x202A...0x202E, 0x2066...0x2069:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func defaultPort(_ scheme: String?) -> Int? {

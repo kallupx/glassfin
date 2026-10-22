@@ -1,7 +1,7 @@
 import CoreModels
 import Foundation
 
-/// S4.2 and S4.3. Public names need HTTPS. Local HTTP is allowed and stays marked as unencrypted.
+/// S4.3. Public HTTP is rejected. HTTP is allowed for private addresses and local hostnames, and stays marked unencrypted.
 public enum ServerTransportPolicy {
     public enum Verdict: Sendable, Equatable {
         case secure
@@ -43,23 +43,135 @@ public enum ServerTransportPolicy {
         return ServerSecurityBadge(showsUnencryptedMark: verdict == .unencryptedLocal, message: message(for: verdict))
     }
 
-    static func isLocal(_ host: String) -> Bool {
-        var trimmed = host
-        while trimmed.hasSuffix(".") { trimmed.removeLast() }
-        if trimmed.isEmpty { return false }
-        if trimmed == "localhost" || trimmed.hasSuffix(".local") || !trimmed.contains(".") {
-            return true
-        }
-        return isIPv4(trimmed) || trimmed.contains(":")
+    enum HostClass: Sendable, Equatable {
+        case privateAddress
+        case publicAddress
+        case localHostname
+        case publicHostname
     }
 
-    private static func isIPv4(_ host: String) -> Bool {
-        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 4 else { return false }
-        return parts.allSatisfy { part in
-            guard let value = Int(part), (0...255).contains(value) else { return false }
-            return !(part.count > 1 && part.hasPrefix("0"))
+    static func isLocal(_ host: String) -> Bool {
+        switch hostClass(host) {
+        case .privateAddress, .localHostname:
+            return true
+        case .publicAddress, .publicHostname:
+            return false
         }
+    }
+
+    /// Only a canonical dotted-quad or IPv6 literal is an address. Other text is a hostname.
+    static func hostClass(_ host: String) -> HostClass {
+        var trimmed = host.lowercased()
+        while trimmed.hasSuffix(".") { trimmed.removeLast() }
+        if trimmed.isEmpty { return .publicHostname }
+        if !trimmed.contains(":"), let octets = canonicalIPv4(trimmed) {
+            return isPrivateIPv4(octets) ? .privateAddress : .publicAddress
+        }
+        if trimmed.contains(":"), let groups = canonicalIPv6(trimmed) {
+            return isPrivateIPv6(groups) ? .privateAddress : .publicAddress
+        }
+        if trimmed == "localhost" || trimmed.hasSuffix(".local") || !trimmed.contains(".") && !trimmed.contains(":") {
+            return .localHostname
+        }
+        return .publicHostname
+    }
+
+    /// Four decimal octets, no leading zeros. Hex, short forms, and integer forms are not addresses.
+    private static func canonicalIPv4(_ host: String) -> [UInt8]? {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var octets: [UInt8] = []
+        for part in parts {
+            if part.isEmpty || part.count > 3 { return nil }
+            if part.count > 1 && part.hasPrefix("0") { return nil }
+            guard part.allSatisfy({ $0.isASCII && $0.isNumber }), let value = Int(part), (0...255).contains(value)
+            else { return nil }
+            octets.append(UInt8(value))
+        }
+        return octets
+    }
+
+    private static func isPrivateIPv4(_ octets: [UInt8]) -> Bool {
+        switch octets[0] {
+        case 127, 10:
+            return true
+        case 172:
+            return (16...31).contains(Int(octets[1]))
+        case 192:
+            return octets[1] == 168
+        case 169:
+            return octets[1] == 254
+        case 100:
+            return (64...127).contains(Int(octets[1]))
+        default:
+            return false
+        }
+    }
+
+    /// Eight hextets. An IPv4-mapped address (`::ffff:0:0/96`) is classified with the IPv4 rules.
+    private static func canonicalIPv6(_ host: String) -> [UInt16]? {
+        var text = host
+        if text.hasPrefix("["), text.hasSuffix("]") {
+            text.removeFirst()
+            text.removeLast()
+        }
+        if let zone = text.firstIndex(of: "%") {
+            text = String(text[..<zone])
+        }
+        var ipv4: [UInt8]?
+        if text.contains(".") {
+            guard let colon = text.lastIndex(of: ":") else { return nil }
+            let tail = String(text[text.index(after: colon)...])
+            guard let octets = canonicalIPv4(tail) else { return nil }
+            ipv4 = octets
+            text = String(text[..<colon])
+        }
+        let groups: [UInt16]
+        if text.contains("::") {
+            let sides = text.components(separatedBy: "::")
+            guard sides.count == 2, let left = hextets(sides[0]), let right = hextets(sides[1]) else { return nil }
+            let tailCount = right.count + (ipv4 == nil ? 0 : 2)
+            guard left.count + tailCount < 8 else { return nil }
+            let zeros = 8 - left.count - right.count - (ipv4 == nil ? 0 : 2)
+            groups = left + Array(repeating: 0, count: zeros) + right
+        } else {
+            guard let all = hextets(text) else { return nil }
+            let expected = 8 - (ipv4 == nil ? 0 : 2)
+            guard all.count == expected else { return nil }
+            groups = all
+        }
+        var full = groups
+        if let ipv4 {
+            full.append(UInt16(ipv4[0]) << 8 | UInt16(ipv4[1]))
+            full.append(UInt16(ipv4[2]) << 8 | UInt16(ipv4[3]))
+        }
+        guard full.count == 8 else { return nil }
+        return full
+    }
+
+    private static func hextets(_ text: String) -> [UInt16]? {
+        if text.isEmpty { return [] }
+        var out: [UInt16] = []
+        for part in text.split(separator: ":", omittingEmptySubsequences: false) {
+            if part.isEmpty || part.count > 4 { return nil }
+            guard part.allSatisfy(\.isHexDigit), let value = UInt16(part, radix: 16) else { return nil }
+            out.append(value)
+        }
+        return out
+    }
+
+    private static func isPrivateIPv6(_ groups: [UInt16]) -> Bool {
+        if groups[0] == 0 && groups[1] == 0 && groups[2] == 0 && groups[3] == 0 && groups[4] == 0 && groups[5] == 0xffff
+        {
+            let octets = [
+                UInt8(groups[6] >> 8), UInt8(groups[6] & 0xff), UInt8(groups[7] >> 8), UInt8(groups[7] & 0xff),
+            ]
+            return isPrivateIPv4(octets)
+        }
+        if groups == [0, 0, 0, 0, 0, 0, 0, 1] { return true }
+        if groups[0] & 0xffc0 == 0xfe80 { return true }
+        if groups[0] & 0xfe00 == 0xfc00 { return true }
+        return false
     }
 }
 

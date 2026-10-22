@@ -16,8 +16,8 @@ final class SecurityCredentialTests: XCTestCase {
     private let token = "token-value-should-not-leak"
     private let accessGroup = "TEAMID.org.glassfin.app"
 
-    /// T03-01. The keychain write uses AfterFirstUnlockThisDeviceOnly, and the token is absent from settings.
-    func testT03_01_keychainAttributesAndSettingsDump() throws {
+    /// T03-18. The keychain write uses AfterFirstUnlockThisDeviceOnly, and the token is absent from settings.
+    func testT03_18_keychainAttributesAndSettingsDump() throws {
         let secure = AttributeSecureStore()
         let settings = InMemorySettingsStore()
         let vault = CredentialVault(secureStore: secure, settings: settings, accessGroup: accessGroup)
@@ -76,8 +76,8 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertTrue(dump.contains("Living Room"))
     }
 
-    /// T03-02. Logout always posts /Sessions/Logout and clears the keychain when that call fails.
-    func testT03_02_logoutClearsKeychainWhenTheServerCallFails() async throws {
+    /// T03-19. Logout always posts /Sessions/Logout and clears the keychain when that call fails.
+    func testT03_19_logoutClearsKeychainWhenTheServerCallFails() async throws {
         let secure = AttributeSecureStore()
         let settings = InMemorySettingsStore()
         let vault = CredentialVault(secureStore: secure, settings: settings, accessGroup: accessGroup)
@@ -118,8 +118,8 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertNil(try pins.fingerprint(for: otherServer))
     }
 
-    /// T03-10. Network, timeout, TLS, 5xx, and 403 keep the token. Only an authenticated 401 removes it.
-    func testT03_10_onlyAuthenticated401EndsTheSession() throws {
+    /// T03-27. Network, timeout, TLS, 5xx, and 403 keep the token. Only an authenticated 401 removes it.
+    func testT03_27_onlyAuthenticated401EndsTheSession() throws {
         let failures: [APIError] = [
             .network, .timeout, .tls, .forbidden, .server(status: 500), .server(status: 502), .server(status: 503),
             .server(status: 504), .redirectRejected(.httpsDowngrade),
@@ -169,8 +169,114 @@ final class SecurityCredentialTests: XCTestCase {
 }
 
 final class SecurityCertificateTests: XCTestCase {
-    /// T03-04. A self-signed leaf is pinned only after confirmation, and a changed fingerprint is refused.
-    func testT03_04_selfSignedPinAndRotation() throws {
+    private let serverID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    /// T03-01. Confirming fingerprint B while the connection presents C cancels. Nothing is pinned or written to the keychain.
+    func testT03_01_acceptedFingerprintMismatchOnChangeCancels() throws {
+        let leafA = presentation(Data("leaf-a".utf8), subject: "CN=old")
+        let leafB = presentation(Data("leaf-b".utf8), subject: "CN=accepted")
+        let leafC = presentation(Data("leaf-c".utf8), subject: "CN=presented")
+        let settings = InMemorySettingsStore()
+        let store = SettingsCertificatePinStore(settings: settings)
+        let keychain = AttributeSecureStore()
+        try store.save(fingerprint: leafA.sha256, serverID: serverID)
+
+        let outcome = SelfSignedTrustFlow.handle(
+            isSystemTrusted: false,
+            leaf: leafC,
+            pinnedSHA256: leafA.sha256,
+            userAcceptedFingerprint: grouped(leafB.sha256, separator: ":")
+        )
+        guard case .cancelPinMismatch(let previous, let presented) = outcome.decision else {
+            return XCTFail("Expected a pin mismatch")
+        }
+        XCTAssertEqual(previous, CertificateFingerprint.normalize(leafA.sha256))
+        XCTAssertEqual(presented.sha256, leafC.sha256)
+        XCTAssertNil(outcome.pinToStore)
+        XCTAssertEqual(try store.fingerprint(for: serverID), CertificateFingerprint.normalize(leafA.sha256))
+        let dump = settings.allValues().values.joined(separator: "\n")
+        XCTAssertFalse(dump.contains(CertificateFingerprint.normalize(leafB.sha256)))
+        XCTAssertFalse(dump.contains(CertificateFingerprint.normalize(leafC.sha256)))
+        XCTAssertEqual(keychain.accounts(), [])
+    }
+
+    /// T03-02. The same mismatch on first acceptance, with no prior pin, cancels and stores nothing.
+    func testT03_02_firstAcceptanceMismatchCancels() throws {
+        let leafB = presentation(Data("leaf-b".utf8), subject: "CN=accepted")
+        let leafC = presentation(Data("leaf-c".utf8), subject: "CN=presented")
+        let settings = InMemorySettingsStore()
+        let store = SettingsCertificatePinStore(settings: settings)
+        let keychain = AttributeSecureStore()
+        let outcome = SelfSignedTrustFlow.handle(
+            isSystemTrusted: false,
+            leaf: leafC,
+            pinnedSHA256: nil,
+            userAcceptedFingerprint: grouped(leafB.sha256, separator: " ")
+        )
+        XCTAssertEqual(outcome.decision, .cancelUntrusted)
+        XCTAssertNil(outcome.pinToStore)
+        XCTAssertNil(try store.fingerprint(for: serverID))
+        XCTAssertTrue(settings.allValues().isEmpty)
+        XCTAssertEqual(keychain.accounts(), [])
+    }
+
+    /// T03-03. A confirmed fingerprint that matches the leaf is pinned. The next connection does not prompt.
+    func testT03_03_matchingFingerprintIsPinnedAndReused() throws {
+        let leaf = presentation(Data("leaf-a".utf8), subject: "CN=jellyfin")
+        let hex = CertificateFingerprint.normalize(leaf.sha256)
+        let colon = grouped(hex, separator: ":")
+        let spaced = grouped(hex, separator: " ")
+        let mixed = colon.replacingOccurrences(of: ":", with: ": ")
+        for accepted in [colon, spaced, mixed, hex.uppercased()] {
+            let outcome = SelfSignedTrustFlow.handle(
+                isSystemTrusted: false, leaf: leaf, pinnedSHA256: nil, userAcceptedFingerprint: accepted)
+            XCTAssertEqual(outcome.decision, .usePinnedCredential, accepted)
+            XCTAssertEqual(outcome.pinToStore, hex, accepted)
+        }
+        let settings = InMemorySettingsStore()
+        let store = SettingsCertificatePinStore(settings: settings)
+        let keychain = AttributeSecureStore()
+        let first = SelfSignedTrustFlow.handle(
+            isSystemTrusted: false, leaf: leaf, pinnedSHA256: nil, userAcceptedFingerprint: mixed)
+        try store.save(fingerprint: try XCTUnwrap(first.pinToStore), serverID: serverID)
+        XCTAssertEqual(try store.fingerprint(for: serverID), hex)
+        XCTAssertEqual(keychain.accounts(), [])
+
+        let next = SelfSignedTrustFlow.handle(
+            isSystemTrusted: false, leaf: leaf, pinnedSHA256: colon, userAcceptedFingerprint: nil)
+        XCTAssertEqual(next.decision, .usePinnedCredential)
+        XCTAssertNil(next.pinToStore)
+        XCTAssertEqual(try store.fingerprint(for: serverID), hex)
+    }
+
+    /// T03-04. A pinned certificate that changes to D is blocked, and the dialog shows D's fingerprint.
+    func testT03_04_changedCertificateShowsNewFingerprint() throws {
+        let leafA = presentation(Data("leaf-a".utf8), subject: "CN=old")
+        let leafD = presentation(Data("leaf-d".utf8), subject: "CN=new")
+        let settings = InMemorySettingsStore()
+        let store = SettingsCertificatePinStore(settings: settings)
+        let keychain = AttributeSecureStore()
+        try store.save(fingerprint: grouped(leafA.sha256, separator: ":"), serverID: serverID)
+        let outcome = SelfSignedTrustFlow.handle(
+            isSystemTrusted: false,
+            leaf: leafD,
+            pinnedSHA256: try store.fingerprint(for: serverID),
+            userAcceptedFingerprint: nil
+        )
+        guard case .cancelPinMismatch(let previous, let presented) = outcome.decision else {
+            return XCTFail("Expected a pin mismatch")
+        }
+        XCTAssertEqual(previous, CertificateFingerprint.normalize(leafA.sha256))
+        XCTAssertEqual(presented, leafD)
+        XCTAssertEqual(presented.sha256, leafD.sha256)
+        XCTAssertNil(outcome.pinToStore)
+        XCTAssertEqual(try store.fingerprint(for: serverID), CertificateFingerprint.normalize(leafA.sha256))
+        XCTAssertFalse(settings.allValues().values.joined().contains(CertificateFingerprint.normalize(leafD.sha256)))
+        XCTAssertEqual(keychain.accounts(), [])
+    }
+
+    /// T03-21. NIST SHA-256 vectors, and a system-trusted leaf is not pinned.
+    func testT03_21_systemTrustedCertificateIsNotPinned() throws {
         XCTAssertEqual(
             CertificateFingerprint.sha256Hex(Data()),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -179,50 +285,13 @@ final class SecurityCertificateTests: XCTestCase {
             CertificateFingerprint.sha256Hex(Data("abc".utf8)),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         )
-        let leafA = presentation(Data("leaf-a".utf8), subject: "CN=jellyfin")
-        let leafB = presentation(Data("leaf-b".utf8), subject: "CN=other")
-        let refused = SelfSignedTrustFlow.handle(
-            isSystemTrusted: false, leaf: leafA, pinnedSHA256: nil, userAcceptsUntrusted: false)
-        XCTAssertEqual(refused.decision, .cancelUntrusted)
-        XCTAssertNil(refused.pinToStore)
-
-        let accepted = SelfSignedTrustFlow.handle(
-            isSystemTrusted: false, leaf: leafA, pinnedSHA256: nil, userAcceptsUntrusted: true)
-        let pin = try XCTUnwrap(accepted.pinToStore)
-        XCTAssertEqual(pin, CertificateFingerprint.normalize(leafA.sha256))
-        let store = SettingsCertificatePinStore(settings: InMemorySettingsStore())
-        let serverID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        try store.save(fingerprint: pin, serverID: serverID)
-
-        let again = SelfSignedTrustFlow.handle(
-            isSystemTrusted: false,
-            leaf: leafA,
-            pinnedSHA256: try store.fingerprint(for: serverID),
-            userAcceptsUntrusted: false
-        )
-        XCTAssertEqual(again.decision, .usePinnedCredential)
-        XCTAssertNil(again.pinToStore)
-
-        let changed = SelfSignedTrustFlow.handle(
-            isSystemTrusted: false,
-            leaf: leafB,
-            pinnedSHA256: try store.fingerprint(for: serverID),
-            userAcceptsUntrusted: false
-        )
-        guard case .cancelPinMismatch(let previous, let presented) = changed.decision else {
-            return XCTFail("Expected a pin mismatch")
-        }
-        XCTAssertEqual(previous, pin)
-        XCTAssertEqual(presented.subject, "CN=other")
-        XCTAssertEqual(presented.sha256, leafB.sha256)
-        XCTAssertNotEqual(previous, CertificateFingerprint.normalize(presented.sha256))
-
-        let rotated = SelfSignedTrustFlow.handle(
-            isSystemTrusted: false, leaf: leafB, pinnedSHA256: pin, userAcceptsUntrusted: true)
-        XCTAssertEqual(rotated.pinToStore, CertificateFingerprint.normalize(leafB.sha256))
-
+        let leaf = presentation(Data("leaf-b".utf8), subject: "CN=public")
         let trusted = SelfSignedTrustFlow.handle(
-            isSystemTrusted: true, leaf: leafB, pinnedSHA256: pin, userAcceptsUntrusted: true)
+            isSystemTrusted: true,
+            leaf: leaf,
+            pinnedSHA256: nil,
+            userAcceptedFingerprint: leaf.sha256
+        )
         XCTAssertEqual(trusted.decision, .performDefaultHandling)
         XCTAssertNil(trusted.pinToStore)
     }
@@ -235,11 +304,107 @@ final class SecurityCertificateTests: XCTestCase {
             notAfter: Date(timeIntervalSince1970: 1_800_000_000)
         )
     }
+
+    private func grouped(_ hex: String, separator: Character) -> String {
+        var pieces: [String] = []
+        var current = ""
+        for character in hex.uppercased() {
+            current.append(character)
+            if current.count == 2 {
+                pieces.append(current)
+                current = ""
+            }
+        }
+        return pieces.joined(separator: String(separator))
+    }
 }
 
 final class SecurityTransportTests: XCTestCase {
-    /// T03-03. App plists allow local networking and do not allow arbitrary loads.
-    func testT03_03_appTransportSecurityDoesNotAllowArbitraryLoads() throws {
+    /// T03-05. Public IPv4 HTTP is rejected before any request is built.
+    func testT03_05_publicIPv4HTTPIsRejectedBeforeAnyRequest() throws {
+        for host in ["203.0.113.5", "8.8.8.8"] {
+            let url = try XCTUnwrap(URL(string: "http://\(host)/library"))
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
+            XCTAssertEqual(
+                ServerTransportPolicy.message(for: .publicHTTPRejected),
+                "Julkiset osoitteet vaativat HTTPS:n"
+            )
+            XCTAssertNil(URLRequest(url: url).value(forHTTPHeaderField: "Authorization"))
+        }
+    }
+
+    /// T03-06. Public IPv6 HTTP is rejected before any request is built.
+    func testT03_06_publicIPv6HTTPIsRejectedBeforeAnyRequest() throws {
+        for host in ["2001:db8::1", "2606:4700::1111"] {
+            let url = try XCTUnwrap(URL(string: "http://[\(host)]/library"))
+            XCTAssertEqual(url.host, host)
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
+        }
+    }
+
+    /// T03-07. Private ranges, including the documented boundaries, stay on local HTTP.
+    func testT03_07_privateAddressBoundariesAllowed() throws {
+        let allowed = [
+            "172.16.0.1", "172.31.255.254", "100.64.0.1", "100.127.255.254",
+            "127.0.0.1", "10.255.255.255", "169.254.0.1", "192.168.0.1",
+        ]
+        for host in allowed {
+            let url = try XCTUnwrap(URL(string: "http://\(host)/"))
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .privateAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .unencryptedLocal, host)
+        }
+        for host in ["::1", "fe80::1", "fd00::1", "fc00::1"] {
+            let url = try XCTUnwrap(URL(string: "http://[\(host)]/"))
+            XCTAssertEqual(url.host, host)
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .privateAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .unencryptedLocal, host)
+        }
+    }
+
+    /// T03-08. Addresses just outside the private ranges are public. IPv4-mapped literals use the IPv4 rules.
+    func testT03_08_addressesJustOutsidePrivateRangesRejected() throws {
+        let rejected = ["172.15.255.255", "172.32.0.1", "100.63.255.255", "100.128.0.1", "192.169.1.1"]
+        for host in rejected {
+            let url = try XCTUnwrap(URL(string: "http://\(host)/"))
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
+        }
+        let mappedPublic = "::ffff:8.8.8.8"
+        let mappedPrivate = "::ffff:192.168.1.1"
+        let publicURL = try XCTUnwrap(URL(string: "http://[\(mappedPublic)]/"))
+        let privateURL = try XCTUnwrap(URL(string: "http://[\(mappedPrivate)]/"))
+        XCTAssertEqual(publicURL.host, mappedPublic)
+        XCTAssertEqual(privateURL.host, mappedPrivate)
+        XCTAssertEqual(ServerTransportPolicy.hostClass(mappedPublic), .publicAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(publicURL), .publicHTTPRejected)
+        XCTAssertEqual(ServerTransportPolicy.hostClass(mappedPrivate), .privateAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(privateURL), .unencryptedLocal)
+    }
+
+    /// T03-09. Non-canonical forms are hostnames. They are not parsed as a private address.
+    func testT03_09_ipBypassesFollowHostnameRules() throws {
+        XCTAssertEqual(ServerTransportPolicy.hostClass("0x7f000001"), .localHostname)
+        XCTAssertEqual(ServerTransportPolicy.hostClass("2130706433"), .localHostname)
+        XCTAssertEqual(
+            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://0x7f000001/"))), .unencryptedLocal)
+        XCTAssertEqual(
+            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://2130706433/"))), .unencryptedLocal)
+        XCTAssertEqual(ServerTransportPolicy.hostClass("127.1"), .publicHostname)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://127.1/"))), .publicHTTPRejected)
+        XCTAssertEqual(ServerTransportPolicy.hostClass("192.168.1.1.nip.io"), .publicHostname)
+        XCTAssertEqual(
+            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://192.168.1.1.nip.io/"))),
+            .publicHTTPRejected
+        )
+        XCTAssertNotEqual(ServerTransportPolicy.hostClass("0x7f000001"), .privateAddress)
+        XCTAssertNotEqual(ServerTransportPolicy.hostClass("127.1"), .privateAddress)
+        XCTAssertNotEqual(ServerTransportPolicy.hostClass("192.168.1.1.nip.io"), .privateAddress)
+    }
+
+    /// T03-20. App plists allow local networking and do not allow arbitrary loads.
+    func testT03_20_appTransportSecurityDoesNotAllowArbitraryLoads() throws {
         let arbitraryLoads = "NSAllows" + "ArbitraryLoads"
         let root = repoRoot()
         for platform in ["tvOS", "iOS"] {
@@ -257,8 +422,8 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertFalse(String(decoding: topShelf, as: UTF8.self).contains(arbitraryLoads))
     }
 
-    /// T03-08. The keychain access group is only on the app and Top Shelf entitlements.
-    func testT03_08_keychainAccessGroupIsLimitedToAppAndTopShelf() throws {
+    /// T03-25. The keychain access group is only on the app and Top Shelf entitlements.
+    func testT03_25_keychainAccessGroupIsLimitedToAppAndTopShelf() throws {
         let root = repoRoot()
         let allowed: Set<String> = [
             "Apps/tvOS/Glassfin.entitlements",
@@ -335,8 +500,8 @@ final class SecurityTransportTests: XCTestCase {
 }
 
 final class SecurityRedirectAndMediaTests: XCTestCase {
-    /// T03-06. Cross-host drops Authorization, HTTPS to HTTP fails, same-host works, and the sixth hop stops.
-    func testT03_06_redirectBudgetAndOriginRules() throws {
+    /// T03-23. Cross-host drops Authorization, HTTPS to HTTP fails, same-host works, and the sixth hop stops.
+    func testT03_23_redirectBudgetAndOriginRules() throws {
         let originalURL = try XCTUnwrap(URL(string: "https://media.example/a"))
         var original = URLRequest(url: originalURL)
         original.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
@@ -382,6 +547,60 @@ final class SecurityRedirectAndMediaTests: XCTestCase {
             .reject(.notFollowed)
         )
         XCTAssertEqual(RedirectFollowLimit.maximum, 5)
+
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let delegate = RedirectSessionDelegate()
+        let privateURL = try XCTUnwrap(URL(string: "http://192.168.1.10/a"))
+        let publicURL = try XCTUnwrap(URL(string: "http://203.0.113.5/a"))
+        let taskA = session.dataTask(with: privateURL)
+        let taskB = session.dataTask(with: try XCTUnwrap(URL(string: "https://media.example/a")))
+        let response = try XCTUnwrap(
+            HTTPURLResponse(url: privateURL, statusCode: 302, httpVersion: nil, headerFields: nil))
+        var proposedA = URLRequest(url: publicURL)
+        proposedA.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
+        var proposedB = URLRequest(url: try XCTUnwrap(URL(string: "http://media.example/a")))
+        proposedB.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
+        delegate.urlSession(
+            session, task: taskA, willPerformHTTPRedirection: response, newRequest: proposedA
+        ) { request in
+            XCTAssertNil(request)
+        }
+        delegate.urlSession(
+            session, task: taskB, willPerformHTTPRedirection: response, newRequest: proposedB
+        ) { request in
+            XCTAssertNil(request)
+        }
+        delegate.urlSession(session, task: taskA, didCompleteWithError: nil)
+        XCTAssertEqual(delegate.consumeRejection(for: taskA.taskIdentifier), .notFollowed)
+        XCTAssertEqual(delegate.consumeRejection(for: taskB.taskIdentifier), .httpsDowngrade)
+        XCTAssertNil(delegate.consumeRejection(for: taskA.taskIdentifier))
+        XCTAssertNotEqual(taskA.taskIdentifier, taskB.taskIdentifier)
+    }
+
+    /// T03-10. A redirect from private HTTP onto public HTTP is not followed, and Authorization is not sent.
+    func testT03_10_redirectFromPrivateToPublicHTTPIsRejected() throws {
+        let originalURL = try XCTUnwrap(URL(string: "http://192.168.1.10/Items"))
+        var original = URLRequest(url: originalURL)
+        original.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
+        let target = try XCTUnwrap(URL(string: "http://8.8.8.8/Items"))
+        var proposed = URLRequest(url: target)
+        proposed.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
+        XCTAssertEqual(RedirectPolicy.apply(original: original, proposed: proposed), .reject(.notFollowed))
+        XCTAssertNil(PlayerMediaHandoff.urlForPlayer(start: originalURL, hops: [target]))
+
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let task = session.dataTask(with: original)
+        let response = try XCTUnwrap(
+            HTTPURLResponse(url: originalURL, statusCode: 302, httpVersion: nil, headerFields: nil))
+        let delegate = RedirectSessionDelegate()
+        var followed: URLRequest? = proposed
+        delegate.urlSession(
+            session, task: task, willPerformHTTPRedirection: response, newRequest: proposed
+        ) { followed = $0 }
+        XCTAssertNil(followed)
+        XCTAssertEqual(delegate.consumeRejection(for: task.taskIdentifier), .notFollowed)
     }
 
     /// T03-11. An ApiKey URL is not followed off-origin, and AVPlayer only receives the resolved URL.
@@ -418,8 +637,8 @@ final class SecurityRedirectAndMediaTests: XCTestCase {
 }
 
 final class SecurityDiscoveryTests: XCTestCase {
-    /// T03-07. A forged discovery packet is shown and never connects or rewrites a stored address.
-    func testT03_07_forgedDiscoveryDoesNotAutoConnect() throws {
+    /// T03-24. A forged discovery packet is shown and never connects or rewrites a stored address.
+    func testT03_24_forgedDiscoveryDoesNotAutoConnect() throws {
         let stored = try XCTUnwrap(URL(string: "http://192.168.1.9:8096"))
         let name = "<script>alert(1)</script><b>" + String(repeating: "N", count: 80) + "</b>\n"
         let packet = try JSONSerialization.data(withJSONObject: [
@@ -469,12 +688,19 @@ final class SecurityDiscoveryTests: XCTestCase {
         XCTAssertNil(DiscoveryPolicy.parse(Data("nope".utf8), storedURL: nil, publicInfoID: nil))
         XCTAssertNil(
             DiscoveryPolicy.parse(Data("{\"Address\":\"ftp://192.168.1.2\"}".utf8), storedURL: nil, publicInfoID: nil))
+
+        let spoofed = "\u{202E}Room\u{202C}\u{2066}TV\u{2069}"
+        XCTAssertEqual(DiscoveryPolicy.displayName(spoofed), "RoomTV")
+        XCTAssertFalse(
+            DiscoveryPolicy.displayName(spoofed).unicodeScalars.contains {
+                (0x202A...0x202E).contains($0.value) || (0x2066...0x2069).contains($0.value)
+            })
     }
 }
 
 final class SecurityHeaderAndLogTests: XCTestCase {
-    /// T03-09. Quotes, comma, equals, plus, space, emoji, and ääkköset round-trip. One Authorization header leaves.
-    func testT03_09_headerEncodingRejectionAndSingleAuthorization() throws {
+    /// T03-26. Quotes, comma, equals, plus, space, emoji, and ääkköset round-trip. One Authorization header leaves.
+    func testT03_26_headerEncodingRejectionAndSingleAuthorization() throws {
         let device = "Olohuone + \"TV\", ää=kköset 📺"
         let header = try AuthorizationHeader.value(
             client: "Glassfin", device: device, deviceID: "device-1", version: "1.0.0", token: "tok+en")
@@ -537,8 +763,8 @@ final class SecurityHeaderAndLogTests: XCTestCase {
         }
     }
 
-    /// T03-05. Every forbidden field is redacted, including a media URL.
-    func testT03_05_loggerRedactsEveryForbiddenField() {
+    /// T03-22. Every forbidden field is redacted, including a media URL.
+    func testT03_22_loggerRedactsEveryForbiddenField() {
         let secret = "planted-token-value"
         let legacy = "api" + "_key"
         let samples = [
@@ -725,6 +951,12 @@ private final class AttributeSecureStore: SecureStore, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return written[account]
+    }
+
+    func accounts() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(values.keys)
     }
 }
 

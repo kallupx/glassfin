@@ -81,35 +81,46 @@ public enum SelfSignedTrustFlow {
     }
 
     /// Mockable trust decision. A system-trusted leaf is never pinned.
+    ///
+    /// `userAcceptedFingerprint` is the fingerprint the user confirmed in the dialog.
+    /// The pin is stored only when that value normalizes to the presented leaf.
+    /// A boolean acceptance is not enough: confirming B while the connection presents C cancels.
     public static func handle(
         isSystemTrusted: Bool,
         leaf: CertificatePresentation,
         pinnedSHA256: String?,
-        userAcceptsUntrusted: Bool
+        userAcceptedFingerprint: String?
     ) -> Outcome {
         if isSystemTrusted {
             return Outcome(decision: .performDefaultHandling, pinToStore: nil)
         }
         let leafHex = CertificateFingerprint.normalize(leaf.sha256)
-        if let pinned = pinnedSHA256.map(CertificateFingerprint.normalize), !pinned.isEmpty {
-            if pinned == leafHex {
-                return Outcome(decision: .usePinnedCredential, pinToStore: nil)
-            }
-            if userAcceptsUntrusted {
-                return Outcome(decision: .usePinnedCredential, pinToStore: leafHex)
-            }
+        let pinned = pinnedSHA256.map(CertificateFingerprint.normalize)
+        let hasPin = pinned.map { !$0.isEmpty } ?? false
+        if hasPin, let pinned, pinned == leafHex, CertificateFingerprint.isValid(leafHex) {
+            return Outcome(decision: .usePinnedCredential, pinToStore: nil)
+        }
+        if accepted(userAcceptedFingerprint, matches: leafHex) {
+            return Outcome(decision: .usePinnedCredential, pinToStore: leafHex)
+        }
+        if hasPin, let pinned {
             return Outcome(
                 decision: .cancelPinMismatch(previous: pinned, presented: leaf),
                 pinToStore: nil
             )
         }
-        if userAcceptsUntrusted {
-            return Outcome(decision: .usePinnedCredential, pinToStore: leafHex)
-        }
         return Outcome(decision: .cancelUntrusted, pinToStore: nil)
+    }
+
+    /// Case and separators (`:` and spaces) are ignored. The stored pin is lowercase hex.
+    private static func accepted(_ userAcceptedFingerprint: String?, matches leafHex: String) -> Bool {
+        guard CertificateFingerprint.isValid(leafHex) else { return false }
+        guard let raw = userAcceptedFingerprint else { return false }
+        return CertificateFingerprint.normalize(raw) == leafHex
     }
 }
 
+/// Local SHA-256 so certificate tests run on Linux. TODO: replace with swift-crypto.
 enum SHA256Digest {
     static func hex(_ message: [UInt8]) -> String {
         hash(message).map { String(format: "%02x", $0) }.joined()
