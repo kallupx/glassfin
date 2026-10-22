@@ -138,7 +138,7 @@ public enum ServerTransportPolicy {
         }
     }
 
-    /// Eight hextets. An IPv4-mapped address (`::ffff:0:0/96`) is classified with the IPv4 rules.
+    /// Eight hextets. Only an IPv4-mapped address (`::ffff:0:0/96`) is classified with the IPv4 rules.
     private static func canonicalIPv6(_ host: String) -> [UInt16]? {
         var text = host
         if text.hasPrefix("["), text.hasSuffix("]") {
@@ -193,15 +193,12 @@ public enum ServerTransportPolicy {
     }
 
     private static func isPrivateIPv6(_ groups: [UInt16]) -> Bool {
-        if isIPv4Mapped(groups) || isNAT64(groups) {
+        if isIPv4Mapped(groups) {
             return isPrivateIPv4(embeddedIPv4(groups))
         }
         if groups == [0, 0, 0, 0, 0, 0, 0, 1] { return true }
-        if isIPv4Compatible(groups) {
-            let octets = embeddedIPv4(groups)
-            if octets == [0, 0, 0, 0] { return false }
-            return isPrivateIPv4(octets)
-        }
+        // S4.3: IPv4-compatible ::/96 and NAT64 64:ff9b::/96 stay public, whatever address they embed.
+        if isIPv4Compatible(groups) || isNAT64(groups) { return false }
         if groups[0] & 0xffc0 == 0xfe80 { return true }
         if groups[0] & 0xfe00 == 0xfc00 { return true }
         return false

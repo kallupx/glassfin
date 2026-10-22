@@ -428,22 +428,29 @@ final class SecurityTransportTests: XCTestCase {
         }
     }
 
-    /// T03-29. Testaaja T03-12. Embedded IPv4 follows the IPv4 rules. A zone id does not crash.
+    /// T03-29. Testaaja T03-12. Only IPv4-mapped addresses use the embedded IPv4 rules.
     func testT03_29_embeddedIPv4AndZoneID() throws {
-        let mapped = try XCTUnwrap(URL(string: "http://[::ffff:808:808]/"))
-        XCTAssertEqual(mapped.host, "::ffff:808:808")
+        let mappedLocal = try XCTUnwrap(URL(string: "http://[::ffff:7f00:1]/"))
+        XCTAssertEqual(mappedLocal.host, "::ffff:7f00:1")
+        XCTAssertEqual(ServerTransportPolicy.hostClass("::ffff:7f00:1"), .privateAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(mappedLocal), .unencryptedLocal)
+
+        let mappedPublic = try XCTUnwrap(URL(string: "http://[::ffff:808:808]/"))
+        XCTAssertEqual(mappedPublic.host, "::ffff:808:808")
         XCTAssertEqual(ServerTransportPolicy.hostClass("::ffff:808:808"), .publicAddress)
-        XCTAssertEqual(ServerTransportPolicy.evaluate(mapped), .publicHTTPRejected)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(mappedPublic), .publicHTTPRejected)
 
         let compatible = try XCTUnwrap(URL(string: "http://[::192.168.1.1]/"))
         XCTAssertEqual(compatible.host, "::192.168.1.1")
-        XCTAssertEqual(ServerTransportPolicy.hostClass("::192.168.1.1"), .privateAddress)
-        XCTAssertEqual(ServerTransportPolicy.evaluate(compatible), .unencryptedLocal)
+        XCTAssertEqual(ServerTransportPolicy.hostClass("::192.168.1.1"), .publicAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(compatible), .publicHTTPRejected)
 
-        let nat64 = try XCTUnwrap(URL(string: "http://[64:ff9b::808:808]/"))
-        XCTAssertEqual(nat64.host, "64:ff9b::808:808")
-        XCTAssertEqual(ServerTransportPolicy.hostClass("64:ff9b::808:808"), .publicAddress)
-        XCTAssertEqual(ServerTransportPolicy.evaluate(nat64), .publicHTTPRejected)
+        for host in ["64:ff9b::808:808", "64:ff9b::c0a8:101"] {
+            let url = try XCTUnwrap(URL(string: "http://[\(host)]/"))
+            XCTAssertEqual(url.host, host, host)
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
+        }
 
         let zoned = try XCTUnwrap(URL(string: "http://[fe80::1%25en0]/"))
         XCTAssertEqual(zoned.host, "fe80::1%en0")
