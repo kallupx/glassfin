@@ -500,7 +500,7 @@ final class ServerEventStreamTests: XCTestCase {
         await waitUntil { events.snapshot().count >= 2 && socket.sentMessages().count >= 1 }
         stream.stop()
         await collect.value
-        XCTAssertEqual(events.snapshot(), [.userDataChanged, .libraryChanged])
+        XCTAssertEqual(events.snapshot(), [.userDataChanged(items: []), .libraryChanged])
         XCTAssertEqual(socket.sentMessages(), [ServerEventParser.keepAliveReply])
     }
 
@@ -554,10 +554,15 @@ final class ServerEventStreamTests: XCTestCase {
         }
         await waitUntil { !clock.sleeps().isEmpty }
         stream.applicationDidBecomeActive()
-        await waitUntil { events.snapshot().contains(.userDataChanged) }
+        await waitUntil {
+            events.snapshot().contains { event in
+                if case .userDataChanged = event { return true }
+                return false
+            }
+        }
         stream.stop()
         await collect.value
-        XCTAssertEqual(events.snapshot(), [.userDataChanged])
+        XCTAssertEqual(events.snapshot(), [.userDataChanged(items: [])])
         XCTAssertEqual(clock.sleeps().count, 1)
     }
 

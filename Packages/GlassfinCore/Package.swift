@@ -69,7 +69,11 @@ let package = Package(
             dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"] + coreAPIExternal,
             swiftSettings: debugSettings
         ),
-        .target(name: "CoreState", dependencies: ["CoreModels"], swiftSettings: debugSettings),
+        .target(
+            name: "CoreState",
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"],
+            swiftSettings: debugSettings
+        ),
         .target(name: "CorePlayback", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),
         .target(
             name: "CoreTestSupport",
@@ -90,6 +94,12 @@ let package = Package(
             swiftSettings: debugSettings
         ),
         .testTarget(name: "CoreModelsTests", dependencies: ["CoreModels"]),
+        .testTarget(
+            name: "CoreStateTests",
+            dependencies: [
+                "CoreState", "CoreModels", "CoreNetworking", "GlassfinServices", "CoreTestSupport",
+            ]
+        ),
         .testTarget(name: "CoreNetworkingTests", dependencies: ["CoreNetworking", "CoreModels"]),
         .testTarget(
             name: "CoreServicesTests",
