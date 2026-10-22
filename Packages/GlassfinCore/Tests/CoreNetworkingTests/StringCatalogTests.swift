@@ -2,6 +2,8 @@ import Foundation
 import XCTest
 
 final class StringCatalogTests: XCTestCase {
+    /// Every `*.xcstrings` in the checkout is checked, not only CoreNetworking.
+    /// That includes `Apps/Shared/Resources/Localizable.xcstrings` once it is in the tree.
     func testEveryStringCatalogHasTranslatedEnglishAndFinnish() throws {
         let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
         let catalogs = StringCatalogLint.catalogs(at: root)
@@ -10,8 +12,42 @@ final class StringCatalogTests: XCTestCase {
             catalogs.contains { $0.path.hasSuffix("Sources/CoreNetworking/Localizable.xcstrings") },
             "CoreNetworking string catalog was not discovered"
         )
+        let sharedSuffix = "Apps/Shared/Resources/Localizable.xcstrings"
+        if FileManager.default.fileExists(atPath: root.appendingPathComponent(sharedSuffix).path) {
+            XCTAssertTrue(
+                catalogs.contains { $0.path.hasSuffix(sharedSuffix) },
+                "Apps/Shared string catalog was not discovered"
+            )
+        }
         let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
         XCTAssertEqual(issues, [], issues.joined(separator: "\n"))
+    }
+
+    func testScannerChecksCatalogsOutsideCoreNetworking() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "glassfin-catalogs-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let packageCatalog = root.appendingPathComponent(
+            "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings"
+        )
+        let appCatalog = root.appendingPathComponent("Apps/Shared/Resources/Localizable.xcstrings")
+        try writeCatalog(packageCatalog, fi: ("translated", "fi-translation"))
+        try writeCatalog(appCatalog, fi: nil)
+
+        let catalogs = StringCatalogLint.catalogs(at: root)
+        XCTAssertEqual(
+            catalogs.map { StringCatalogLint.relative($0, root: root) },
+            [
+                "Apps/Shared/Resources/Localizable.xcstrings",
+                "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings",
+            ]
+        )
+        let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
+        let appIssues = issues.filter { $0.hasPrefix("Apps/Shared/Resources/Localizable.xcstrings") }
+        XCTAssertTrue(appIssues.contains { $0.contains("missing fi") })
+        XCTAssertFalse(issues.contains { $0.contains("Sources/CoreNetworking/Localizable.xcstrings") })
     }
 
     func testCatalogLintRejectsMissingOrUntranslatedLocales() throws {
@@ -99,9 +135,18 @@ final class StringCatalogTests: XCTestCase {
         ]
         return try JSONSerialization.data(withJSONObject: root)
     }
+
+    private func writeCatalog(_ url: URL, fi: (String, String)?) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try catalog(en: ("translated", "Hello"), fi: fi).write(to: url)
+    }
 }
 
 private enum StringCatalogLint {
+    /// Every `*.xcstrings` under `root` (Packages, Apps, and the rest of the repo).
     static func catalogs(at root: URL) -> [URL] {
         guard
             let enumerator = FileManager.default.enumerator(
@@ -203,7 +248,7 @@ private enum StringCatalogLint {
         return found
     }
 
-    private static func relative(_ url: URL, root: URL) -> String {
+    static func relative(_ url: URL, root: URL) -> String {
         let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
         if url.path.hasPrefix(prefix) {
             return String(url.path.dropFirst(prefix.count))
