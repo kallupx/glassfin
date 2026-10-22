@@ -14,7 +14,7 @@ struct GlassfinApp: App {
 
     var body: some Scene {
         WindowGroup {
-            WelcomeView()
+            GlassfinRootView()
         }
     }
 }
