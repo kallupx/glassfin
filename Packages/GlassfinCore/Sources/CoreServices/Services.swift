@@ -335,18 +335,16 @@ public struct JellyfinSearchService: SearchService {
 
     public func hints(term: String, limit: Int) async throws(APIError) -> [MediaItem] {
         let dto = try await client.send(
-            APIRequest(
-                method: "GET",
-                path: "/Search/Hints",
-                query: [
-                    URLQueryItem(name: "searchTerm", value: term), URLQueryItem(name: "limit", value: String(limit)),
-                ]
-            ),
+            QueryTransport.searchHints(term: term, limit: limit),
             as: SearchHintResultDTO.self
         )
         return (dto.SearchHints ?? []).compactMap { hint in
             guard let id = hint.ItemId ?? hint.Id else { return nil }
-            return MediaItem(id: id, kind: MediaKind.from(serverType: hint.`Type` ?? ""), name: hint.Name ?? "")
+            return MediaItem(
+                id: id,
+                kind: MediaKind.from(serverType: hint.`Type` ?? ""),
+                name: MetadataSanitizer.plainText(hint.Name ?? "")
+            )
         }
     }
 }
