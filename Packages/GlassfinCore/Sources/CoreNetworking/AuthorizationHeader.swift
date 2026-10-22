@@ -35,8 +35,12 @@ public enum AuthorizationHeader {
     }
 
     /// `encodeURIComponent`: UTF-8 percent-encoding, unreserved plus `!'()*-._~` left intact.
+    static func containsRejectedControl(_ raw: String) -> Bool {
+        raw.unicodeScalars.contains(where: isRejectedControl)
+    }
+
     static func encodeComponent(_ raw: String) throws -> String {
-        if raw.unicodeScalars.contains(where: isRejectedControl) {
+        if containsRejectedControl(raw) {
             throw AuthorizationHeaderError.controlCharacter
         }
         var allowed = CharacterSet()

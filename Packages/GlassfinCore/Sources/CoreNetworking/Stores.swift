@@ -190,13 +190,24 @@ public final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
     public func set(_ value: String?, forKey key: String) {
         lock.lock()
         defer { lock.unlock() }
-        values[key] = value
+        if let value {
+            values[key] = value
+        } else {
+            values.removeValue(forKey: key)
+        }
     }
 
     public func removeAll() {
         lock.lock()
         defer { lock.unlock() }
         values.removeAll()
+    }
+
+    /// Every value currently stored. Used to prove a token never landed in settings.
+    public func allValues() -> [String: String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
     }
 }
 

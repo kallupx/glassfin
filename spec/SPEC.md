@@ -16,6 +16,7 @@
     - Every uploaded artifact uses `retention-days: 14`. xcresult bundles are not uploaded.
     - Self-hosted runners and `-xlarge` labels stay forbidden. `scripts/ci-grep.sh` rejects both. `xcode-27` remains the standard hosted label.
   - The specification documents in `spec/` are English.
+  - S4.3 from v1.3.2 is kept, in English: public HTTP is rejected, and cleartext is limited to private addresses and local names classified from the literal.
 - **v1.2 (21 Oct 2026, Tester questions and Security clarifications)**
   - **The package name is `GlassfinCore` everywhere** (the old working name was removed from every file, grep: 0 hits).
   - **M00, CI artifacts:** JUnit XML, PNG screenshots, `xccov` coverage JSON, and logs of failed tests in addition to `.xcresult`, so they can be read on Linux. S5 redaction and scanning also cover artifacts (S5.5).
@@ -145,7 +146,7 @@ Source: the Researcher's report, part 2 (Reddit, the Jellyfin forum, Swiftfin #1
 5. **The iOS UI is P1**, and it starts when tvOS auth, home, and library are stable. +30–50% is the Researcher's unmeasured estimate.
 6. **"Infuse level" = playback quality and smoothness**, not multi-source support (SMB, Plex).
 7. On home, "Continue watching" and "Next episodes" are separate rows (a P1 setting merges them). Libraries are shown as their own tabs (max 5).
-8. ~~Public server addresses require HTTPS~~ **AGREED with Security (S4.3).** HTTP is allowed only on the LAN. Noted for the user, because it is a visible limitation.
+8. ~~Public server addresses require HTTPS~~ **AGREED with Security (S4.3, v1.3.2).** Public HTTP is rejected. Cleartext is allowed only for private addresses and local names, classified from the literal, not from DNS. See 03-security.md. Noted for the user, because it is a visible limitation.
 9. ~~Repository~~ **RESOLVED: GitHub repository `kallupx/glassfin`** (the user's decision 21 Oct 2026). It can move to an organization later. The original plan was to make it public at release. **As of 22 Oct 2026 it is public**, and the v1.3.3 CI rules apply (00-infra-ci.md). While it was private, macOS minutes were consumed at about 10x, so a Free account's budget was about 200 macOS minutes per month.
 10. **CI integration test server – PROPOSAL (v1.2) – needs the user's confirmation:** `jellyfin/jellyfin` Docker containers (`10.10.7`, `10.11.11`, and `12.2`) as a GitHub Actions service on a Linux runner, seeded with a small generated or CC0 test library. No macOS minutes, and credentials come only from Secrets (M00). The SDK's Linux build is unverified, and the fallback is in M00. The workflow that implements this is `integration.yml` (`workflow_dispatch` only).
 11. **Application license: MPL-2.0** – PROPOSAL – needs the user's confirmation (the user decided on 21 Oct 2026 that the app is free and open source; see §7 R9).

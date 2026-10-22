@@ -18,7 +18,8 @@ public enum RedirectApplication: Sendable, Equatable {
 /// S4.6 for Glassfin's own `URLSession`.
 ///
 /// Authorization stays on the same origin (scheme, host, and port). Any HTTPS→HTTP
-/// redirect is rejected. A request URL that contains an API key query is rejected,
+/// redirect is rejected. A redirect from local HTTP onto public HTTP is not followed,
+/// so Authorization is not sent there. A request URL that contains an API key query is rejected,
 /// not merely stripped, when the target is a different origin or HTTP.
 ///
 /// AVPlayer follows redirects itself and does not use this delegate. Callers must
@@ -36,6 +37,9 @@ public enum RedirectPolicy {
         }
         if credential && !sameOrigin {
             return .reject(.credentialQueryCrossHost)
+        }
+        if leavesLocalHTTP(originalURL, for: redirectURL) {
+            return .reject(.notFollowed)
         }
         if !sameOrigin {
             return .follow(stripAuthorization: true)
@@ -103,18 +107,61 @@ public enum RedirectPolicy {
     private static func isHTTPSDowngrade(_ original: URL, _ redirect: URL) -> Bool {
         original.scheme?.lowercased() == "https" && redirect.scheme?.lowercased() == "http"
     }
+
+    /// Private or local HTTP must not be sent on to a public HTTP host. Authorization stays behind.
+    private static func leavesLocalHTTP(_ original: URL, for redirect: URL) -> Bool {
+        ServerTransportPolicy.evaluate(original) == .unencryptedLocal
+            && ServerTransportPolicy.evaluate(redirect) == .publicHTTPRejected
+    }
+}
+
+/// Same-origin redirects stop after 5 follows. A repeated URL is a loop and is not followed.
+public enum RedirectFollowLimit {
+    public static let maximum = 5
+
+    public static func decide(
+        followed: Int,
+        seen: [URL],
+        original: URLRequest,
+        proposed: URLRequest
+    ) -> RedirectApplication {
+        if followed >= maximum {
+            return .reject(.notFollowed)
+        }
+        guard let next = proposed.url else { return .reject(.notFollowed) }
+        if seen.contains(where: { same($0, next) }) {
+            return .reject(.notFollowed)
+        }
+        return RedirectPolicy.apply(original: original, proposed: proposed)
+    }
+
+    static func same(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.absoluteString == rhs.absoluteString
+    }
 }
 
 public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    private let lock = NSLock()
-    private var rejection: RedirectRejection?
+    private struct HopState {
+        var followed: Int
+        var seen: [URL]
+    }
 
+    private let lock = NSLock()
+    private var rejections: [Int: RedirectRejection] = [:]
+    private var hops: [Int: HopState] = [:]
+
+    public func consumeRejection(for taskIdentifier: Int) -> RedirectRejection? {
+        lock.lock()
+        defer { lock.unlock() }
+        return rejections.removeValue(forKey: taskIdentifier)
+    }
+
+    /// One in-flight task. Returns nil when two tasks have a rejection waiting, so they cannot be swapped.
     public func consumeRejection() -> RedirectRejection? {
         lock.lock()
         defer { lock.unlock() }
-        let value = rejection
-        rejection = nil
-        return value
+        guard rejections.count == 1, let key = rejections.keys.first else { return nil }
+        return rejections.removeValue(forKey: key)
     }
 
     public func urlSession(
@@ -125,14 +172,42 @@ public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @u
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
         let original = task.originalRequest ?? task.currentRequest ?? request
-        switch RedirectPolicy.apply(original: original, proposed: request) {
+        let decision: RedirectApplication = {
+            lock.lock()
+            defer { lock.unlock() }
+            var state = hops[task.taskIdentifier] ?? HopState(followed: 0, seen: [])
+            if state.seen.isEmpty, let originalURL = original.url {
+                state.seen.append(originalURL)
+            }
+            let decision = RedirectFollowLimit.decide(
+                followed: state.followed,
+                seen: state.seen,
+                original: original,
+                proposed: request
+            )
+            switch decision {
+            case .follow:
+                state.followed += 1
+                if let url = request.url {
+                    state.seen.append(url)
+                }
+            case .reject(let reason):
+                rejections[task.taskIdentifier] = reason
+            }
+            hops[task.taskIdentifier] = state
+            return decision
+        }()
+        switch decision {
         case .follow(let next):
             completionHandler(next)
-        case .reject(let reason):
-            lock.lock()
-            rejection = reason
-            lock.unlock()
+        case .reject:
             completionHandler(nil)
         }
+    }
+
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        lock.lock()
+        hops[task.taskIdentifier] = nil
+        lock.unlock()
     }
 }
