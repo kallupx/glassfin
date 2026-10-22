@@ -24,7 +24,8 @@ enum BlurHash {
                 var blue = 0.0
                 for j in 0..<numY {
                     for i in 0..<numX {
-                        let basis = cos(Double.pi * Double(x) * Double(i) / Double(width))
+                        let basis =
+                            cos(Double.pi * Double(x) * Double(i) / Double(width))
                             * cos(Double.pi * Double(y) * Double(j) / Double(height))
                         let color = factors.colors[i + j * numX]
                         red += color.r * basis
