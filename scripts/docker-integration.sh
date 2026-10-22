@@ -74,13 +74,21 @@ for version in "${versions[@]}"; do
   work="$(mktemp -d)"
   chmod 755 "$work"
   mkdir -p "$work/media" "$work/config"
-  chmod 777 "$work/media" "$work/config"
   ffmpeg -y -loglevel error \
     -f lavfi -i "testsrc=size=320x240:rate=24" \
     -f lavfi -i "sine=frequency=440:sample_rate=48000" \
     -t 2 -shortest \
     -c:v libx264 -pix_fmt yuv420p -c:a aac \
     "$work/media/Test Movie (2024).mp4"
+  # GitHub-hosted runners keep the world-writable mounts. Locally the directories
+  # are private and owned by the image user so the container can still write them.
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    chmod 777 "$work/media" "$work/config"
+  else
+    container_uid="$("${docker_cmd[@]}" run --rm --entrypoint id "$image" -u)"
+    sudo chown -R "${container_uid}:${container_uid}" "$work/media" "$work/config"
+    sudo chmod 700 "$work/media" "$work/config"
+  fi
   port="$(python3 - <<'PY'
 import socket
 s = socket.socket()

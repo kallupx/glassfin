@@ -26,6 +26,8 @@ bash ../../scripts/ci-grep.sh
 bash ../../scripts/check-entitlements.sh
 python3 ../../scripts/check-debug-only-strings.py --self-test
 python3 ../../scripts/check-debug-only-strings.py
+python3 ../../scripts/check-forbidden-calls.py --self-test
+python3 ../../scripts/check-forbidden-calls.py
 swift-format lint --recursive --strict Package.swift Sources Tests ../../Apps
 ```
 
@@ -43,12 +45,12 @@ The macOS jobs run `scripts/check-release-binary.sh` on the Release `.app` execu
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pull requests to `main` and `cursor/m00-m01-glassfin-core-bd57`, pushes to `main`, and `workflow_dispatch`.
+`.github/workflows/ci.yml` runs on pull requests to `main`, pushes to `main`, and `workflow_dispatch`.
 
 - `lint` (Ubuntu, 10 minutes) runs first and gates GlassfinCore line coverage at 80% (T01-19). macOS jobs `needs: lint`.
-- `test-tvos` and `test-ios` (`xcode-27`, 25 minutes) run on pull requests and `workflow_dispatch` when code, the project, or workflows change. They do not run on push. A spec-only change stays on Linux. iOS runs on a pull request when `Apps/iOS` or `Packages` change. Dependabot skips macOS until the `full-ci` label or `workflow_dispatch`. A grouped dependency pull request needs a green macOS build before merge. See `CONTRIBUTING.md`.
-- `full-ui` runs on `workflow_dispatch` and on pull requests labeled `full-ci`.
-- Artifacts (7 days): JUnit XML, failed-test text, coverage JSON, screenshots, and the xcresult. Text artifacts are redacted before upload.
+- `test-tvos` and `test-ios` (`xcode-27`, 25 minutes) run on draft and ready pull requests, and on `workflow_dispatch`, when code, the project, or workflows change. They do not run on push. A spec-only change stays on Linux. Dependabot skips macOS until the `full-ci` label or `workflow_dispatch`. A grouped dependency pull request needs a green macOS build before merge. See `CONTRIBUTING.md`.
+- `full-ui` runs on push to `main`, on a pull request that is ready for review, on `workflow_dispatch`, and on a draft labeled `full-ci`. Runners stay on the standard `xcode-27` label.
+- Artifacts are kept for 14 days: JUnit XML, failed-test text, coverage JSON, screenshots, and the xcresult text export. Text artifacts are redacted before upload. xcresult bundles are not uploaded.
 - `integration.yml` is `workflow_dispatch` only. `scripts/docker-integration.sh` runs T01-20 and T01-30 against jellyfin 10.10.7, 10.11.11, and 12.2.
 - `release.yml` is `workflow_dispatch` or a `v*` tag. It has no `pull_request` trigger. The App Store Connect key is written to a temp file and removed with `if: always()`. Upload is not implemented.
 

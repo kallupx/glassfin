@@ -1,63 +1,63 @@
-# M03 – Turvallisuusvaatimukset (P0, poikkileikkaava)
+# M03 – Security requirements (P0, cross-cutting)
 
-> 🔒 **Turvallisuus-botin katselmointi:** kohdat, joissa on merkintä **[SOVITTU]**, on sovittu Turvallisuuden kanssa (parentin välittämä tiimin linjaus 21.10.2026). Kohdat, joissa on merkintä **[EHDOTUS]**, ovat Spesifikaation lisäyksiä, jotka odottavat Turvallisuuden katselmointia.
+> **Security-bot review:** items marked **[AGREED]** are agreed with Security (the parent's relay of the team decision on 21 Oct 2026). Items marked **[PROPOSAL]** are additions from Specification and are waiting for Security's review.
 
-**Riippuvuudet:** M01. Vaatimukset toteutetaan `CoreNetworking`-targetissa ja auth-moduulissa (M04). Ne koskevat kaikkia moduuleja.
+**Dependencies:** M01. The requirements are implemented in the `CoreNetworking` target and in the auth module (M04). They apply to every module.
 
-## S1 Tokenit ja tunnukset
-- **S1.1 [SOVITTU]** Access token tallennetaan **vain Keychainiin**, ja asetuksena on `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Turvallisuus vaati `...ThisDeviceOnly`-luokkaa; `AfterFirstUnlock` ehdotetaan, koska tvOS:ssä ei ole lukitusnäyttöä ja Top Shelf tai taustatoiminnot tarvitsevat tokenin. Tarkka luokka on **[EHDOTUS]**, joka odottaa Turvallisuuden vahvistusta. Token ei saa synkronoitua iCloudiin (`kSecAttrSynchronizable = false`).
-- **S1.2 [SOVITTU]** **Salasanaa ei tallenneta koskaan** (ei Keychainiin, UserDefaultsiin eikä lokiin). Salasana pidetään muistissa vain `AuthenticateByName`-kutsun ajan, ja kenttä tyhjennetään sen jälkeen.
-- **S1.3** Tokenia ei tallenneta UserDefaultsiin, plistiin, Caches-hakemistoon eikä `UserSession`-malliin. Vain `CoreNetworking` lukee sen `SecureStore`-protokollan kautta.
-- **S1.4** Keychain-avaimena on `serverId + userId`, mikä mahdollistaa useita palvelimia ja käyttäjiä (P1). DeviceId on oma Keychain-itemnsä.
-- **S1.5 [SOVITTU]** Auth-headerin muoto on `Authorization: MediaBrowser Client=, Device=, DeviceId=, Version=, Token=` (ks. 01-core.md). Legacy-headereita ja `api_key`:ta ei käytetä.
+## S1 Tokens and credentials
+- **S1.1 [AGREED]** The access token is stored **only in the Keychain**, with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Security required the `...ThisDeviceOnly` class; `AfterFirstUnlock` is proposed because tvOS has no lock screen and Top Shelf or background work needs the token. The exact class is a **[PROPOSAL]** waiting for Security's confirmation. The token must not sync to iCloud (`kSecAttrSynchronizable = false`).
+- **S1.2 [AGREED]** **The password is never stored** (not in the Keychain, not in UserDefaults, not in logs). The password stays in memory only for the `AuthenticateByName` call, and the field is cleared after that.
+- **S1.3** The token is not stored in UserDefaults, a plist, the Caches directory, or the `UserSession` model. Only `CoreNetworking` reads it, through the `SecureStore` protocol.
+- **S1.4** The Keychain key is `serverId + userId`, which allows several servers and users (P1). DeviceId is its own Keychain item.
+- **S1.5 [AGREED]** The auth header form is `Authorization: MediaBrowser Client=, Device=, DeviceId=, Version=, Token=` (see 01-core.md). Legacy headers and `api_key` are not used.
 
-## S2 Uloskirjautuminen ja mitätöinti
-- **S2.1 [SOVITTU]** Uloskirjautuminen kutsuu **aina** `POST /Sessions/Logout` ja **poistaa tokenin Keychainista**. Jos kutsu epäonnistuu (offline), Keychain tyhjennetään silti, ja käyttäjälle kerrotaan, että palvelimen istunto voi jäädä voimaan, kunnes admin poistaa laitteen (`/Devices`).
-- **S2.2** 401 mistä tahansa pyynnöstä → token poistetaan paikallisesti (ks. 02, virhetaulukko).
-- **S2.3** Palvelimen poisto listalta poistaa sen kaikki tokenit ja sertifikaattipinnit.
+## S2 Logout and revocation
+- **S2.1 [AGREED]** Logout **always** calls `POST /Sessions/Logout` and **deletes the token from the Keychain**. If the call fails (offline), the Keychain is still cleared, and the user is told that the server session may stay active until an admin removes the device (`/Devices`).
+- **S2.2** A 401 from any request → the token is removed locally (see 02, the error table).
+- **S2.3** Removing a server from the list deletes all of its tokens and certificate pins.
 
 ## S3 Quick Connect
-- **S3.1 [SOVITTU]** Kulku: `GET /QuickConnect/Enabled` → `POST /QuickConnect/Initiate` (→ `Code` ja `Secret`) → `GET /QuickConnect/Connect?secret=` pollaten → `POST /Users/AuthenticateWithQuickConnect {Secret}`.
-- **S3.2** `Secret` pidetään vain muistissa, eikä sitä lokiteta. Näytölle tulee vain `Code`.
-- **S3.3 [EHDOTUS]** Pollausväli on 5 s, ja koodi vanhenee/aikakatkaistaan 5 minuutin jälkeen tai näkymästä poistuttaessa (polling-task perutaan). ⚠️ Palvelimen oma koodin vanhenemisaika on varmistamatta, joten 5 min on clientin oma raja.
+- **S3.1 [AGREED]** Flow: `GET /QuickConnect/Enabled` → `POST /QuickConnect/Initiate` (→ `Code` and `Secret`) → poll `GET /QuickConnect/Connect?secret=` → `POST /Users/AuthenticateWithQuickConnect {Secret}`.
+- **S3.2** `Secret` is kept only in memory and is not logged. The screen shows only `Code`.
+- **S3.3 [PROPOSAL]** The poll interval is 5 s, and the code expires or times out after 5 minutes or when the view disappears (the polling task is cancelled). The server's own code lifetime is unverified, so 5 min is the client's own limit.
 
-## S4 Verkkoliikenne ja ATS
-- **S4.1 [SOVITTU]** `Info.plist`: `NSAppTransportSecurity` → `NSAllowsLocalNetworking = true`. **`NSAllowsArbitraryLoads`-asetusta EI käytetä.** Swiftfin tvOS käyttää sitä (Tutkija varmisti), mutta me jätämme sen tietoisesti pois.
-- **S4.2 [SOVITTU]** Kun yhteys ei ole HTTPS, palvelimen lisäyksessä näytetään varoitus "Yhteys ei ole salattu". Asetuksissa palvelinrivillä on pysyvä 🔓-merkintä.
-- **S4.3 [SOVITTU] (v1.3.2)** Julkinen HTTP hylätään. Cleartext sallitaan yksityisille osoitteille (127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, 100.64/10, `::1`, `fe80::/10`, `fc00::/7`) sekä nimille `.local` ja yksiosaisille hosteille. Vain IPv4-mapped `::ffff:0:0/96` käyttää upotetun IPv4:n sääntöjä. IPv4-compatible `::/96` ja NAT64 `64:ff9b::/96` ovat julkisia. IPv4-literaali hyväksytään vain kanonisena neliosaisena desimaalina ilman etunollia. Yksiosainen nimi ei ole paikallinen, jos se on pelkkiä numeroita (desimaali tai etunollainen oktaali, esim. `2130706433`, `017700000001`) tai `0x`+hex. Ilman `0x`-etuliitettä oleva heksa (esim. `7f000001`) on tavallinen hostname ja voi jäädä yksiosaiseksi paikalliseksi nimeksi. `.local` ja muut yksiosaiset nimet hyväksytään nimenä; tämä on tunnettu riski. Luokittelu tehdään literaalista, ei DNS-resoluutiosta. `NSAllowsLocalNetworking` ei ole tämän päätöksen peruste.
-- **S4.4 [SOVITTU] Itse allekirjoitetut sertifikaatit:** hyväksytään vain käyttäjän vahvistuksen jälkeen. Näkymässä näytetään sertifikaatin **SHA-256-fingerprint**, subject ja voimassaolo. Hyväksynnän jälkeen fingerprint **pinnataan kyseiselle palvelimelle** (`URLSessionDelegate` `didReceive challenge`).
-  - Jos pinnattu sertifikaatti vaihtuu, yhteys katkaistaan ja käyttäjälle näytetään varoitus, jossa on vanha ja uusi fingerprint. Hyväksyntä vaatii uuden vahvistuksen.
-  - Julkisesti luotettuja (CA-validoituja) sertifikaatteja ei pinnata oletuksena, jotta Let's Encrypt -uusinnat eivät katkaise yhteyttä. **[EHDOTUS]**
-  - ⚠️ **Riski:** AVPlayer (AVURLAsset) ei käytä appin URLSession-delegaattia, joten itse allekirjoitetun palvelimen media-URL:t voivat epäonnistua. Ratkaisuvaihtoehdot ovat `AVAssetResourceLoaderDelegate` (custom scheme) tai paikallinen proxy. Tämä on varmistamatta ja vaatii prototyypin M08:ssa. Siihen asti itse allekirjoitettu palvelin toimii API-tasolla, ja toistotuki merkitään "tunnetuksi rajoitteeksi".
-- **S4.5** Palvelin-URL validoidaan: vain `http`/`https`-skeemat. Polun normalisointi tukee reverse proxy -alipolkua (`https://host/jellyfin`). Tunnisteet poistetaan URL:sta.
+## S4 Network traffic and ATS
+- **S4.1 [AGREED]** `Info.plist`: `NSAppTransportSecurity` → `NSAllowsLocalNetworking = true`. **`NSAllowsArbitraryLoads` is NOT used.** Swiftfin for tvOS uses it (the Researcher confirmed), and we leave it out on purpose.
+- **S4.2 [AGREED]** When the connection is not HTTPS, adding a server shows the warning "Connection is not encrypted". In Settings the server row has a permanent unlocked indicator.
+- **S4.3 [AGREED] (v1.3.2)** Public HTTP is rejected. Cleartext is allowed for private addresses (127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, 100.64/10, `::1`, `fe80::/10`, `fc00::/7`) and for `.local` names and single-label hosts. Only IPv4-mapped `::ffff:0:0/96` uses the embedded IPv4 rules. IPv4-compatible `::/96` and NAT64 `64:ff9b::/96` are public. An IPv4 literal is accepted only as canonical four-part decimal with no leading zeros. A single-label name is not local when it is only digits (decimal, or octal with a leading zero, for example `2130706433`, `017700000001`) or `0x` plus hex. Hex without a `0x` prefix (for example `7f000001`) is an ordinary hostname and may remain a single-label local name. `.local` and other single-label names are accepted as names; that is a known risk. Classification uses the literal, not a DNS lookup. `NSAllowsLocalNetworking` is not the basis of this decision.
+- **S4.4 [AGREED] Self-signed certificates:** accepted only after the user confirms. The view shows the certificate's **SHA-256 fingerprint**, subject, and validity. After acceptance the fingerprint is **pinned for that server** (`URLSessionDelegate` `didReceive challenge`).
+  - If the pinned certificate changes, the connection is dropped and the user sees a warning with the old and new fingerprints. Acceptance requires a new confirmation.
+  - Publicly trusted (CA-validated) certificates are not pinned by default, so Let's Encrypt renewals do not drop the connection. **[PROPOSAL]**
+  - **Risk:** AVPlayer (AVURLAsset) does not use the app's URLSession delegate, so media URLs on a self-signed server can fail. Options are `AVAssetResourceLoaderDelegate` (custom scheme) or a local proxy. This is unverified and needs a prototype in M08. Until then a self-signed server works at the API level, and playback support is marked a "known limitation".
+- **S4.5** The server URL is validated: only `http` / `https` schemes. Path normalization supports a reverse-proxy subpath (`https://host/jellyfin`). Credentials are stripped from the URL.
 
-## S5 Lokit ja kaatumisraportit
-- **S5.1 [SOVITTU]** **Stream-URL:eja, joissa on token (`ApiKey=`, ja varmuuden vuoksi myös `api_key=` ja `Token=`), ei lokiteta koskaan**, ei konsoliin, `os_log`iin, kaatumisraportteihin eikä diagnostiikkaan.
-- **S5.2** Lokitus tehdään yhden `Logger`-wrapperin kautta, joka redaktoi queryparametrit `ApiKey`, `api_key`, `Token`, `secret` ja `Pw` sekä `Authorization`-headerin. Wrapperille kirjoitetaan yksikkötesti, jossa jokainen kielletty kenttä on syötteenä.
-- **S5.3** `os_log`-kentät ovat oletuksena `privacy: .private`. Palvelimen nimi ja versio voivat olla public.
-- **S5.4** CI:ssä on grep-tarkistus, joka etsii `print(`-kutsuja ja URL-interpolointia lokikutsuissa (lint-sääntö).
+## S5 Logs and crash reports
+- **S5.1 [AGREED]** **Stream URLs that contain a token (`ApiKey=`, and also `api_key=` and `Token=` to be safe) are never logged**, not to the console, `os_log`, crash reports, or diagnostics.
+- **S5.2** Logging goes through one `Logger` wrapper that redacts the query parameters `ApiKey`, `api_key`, `Token`, `secret`, and `Pw`, and the `Authorization` header. The wrapper has a unit test whose input includes every forbidden field.
+- **S5.3** `os_log` fields are `privacy: .private` by default. The server name and version may be public.
+- **S5.4** CI has a grep that looks for `print(` calls and URL interpolation in log calls (lint rule). The shipping check is `scripts/check-forbidden-calls.py`. UI test sources are scanned. A directory named exactly `Tests` is skipped for call checks only.
 
-## S6 Syötteiden ja median käsittely
-- **S6.1** Palvelimelta tuleva metatieto (nimet, kuvaukset, HTML:ää sisältävä overview) näytetään **pelkkänä tekstinä**. HTML-tagit poistetaan, eikä HTML:ää tai Markdownia renderöidä.
-- **S6.2** Ulkoiset linkit (`ExternalUrls`) eivät avaudu tvOS:llä. iOS:llä ne avataan vain http(s)-skeemalla.
-- **S6.3** Media on epäluotettavaa syötettä. **[SOVITTU]** Mahdolliset FFmpeg-, VLCKit- tai MPV-kirjastot pidetään ajan tasalla (Renovate, tietoturvapäivitykset ≤ 14 päivää julkaisusta), ja niistä käytetään vain tarvittavat demuxerit ja dekooderit (pienempi hyökkäyspinta).
-- **S6.4** Tekstitystiedostot (SRT, VTT, ASS) jäsennetään kokorajalla (max 10 MB) ja aikakatkaisulla.
-- **S6.5** Haku- ja suodatinparametrit välitetään vain SDK:n query-rakentajan kautta (URL-enkoodaus). Merkkijonoja ei liitetä polkuihin.
+## S6 Handling input and media
+- **S6.1** Metadata from the server (names, descriptions, an overview that contains HTML) is shown as **plain text**. HTML tags are stripped. HTML and Markdown are not rendered.
+- **S6.2** External links (`ExternalUrls`) do not open on tvOS. On iOS they open only with an http(s) scheme.
+- **S6.3** Media is untrusted input. **[AGREED]** Any FFmpeg, VLCKit, or MPV libraries are kept up to date (Renovate, security updates within 14 days of release), and only the needed demuxers and decoders are used (smaller attack surface).
+- **S6.4** Subtitle files (SRT, VTT, ASS) are parsed with a size limit (max 10 MB) and a timeout.
+- **S6.5** Search and filter parameters are passed only through the SDK's query builder (URL encoding). Strings are not concatenated into paths.
 
-## S7 Oikeudet ja admin
-- **S7.1** Admin-näkymät näytetään vain, jos `User.Policy.IsAdministrator == true`. Se on vain UI-vihje, sillä **palvelin tekee todellisen autorisoinnin**, ja 403 käsitellään siististi (02).
-- **S7.2** Tuhoavat admin-toiminnot (palvelimen uudelleenkäynnistys, käyttäjän tai laitteen poisto) vaativat erillisen vahvistusdialogin, jonka oletusfokus on "Peruuta".
+## S7 Permissions and admin
+- **S7.1** Admin views are shown only when `User.Policy.IsAdministrator == true`. That is only a UI hint: **the server does the real authorization**, and a 403 is handled cleanly (02).
+- **S7.2** Destructive admin actions (server restart, deleting a user or a device) require a separate confirmation dialog whose default focus is "Cancel".
 
-## S8 iOS (myöhemmin)
-- **S8.1 [SOVITTU]** iOS-lataukset suojataan Data Protectionilla (`NSFileProtectionComplete` tai vähintään `CompleteUntilFirstUserAuthentication`, jotta taustalataus toimii; tarkka luokka sovitaan M18:ssa). Ne poissuljetaan iCloud-varmuuskopioista (`isExcludedFromBackup`).
+## S8 iOS (later)
+- **S8.1 [AGREED]** iOS downloads are protected with Data Protection (`NSFileProtectionComplete`, or at least `CompleteUntilFirstUserAuthentication` so background downloads work; the exact class is decided in M18). They are excluded from iCloud backup (`isExcludedFromBackup`).
 
-## S9 Lisenssit (ei tietoturvaa)
-- Ei enää julkaisun este. Ks. SPEC.md §7 R9: appin lisenssiksi ehdotetaan MPL-2.0:aa (EHDOTUS – vaatii käyttäjän vahvistuksen), ja LGPL-ehdot L1–L5 ovat pakollisia. Vain LGPL-buildeja käytetään, mikä tukee myös S6.3:n pientä hyökkäyspintaa (vain tarvittavat demuxerit ja dekooderit).
+## S9 Licenses (not a security control)
+- No longer a release blocker. See SPEC.md §7 R9: the proposed app license is MPL-2.0 (PROPOSAL – needs the user's confirmation), and the LGPL conditions L1–L5 are mandatory. Only LGPL builds are used, which also supports the small attack surface in S6.3 (only the needed demuxers and decoders).
 
-## Hyväksymiskriteerit
-- [ ] Yksikkötestit: Keychain-tallennus käyttää oikeaa accessibility-luokkaa (SecureStore-mock tarkistaa attribuutit), eikä token esiinny UserDefaults-dumpissa.
-- [ ] Uloskirjautumisen testi: `POST /Sessions/Logout` kutsutaan, ja Keychain on tyhjä myös silloin, kun kutsu epäonnistuu.
-- [ ] `Info.plist` ei sisällä `NSAllowsArbitraryLoads`-asetusta (CI-tarkistus).
-- [ ] Itse allekirjoitetun sertifikaatin hyväksyntä ja pinnauksen vaihtuminen on testattu (mock-challenge).
-- [ ] Logger-redaktointitesti menee läpi. Integraatiotestin lokidumpissa ei esiinny tokenia (grep).
-- [ ] Turvallisuus-botti on katselmoinut tämän tiedoston ja kuitannut [EHDOTUS]-kohdat.
+## Acceptance criteria
+- [ ] Unit tests: Keychain storage uses the correct accessibility class (the SecureStore mock checks the attributes), and the token does not appear in a UserDefaults dump.
+- [ ] Logout test: `POST /Sessions/Logout` is called, and the Keychain is empty even when the call fails.
+- [ ] `Info.plist` does not contain `NSAllowsArbitraryLoads` (CI check). The same check rejects `NSExceptionAllowsInsecureHTTPLoads` and `NSExceptionMinimumTLSVersion` followed by TLSv1.0 or TLSv1.1.
+- [ ] Accepting a self-signed certificate, and a pin change, are tested (mock challenge).
+- [ ] The logger redaction test passes. An integration-test log dump does not contain the token (grep).
+- [ ] The Security bot has reviewed this file and signed off the [PROPOSAL] items.

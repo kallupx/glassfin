@@ -51,7 +51,7 @@ public struct SessionEndResult: Sendable, Equatable {
 
 public enum SessionEndCopy {
     public static let serverSessionMayRemain =
-        "Palvelimen istunto voi jäädä voimaan, kunnes ylläpitäjä poistaa laitteen."
+        "The server session may stay active until an administrator removes the device."
 }
 
 public enum SessionTermination {

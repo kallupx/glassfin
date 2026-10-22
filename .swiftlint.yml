@@ -4,15 +4,10 @@ included:
 excluded:
   - Packages/GlassfinCore/.build
   - spec
+# print(, debugPrint(, dump(, and NSLog( are enforced by scripts/check-forbidden-calls.py.
+# SwiftLint custom_rules need SourceKit and do not run on the Linux lint job.
 only_rules:
   - force_cast
   - force_try
-  - custom_rules
-custom_rules:
-  no_print:
-    name: No print
-    regex: '\bprint\('
-    message: Use GlassfinLog instead of print
-    severity: error
 analyzer_rules: []
 reporter: emoji

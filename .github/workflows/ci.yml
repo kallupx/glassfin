@@ -3,9 +3,9 @@ name: ci
 on:
   pull_request:
     # `labeled` lets the full-ci label start macOS on a Dependabot pull request.
-    types: [opened, synchronize, reopened, labeled]
-    # Stacked PRs target the M00/M01 branch as well as main.
-    branches: [main, cursor/m00-m01-glassfin-core-bd57]
+    # `ready_for_review` starts full-ui when a draft becomes ready.
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -80,6 +80,10 @@ jobs:
         run: |
           python3 scripts/check-debug-only-strings.py --self-test
           python3 scripts/check-debug-only-strings.py
+      - name: Forbidden calls
+        run: |
+          python3 scripts/check-forbidden-calls.py --self-test
+          python3 scripts/check-forbidden-calls.py
       - name: Artifact redaction self-test
         run: python3 scripts/redact_artifacts.py --self-test
       - name: Linux package tests and coverage gate
@@ -87,7 +91,7 @@ jobs:
 
   test-tvos:
     needs: lint
-    # Push, including a merge commit on main, stays on lint.
+    # Draft and ready pull requests run this job. Push to main does not.
     # Dependabot skips macOS until the full-ci label or workflow_dispatch.
     if: >
       needs.lint.result == 'success' &&
@@ -124,16 +128,15 @@ jobs:
             artifacts/tvOS/readable/**
             artifacts/tvOS/*.log
             artifacts/tvOS/*.txt
-          retention-days: 7
+          retention-days: 14
 
   test-ios:
     needs: lint
+    # Same gate as test-tvos: draft pull requests run both macOS jobs.
     if: >
       needs.lint.result == 'success' &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'pull_request' && needs.lint.outputs.ios == 'true')
-      ) &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') &&
+      (needs.lint.outputs.macos == 'true' || github.event_name == 'workflow_dispatch') &&
       (
         github.actor != 'dependabot[bot]' ||
         github.event_name == 'workflow_dispatch' ||
@@ -163,18 +166,29 @@ jobs:
             artifacts/iOS/readable/**
             artifacts/iOS/*.log
             artifacts/iOS/*.txt
-          retention-days: 7
+          retention-days: 14
 
   full-ui:
     needs: lint
+    # Ready pull requests and pushes to main run the suite.
+    # A draft runs it only with the full-ci label, or via workflow_dispatch.
     if: >
       needs.lint.result == 'success' &&
-      needs.lint.outputs.macos == 'true' &&
+      (
+        github.actor != 'dependabot[bot]' ||
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'push' ||
+        contains(github.event.pull_request.labels.*.name, 'full-ci')
+      ) &&
       (
         github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'push' ||
         (
           github.event_name == 'pull_request' &&
-          contains(github.event.pull_request.labels.*.name, 'full-ci')
+          (
+            github.event.pull_request.draft == false ||
+            contains(github.event.pull_request.labels.*.name, 'full-ci')
+          )
         )
       )
     runs-on: xcode-27
@@ -191,7 +205,7 @@ jobs:
             artifacts/tvOS/readable/**
             artifacts/tvOS/*.log
             artifacts/tvOS/*.txt
-          retention-days: 7
+          retention-days: 14
 
   # Lint alone must not turn a Dependabot pull request green. The job always
   # reports, so branch protection can require it: human pull requests pass,
