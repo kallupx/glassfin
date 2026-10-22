@@ -1,6 +1,6 @@
 # Glassfin
 
-Jellyfin client for tvOS and iOS. Swift 6, SwiftUI. M00 is the repository, project, and CI. M01 is the `GlassfinCore` package (networking, auth header, services, models). Later milestones are not implemented.
+Jellyfin client for tvOS and iOS. Swift 6, SwiftUI. M00 is the repository, project, and CI. M01 is the `GlassfinCore` package (networking, auth header, services, models). M02 is state, errors, cache, and performance instrumentation in `CoreState`. Later milestones are not implemented.
 
 Bundle identifier: `org.glassfin.app`. Top Shelf: `org.glassfin.app.topshelf`. License: MPL-2.0 (`LICENSE`, `THIRD_PARTY_LICENSES`).
 
@@ -58,5 +58,6 @@ UI tests launch with `-uitest-mock-server` and `-uitest-reset`. Those arguments 
 
 M00: T00-01 through T00-19, including the Release binary string check (T00-19).
 M01: T01-01 through T01-20, plus T01-21 through T01-27 (redirects, ApiKey scope, log redaction, entitlements, CR/LF rejection, percent-encoding, artifact redaction).
+M02: T02-01 through T02-30 in `CoreStateTests` (phases, load state, user data, offline and server-down, 401 logout, cache budgets, retry, search debounce, signposts). The `XCTMetric` signpost test runs on Apple CI only.
 
 Live server tests (T01-20) are skipped until the Docker follow-up. See `Tests/IntegrationTests`.
