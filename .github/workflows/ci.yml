@@ -18,9 +18,9 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    # Xcode 27's compiler is Swift 6.4. Stay on that minor so Linux and macOS
-    # see the same concurrency checking.
-    container: swift:6.4
+    # Xcode 27's compiler is Swift 6.4. The tag is pinned to the OCI index for
+    # swift:6.4 (Swift 6.4.1). linux/amd64 manifest: sha256:4ce725174432bd37b2aca74776445a79d6bb57b3e95d0800df0af66d5a0c1c33
+    container: swift:6.4@sha256:6fbd5978b56a5a9ff05a48f8f678079fc45be496ecda15b4e74e8944fab857be
     timeout-minutes: 10
     outputs:
       macos: ${{ steps.filter.outputs.macos }}

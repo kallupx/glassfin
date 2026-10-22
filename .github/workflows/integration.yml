@@ -17,7 +17,8 @@ concurrency:
 jobs:
   docker-matrix:
     runs-on: ubuntu-latest
-    container: swift:6.4
+    # Same pinned swift:6.4 index as ci.yml (Swift 6.4.1).
+    container: swift:6.4@sha256:6fbd5978b56a5a9ff05a48f8f678079fc45be496ecda15b4e74e8944fab857be
     timeout-minutes: 10
     steps:
       - name: Swift from the official image
