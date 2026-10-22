@@ -119,6 +119,20 @@ final class RedactionTests: XCTestCase {
         GlassfinLogger().infoPublic(bare)
     }
 
+    /// T01-26. The logger redacts credential query values before anything is written.
+    func testT01_26_loggerRedactsSecretsBeforeWriting() {
+        let legacy = "api" + "_key"
+        let raw = "https://media.example/v?\(legacy)=legacy-secret&x=1 ApiKey=query-secret"
+        let logger = GlassfinLogger()
+        logger.warning(raw)
+        logger.debug(raw)
+        logger.error(raw)
+        logger.infoPublic("server Glassfin Home version 12.2.0 ApiKey=query-secret")
+        let redacted = SensitiveRedactor.redact(raw)
+        XCTAssertFalse(redacted.contains("legacy-secret"))
+        XCTAssertFalse(redacted.contains("query-secret"))
+    }
+
     /// T01-32. Detection and redaction match apikey and the underscored legacy name in any case.
     func testT01_32_detectsAndRedactsCredentialQueryNamesIgnoringCase() throws {
         let legacy = "api" + "_key"
@@ -133,7 +147,9 @@ final class RedactionTests: XCTestCase {
 }
 
 final class RedirectPolicyTests: XCTestCase {
-    func testAuthorizationDoesNotCrossHostsAndDowngradesAreRejected() throws {
+    /// T01-22. Redirect matrix: same origin follows, a new origin strips Authorization,
+    /// and an ApiKey URL to another origin or to HTTP is rejected.
+    func testT01_22_redirectMatrixRejectsCrossOriginAndDowngrade() throws {
         let same = try decide("https://media.example/a", "https://media.example/b")
         XCTAssertEqual(same, .follow(stripAuthorization: false))
 
@@ -182,7 +198,8 @@ final class RedirectPolicyTests: XCTestCase {
         XCTAssertNil(next.value(forHTTPHeaderField: "Authorization"))
     }
 
-    func testCrossHostFollowStripsTheAuthorizationHeader() throws {
+    /// T01-23. Following a redirect to another host drops Authorization.
+    func testT01_23_crossHostFollowStripsAuthorization() throws {
         var original = URLRequest(url: URL(string: "https://media.example/Items")!)
         original.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
         var proposed = URLRequest(url: URL(string: "https://other.example/Items")!)
@@ -289,7 +306,8 @@ final class DeviceIdentityTests: XCTestCase {
 #endif
 
 final class MediaAndSocketTests: XCTestCase {
-    func testHeaderAndAPIKeyModesAreMutuallyExclusive() throws {
+    /// T01-24. A media URL carries either the Authorization header or an ApiKey query, never both.
+    func testT01_24_headerAndApiKeyModesAreMutuallyExclusive() throws {
         let server = URL(string: "https://media.example/jellyfin")!
         let identity = ClientIdentity(
             deviceName: "Living Room", deviceID: "device-1", version: "0.1.0", token: "token-secret")
@@ -315,7 +333,8 @@ final class MediaAndSocketTests: XCTestCase {
         XCTAssertFalse(String(describing: query).contains("token-secret"))
     }
 
-    func testSocketUsesTheAuthorizationHeaderAndNotAPIKey() throws {
+    /// T01-25. The socket URL has no ApiKey query. The token stays in Authorization.
+    func testT01_25_socketOmitsApiKeyQuery() throws {
         let request = try SocketRequestBuilder.make(
             server: URL(string: "https://media.example/jellyfin/")!,
             identity: ClientIdentity(
@@ -329,7 +348,8 @@ final class MediaAndSocketTests: XCTestCase {
         XCTAssertNotNil(request.value(forHTTPHeaderField: "Authorization"))
     }
 
-    func testAPIRequestsRejectCredentialQuery() throws {
+    /// T01-25. An API request that puts a credential in the query is rejected.
+    func testT01_25_apiRequestsRejectCredentialQuery() throws {
         let client = HTTPJellyfinClient(
             server: URL(string: "https://media.example")!,
             identity: ClientIdentity(deviceName: "TV", deviceID: "device-1", version: "0.1.0", token: "token-secret")
