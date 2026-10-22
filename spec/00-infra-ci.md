@@ -11,7 +11,7 @@ The Tester has only a Linux machine. Xcode, the tvOS simulator, and XCUITest wor
 - ✅ **RESOLVED: GitHub repo `kallupx/glassfin`, public from 22.10.2026** (private 21.–22.10.). It can later be moved to an organization. M00 has no blockers.
   - Moving to an organization: GitHub redirects old URLs to the new one, but Actions secrets, branch-protection rules, and any GitHub Apps installations are checked after the move. Workflows do not use a hardcoded owner (`${{ github.repository }}`).
   - Once the repo becomes public, minutes on standard GitHub-hosted runners are free (see costs below), and CI limits can be relaxed.
-- The application's name is **Glassfin** (tvOS and iOS). The proposed bundle ID is `org.glassfin.app` (placeholder, SPEC.md §6.13).
+- The application's name is **Glassfin** (tvOS and iOS). The bundle ID is `org.glassfin.app` (**CONFIRMED 21.10.2026**, SPEC.md §6.13).
 - **An Apple Developer account is not a prerequisite for M00:** CI builds and tests on the simulator without signing (`CODE_SIGNING_ALLOWED=NO`, no Apple account). Installation on one's own device works with a free Apple ID (Personal Team, 7-day provisioning). Paid membership is needed only before TestFlight (SPEC.md §7).
 - Layout:
   ```
@@ -25,7 +25,7 @@ The Tester has only a Linux machine. Xcode, the tvOS simulator, and XCUITest wor
 - Xcode project generation: XcodeGen or Tuist (the Coder chooses, so that the project file does not cause merge conflicts). This is a recommendation, not a requirement.
 - Swift 6 language mode and strict concurrency `complete`.
 - **Open source:** the user's decision on 21.10.2026 is that the app is free and open source. The repo is public from 22.10.2026. License files are included from the start, so that publishing does not require follow-up work.
-  - At the root there is `LICENSE` (**MPL-2.0 – PROPOSAL – requires user confirmation**, see SPEC.md §7 R9) and `THIRD_PARTY_LICENSES` (L4): every dependency, its version, license, and source-code link. For binary libraries (FFmpeg, VLCKit, MPV), add a link or tarball of the exactly corresponding source, plus the build configuration (the configure line and a possible `changes.diff`).
+  - At the root there is `LICENSE` (**MPL-2.0 – CONFIRMED 21.10.2026**, see SPEC.md §6.11 and §7 R9) and `THIRD_PARTY_LICENSES` (L4): every dependency, its version, license, and source-code link. For binary libraries (FFmpeg, VLCKit, MPV), add a link or tarball of the exactly corresponding source, plus the build configuration (the configure line and a possible `changes.diff`).
   - Files copied from Swiftfin keep their MPL-2.0 headers and copyright notices.
 
 ## CI requirements (GitHub Actions)
@@ -83,7 +83,7 @@ The Tester has only a Linux machine. Xcode, the tvOS simulator, and XCUITest wor
      - The Tester reviews the artifacts on Linux.
   6. **Coverage:** GlassfinCore ≥ 80% line coverage (P0 modules); the UI layer is not mandatory.
 - **`integration.yml`** (`workflow_dispatch`, before release, and with the PR label `integration`; not nightly during the private-repo period): GlassfinCore integration tests against a real Jellyfin server.
-  - **PROPOSAL (v1.2, resolves SPEC.md §6 open decision 10 – ASSUMPTION – requires user confirmation): Jellyfin Docker containers as a GitHub Actions service on a Linux runner.** This does not consume macOS minutes.
+  - **CONFIRMED 21.10.2026 (v1.2, resolves SPEC.md §6 open decision 10; images 10.10.7, 10.11.11, 12.2): Jellyfin Docker containers as a GitHub Actions service on a Linux runner.** This does not consume macOS minutes.
     - A matrix of three versions, using **version tags** of the official `jellyfin/jellyfin` image (verified from Docker Hub on 21.10.2026): `10.10.7`, `10.11.11` (the latest 10.11.x), and `12.2`.
     - Tags are pinned to a digest (`image@sha256:…`) and updated with Dependabot. The `latest` and `unstable` tags are not used.
     - **Seed:** the job runs the first startup through the API. The calls are `POST /Startup/Configuration` and `POST /Startup/User`, then `POST /Startup/Complete`, `POST /Library/VirtualFolders` (Movies (fi: "Elokuvat"), Series (fi: "Sarjat"), Music (fi: "Musiikki")), and `POST /Library/Refresh` (every endpoint is in OpenAPI 12.2.0). Finally the job waits until the scan is finished.

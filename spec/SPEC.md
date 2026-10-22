@@ -239,7 +239,7 @@ The repo is **`kallupx/glassfin`**, public from 22.10.2026 (later, possibly to a
 3. **"Most efficient" vs on-device FFmpeg remux:** on-device remux increases memory and CPU use on Apple TV but reduces server load. The spec prioritizes smoothness on the device (the P12 limit is 500 MB).
 4. **Feature parity vs the tvOS platform:** downloads are impossible on tvOS (500 KB) and belong only to iOS. This departs from the goal of "the same features on iOS and tvOS".
 5. **The Researcher's version proposals are outdated:** "tvOS 17 or 18" → the current version is tvOS 27. Server 10.10 → the current version is 12.2. In addition, 12.0's breaking changes (legacy auth, `GET /QuickConnect/Initiate`, `/emby` routes) have been taken into account.
-6. **Security's Keychain class:** `...ThisDeviceOnly` has been agreed. The spec proposes `AfterFirstUnlockThisDeviceOnly` as the exact class because of Top Shelf and background work, and Security must confirm it.
+6. ~~**Security's Keychain class**~~ **RESOLVED (21.10.2026):** the class is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, confirmed by Security. 03-security.md S1.1 is authoritative.
 7. **The Researcher's report differs slightly between two versions:** part 4 sent directly to Spec cites DTS/TrueHD as the reason for the VLCKit fallback path, and the group version does not. The spec follows the broader version.
 
 ## 10. Gaps in this spec
