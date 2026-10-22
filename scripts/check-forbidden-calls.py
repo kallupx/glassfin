@@ -5,17 +5,27 @@ SwiftLint custom rules do not run on the Linux lint job (they need SourceKit).
 This script is the check that does run there.
 
 `print(`, `debugPrint(`, `dump(`, and `NSLog(` are calls only outside comments
-and string literals. Code inside `\\(` ... `)` string interpolation is scanned
-as code, so `"\\(print(x))"` is a hit. A line may opt out of the call check
-and the public-log check with `// allow-print: reason`.
-Legacy header names are ignored in comments and under `Tests/`, and are still
-reported inside string literals, because that is how the header is set.
-`NSAllowsArbitraryLoads` is a substring match, so it also catches
-`NSAllowsArbitraryLoadsForMedia` and `NSAllowsArbitraryLoadsInWebContent`.
+and string literals. Code inside string interpolation is scanned as code,
+including raw strings: `"value \\(dump(x))"` and `#"raw \\#(print(1))"#`
+(any number of `#` delimiters, nested parentheses). A line may opt out of the
+call check and the public-log check with `// allow-print: reason`.
+
+Those call rules skip a file when any path component ends in `Tests`
+(`Tests`, `UITests`, `GlassfinCoreTests`). Legacy headers, plist ATS keys,
+and `.public` credential lines are not part of that skip: they apply in test
+directories too.
+
+Legacy header names are matched case-insensitively and are ignored in
+comments. They are still reported inside string literals, because that is how
+the header is set. `NSAllowsArbitraryLoads` is a substring match, so it also
+catches `NSAllowsArbitraryLoadsForMedia` and `NSAllowsArbitraryLoadsInWebContent`.
 `NSExceptionAllowsInsecureHTTPLoads` is forbidden in every plist.
-A non-test line that contains `.public` and a credential word (`token`,
-`password`, `apiKey`, or `secret`, case-insensitive) fails unless that line
-has an `// allow-print: reason` comment.
+A line that contains `.public` and a credential word (`token`, `password`,
+`apiKey`, or `secret`, case-insensitive) fails unless that line has an
+`// allow-print: reason` comment.
+
+Known limitations: a call split across lines (`print` then `(1)` on the next
+line) is not detected, and a function reference (`let f = print`) is not a call.
 """
 
 from __future__ import annotations
@@ -26,7 +36,7 @@ import tempfile
 from pathlib import Path
 
 CALL_RE = re.compile(r"\b(?:print|debugPrint|dump|NSLog)\s*\(")
-HEADER_RE = re.compile(r"X-Emby-Token|X-MediaBrowser-Token|X-Emby-Authorization")
+HEADER_RE = re.compile(r"X-Emby-Token|X-MediaBrowser-Token|X-Emby-Authorization", re.IGNORECASE)
 ALLOW_RE = re.compile(r"//\s*allow-print:\s+\S")
 PUBLIC_RE = re.compile(r"\.public\b")
 SENSITIVE_RE = re.compile(r"\b(?:token|password|apikey|secret)\b", re.IGNORECASE)
@@ -212,24 +222,27 @@ def plist_hits(text: str) -> list[tuple[int, str]]:
     return hits
 
 
-def skip_swift(path: Path) -> bool:
-    return "Tests" in path.parts or any(part in SKIP_PARTS for part in path.parts)
-
-
-def skip_plist(path: Path) -> bool:
+def hidden(path: Path) -> bool:
     return any(part in SKIP_PARTS for part in path.parts)
+
+
+def is_test_code(path: Path) -> bool:
+    """True for Tests, UITests, GlassfinCoreTests, and any other *Tests directory."""
+    return any(part.endswith("Tests") for part in path.parts)
 
 
 def scan(root: Path) -> list[str]:
     findings: list[str] = []
     for path in sorted(root.rglob("*")):
-        if not path.is_file():
+        if not path.is_file() or hidden(path):
             continue
-        if path.suffix == ".swift" and not skip_swift(path):
+        if path.suffix == ".swift":
             text = path.read_text(encoding="utf-8", errors="replace")
             for number, message in swift_hits(text):
+                if is_test_code(path) and message.startswith("forbidden call"):
+                    continue
                 findings.append(f"{path}:{number}: {message}")
-        elif path.suffix == ".plist" and not skip_plist(path):
+        elif path.suffix == ".plist":
             text = path.read_text(encoding="utf-8", errors="replace")
             for number, message in plist_hits(text):
                 findings.append(f"{path}:{number}: {message}")
@@ -242,6 +255,7 @@ def self_test() -> int:
         'let token = "X-Emby-Token"\n'
         'let media = "X-MediaBrowser-Token"\n'
         'let auth = "X-Emby-Authorization"\n'
+        'let lower = "x-emby-token"\n'
     )
     quiet = (
         "// print( debugPrint( dump( NSLog( X-Emby-Token X-MediaBrowser-Token X-Emby-Authorization\n"
@@ -253,7 +267,12 @@ def self_test() -> int:
         'logger.log(privacy: .private, "token")\n'
         'logger.log(privacy: .public, "name")\n'
     )
-    interpolated = 'let value = "\\(print(x))"\nlet nested = "\\(print(foo(1)))"\n'
+    interpolated = (
+        'let value = "value \\(dump(x))"\n'
+        'let nested = "\\(print(foo(1)))"\n'
+        'let raw = #"raw \\#(print(1))"#\n'
+        'let raw2 = ##"raw \\##(dump(bar(1)))"##\n'
+    )
     public_hits = (
         'logger.log(privacy: .public, "token")\n'
         'logger.log(privacy: .public, "Password")\n'
@@ -261,7 +280,6 @@ def self_test() -> int:
         'logger.log(privacy: .public, "secret")\n'
     )
     allowed = 'logger.log(privacy: .public, "token") // allow-print: redacted sample\n'
-    tests = calls + headers + public_hits
     plist = (
         "<plist><dict>\n"
         "<key>NSAllowsArbitraryLoads</key><true/>\n"
@@ -281,9 +299,18 @@ def self_test() -> int:
         (source / "Interpolated.swift").write_text(interpolated, encoding="utf-8")
         (source / "Public.swift").write_text(public_hits, encoding="utf-8")
         (source / "Allowed.swift").write_text(allowed, encoding="utf-8")
-        nested = root / "Packages" / "GlassfinCore" / "Tests"
-        nested.mkdir(parents=True)
-        (nested / "Ignored.swift").write_text(tests, encoding="utf-8")
+        for relative in (
+            "Packages/GlassfinCore/Tests/Calls.swift",
+            "Apps/Shared/UITests/Calls.swift",
+            "Packages/GlassfinCoreTests/Calls.swift",
+        ):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(calls, encoding="utf-8")
+        still = root / "Packages" / "GlassfinCore" / "Tests" / "Still.swift"
+        still.write_text(headers + public_hits, encoding="utf-8")
+        uitests_plist = root / "Apps" / "Shared" / "UITests" / "Bad.plist"
+        uitests_plist.write_text(plist, encoding="utf-8")
         (root / "Info.plist").write_text(plist, encoding="utf-8")
         (source / "Clean.plist").write_text(clean_plist, encoding="utf-8")
         findings = scan(root)
@@ -295,7 +322,12 @@ def self_test() -> int:
         ("Headers.swift", "X-Emby-Token"),
         ("Headers.swift", "X-MediaBrowser-Token"),
         ("Headers.swift", "X-Emby-Authorization"),
+        ("Headers.swift", "x-emby-token"),
+        ("Interpolated.swift", "dump("),
         ("Interpolated.swift", "print("),
+        ("Still.swift", "X-Emby-Token"),
+        ("Still.swift", "token"),
+        ("UITests/Bad.plist", "NSExceptionAllowsInsecureHTTPLoads"),
         ("Public.swift", "token"),
         ("Public.swift", "Password"),
         ("Public.swift", "apiKey"),
@@ -315,15 +347,15 @@ def self_test() -> int:
     if len(loads_hits) < 3:
         print("forbidden-call self-test missed an NSAllowsArbitraryLoads variant", file=sys.stderr)
         failed = True
-    interpolated_hits = [hit for hit in findings if "Interpolated.swift" in hit and "print(" in hit]
-    if len(interpolated_hits) < 2:
-        print("forbidden-call self-test missed an interpolated print(", file=sys.stderr)
+    interpolated_hits = [hit for hit in findings if "Interpolated.swift" in hit]
+    if not any("dump(" in hit for hit in interpolated_hits) or not any("print(" in hit for hit in interpolated_hits):
+        print("forbidden-call self-test missed a raw or nested interpolation", file=sys.stderr)
         failed = True
     for hit in findings:
-        if any(
-            name in hit
-            for name in ("Quiet.swift", "/Tests/", "Clean.plist", "Ignored.swift", "Allowed.swift")
-        ):
+        if "forbidden call" in hit and any(part.endswith("Tests") for part in Path(hit.split(":", 1)[0]).parts):
+            print(f"forbidden-call self-test counted a call in test code: {hit}", file=sys.stderr)
+            failed = True
+        if any(name in hit for name in ("Quiet.swift", "Clean.plist", "Allowed.swift")):
             print(f"forbidden-call self-test counted an ignored line: {hit}", file=sys.stderr)
             failed = True
     if failed:
