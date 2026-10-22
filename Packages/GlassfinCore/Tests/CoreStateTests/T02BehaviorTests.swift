@@ -51,7 +51,7 @@ final class T02BehaviorTests: XCTestCase {
         // Version numbers are format arguments, not translated copy.
         let message = try XCTUnwrap(AppErrorMessage.userFacing(error))
         XCTAssertTrue(message.contains("10.9.11"))
-        XCTAssertTrue(message.contains(ServerVersionGate.dotted(.minimumJellyfin)))
+        XCTAssertTrue(message.contains("10.10.0"))
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         harness.app.removeServer(id: Sample.serverID)
