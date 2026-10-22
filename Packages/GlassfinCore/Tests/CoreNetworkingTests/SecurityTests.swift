@@ -386,7 +386,7 @@ final class SecurityTransportTests: XCTestCase {
     /// T03-09. inet_aton shorthands are rejected. The class is the literal host, with no DNS lookup.
     func testT03_09_nonCanonicalNumericHostsAreRejected() throws {
         let rejected = [
-            "0x7f000001", "2130706433", "134744072", "0x08080808",
+            "0x7f000001", "2130706433", "017700000001", "134744072", "0x08080808",
             "127.1", "010.0.0.1", "0x7f.1", "0177.0.0.1",
         ]
         for host in rejected {
@@ -399,6 +399,12 @@ final class SecurityTransportTests: XCTestCase {
         }
         XCTAssertEqual(ServerTransportPolicy.hostClass("nas"), .localHostname)
         XCTAssertEqual(ServerTransportPolicy.hostClass("cafe"), .localHostname)
+        let bareHex = "7f000001"
+        XCTAssertEqual(ServerTransportPolicy.hostClass(bareHex), .localHostname)
+        XCTAssertEqual(
+            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://\(bareHex)/"))),
+            .unencryptedLocal
+        )
         let rebound = "192.168.1.1.nip.io"
         XCTAssertEqual(ServerTransportPolicy.hostClass(rebound), .publicHostname)
         XCTAssertNotEqual(ServerTransportPolicy.hostClass(rebound), .privateAddress)

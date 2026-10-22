@@ -63,8 +63,9 @@ public enum ServerTransportPolicy {
     /// resolve to a private address stays a hostname.
     ///
     /// An IPv4 literal is accepted only as four decimal octets with no leading zeros.
-    /// inet_aton shorthands (hex, octal, a single integer, one to three dotted parts,
-    /// a trailing dot) are rejected. A single-label hostname must not itself be one of those numbers.
+    /// A single-label name is not local when it is all digits (decimal or leading-zero octal)
+    /// or `0x` plus hex. Hex without that prefix, such as `7f000001`, is an ordinary hostname
+    /// and may stay local. `.local` and other single-label names are accepted by name (S4.3, known risk).
     static func hostClass(_ host: String) -> HostClass {
         var trimmed = host.lowercased()
         if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
