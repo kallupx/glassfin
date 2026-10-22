@@ -1,62 +1,66 @@
-# Testisuunnitelma – M00 (infra & CI) ja M01 (GlassfinCore)
+# Test plan – M00 (infra and CI) and M01 (GlassfinCore)
 
-**Laatija:** Testaaja · 21.10.2026 · Pohja: spec/SPEC.md, 00-infra-ci.md, 01-core.md
-**Ympäristö:** Testaajalla Linux (ei Xcodea, ei Swiftiä, ei Dockeria tällä hetkellä). Kaikki ajo CI:ssä; Testaaja lukee artefaktit ja katselmoi testit/koodin repossa `kallupx/glassfin`.
+**Author:** Tester · 21 Oct 2026 · Basis: spec/SPEC.md, 00-infra-ci.md, 01-core.md
+**Environment:** the Tester has Linux (no Xcode, no Swift, no Docker at the time of writing). Everything runs in CI; the Tester reads artifacts and reviews tests and code in `kallupx/glassfin`.
 
-## Avoimet kysymykset ennen testausta
-| # | Kysymys | Kenelle | Miksi |
+## Open questions before testing
+| # | Question | Who | Why |
 |---|---|---|---|
-| Q1 | Paketin nimi: `GlassfinCore` (SPEC §1, M01) vai `GlassfinCore` (M00)? Targetit ja CI-grepit viittaavat nimeen. | Spesifikaatio | Yksi nimi kaikkialla, muuten grep-tarkistukset ja skeemat menevät ristiin. |
-| Q2 | `.xcresult` ei aukea Linuxilla (`xcresulttool` on vain macOS:llä). CI:n pitää lisäksi viedä: JUnit XML, kuvakaappaukset PNG-tiedostoina, coverage tekstinä/JSONina (`xccov view --report --json`) ja failanneiden testien lokit. | Koodari | Muuten M00:n kriteeri "Testaaja saa artefaktit auki Linuxilla" ei täyty. |
-| Q3 | Mitä negatiivinen ticks-arvo tuottaa: virhe, nolla vai negatiivinen Duration? | Spesifikaatio | M01-kriteeri vaatii testin, mutta odotettu tulos puuttuu. |
-| Q4 | WebSocket-backoff: lisätäänkö jitter, ja nollautuuko viive onnistuneen yhteyden jälkeen? Testit vaativat injektoidun `Clock`-abstraktion. | Spesifikaatio / Koodari | Muuten testi on hidas tai epädeterministinen. |
-| Q5 | Integraatiotestipalvelin (SPEC §6.10). Suosittelen vaihtoehtoa (b): Docker-kontit 10.10.7 / 10.11.x / 12.x Linux-runnerilla. Se on halvin, ja ajot ovat toistettavia. | Käyttäjä | Ilman tätä M01:n integraatiokriteeri ei ole testattavissa. |
+| Q1 | Package name. Resolved in v1.2: `GlassfinCore` everywhere (SPEC §1 and M00/M01). Targets and CI greps use that name. | Specification | One name everywhere, otherwise grep checks and schemes diverge. |
+| Q2 | `.xcresult` does not open on Linux (`xcresulttool` is macOS-only). CI must also export: JUnit XML, screenshots as PNG, coverage as text/JSON (`xccov view --report --json`), and logs of failed tests. The shipping CI uploads the redacted text export and does not upload the xcresult bundle. | Coder | Otherwise M00's criterion "the Tester can open the artifacts on Linux" is not met. |
+| Q3 | What does a negative ticks value produce: an error, zero, or a negative Duration? Resolved in SPEC v1.2: a negative position becomes 0 with one warning. `RunTimeTicks` ≤ 0 means unknown duration and no progress bar. A negative value is never sent to the server. | Specification | The M01 criterion requires a test, and the expected result is now specified. |
+| Q4 | WebSocket backoff: is jitter added, and does the delay reset after a successful connection? Tests need an injected `Clock`. Resolved in SPEC v1.2: full jitter `random(0, min(30 s, 1 s · 2^n))`, and the counter resets only after 10 s of a stable connection. Reconnect immediately in the foreground. | Specification / Coder | Otherwise the test is slow or nondeterministic. |
+| Q5 | Integration test server (SPEC §6.10). Recommendation was option (b): Docker containers 10.10.7 / 10.11.x / 12.x on a Linux runner. That is now `integration.yml` (`workflow_dispatch`): pinned images `10.10.7`, `10.11.11`, and `12.2`. | User | Without this, M01's integration criterion is not testable. |
 
-## M00 – testitapaukset
-| ID | Testi | Askeleet | Odotettu | Todennus |
+## M00 – test cases
+| ID | Test | Steps | Expected | Evidence |
 |---|---|---|---|---|
-| T00-01 | Puhdas build | PR, jossa on tyhjät tvOS- ja iOS-appit ja core | `ci.yml` vihreä, kaikki jobit ajettu | Actions-ajon tila |
-| T00-02 | Path-filtteri | PR, joka muuttaa vain `spec/**`:ia tai `*.md`:tä | Vain `lint` ajetaan, macOS-jobit ohitetaan | Jobilista |
-| T00-03 | Path-filtteri, positiivinen | PR, joka muuttaa `Packages/**`:ia | `test-tvos` ja `test-ios` ajetaan | Jobilista |
-| T00-04 | iOS-ehto | PR, joka muuttaa vain `Apps/tvOS/**`:ia | `test-ios` ohitetaan PR:ssä, mutta ajetaan main-pushissa | Jobilista |
-| T00-05 | Concurrency | Kaksi pushia samaan PR:ään peräkkäin | Ensimmäinen ajo perutaan (cancelled) | Ajohistoria |
-| T00-06 | Cache | Sama PR ajetaan kahdesti | Toisessa ajossa cache hit (SPM ja DerivedData), kesto lyhenee | Lokit ja kesto |
-| T00-07 | `needs: lint` | PR, jossa tahallinen SwiftLint-virhe | `lint` failaa, macOS-jobit eivät käynnisty (0 macOS-minuuttia) | Jobilista |
-| T00-08 | Lint estää mergen | Sama PR | Branch protection estää mergen | PR-näkymä |
-| T00-09 | CI-grepit | Testihaaroissa erikseen: `NSAllowsArbitraryLoads`, `X-Emby-Token`, `api_key=`, `print(` | Jokainen failaa `lint`-jobin selkeällä viestillä | Lokit |
-| T00-10 | license-check, negatiivinen | Testihaara + `kingslay/FFmpegKit` | `license-check` failaa | Lokit |
-| T00-11 | license-check, positiivinen | Puhdas main | Menee läpi | Lokit |
-| T00-12 | Unit molemmilla alustoilla | main-push | JUnit-raportit sekä tvOS- että iOS-simulaattorista | Artefaktit |
-| T00-13 | Savutesti + kuvakaappaus | main-push | XCUITest käynnistää appin, ensimmäinen näkymä näkyy, PNG artefaktina | Testaaja avaa PNG:n |
-| T00-14 | Artefaktit Linuxilla | Lataa ajon artefaktit | JUnit, PNG:t ja coverage aukeavat ilman macOS:ää (ks. Q2) | Testaaja |
-| T00-15 | Aikakatkaisut | Tarkista workflow | macOS 25 min, Linux 10 min, `permissions: contents: read` | Katselmointi |
-| T00-16 | Minuuttiseuranta | 10 ensimmäistä ajoa | macOS-minuutit kirjattu, ennuste ≤ 200 min/kk tai eskalointiehdotus | Koodarin raportti |
-| T00-17 | Lisenssitiedostot | Repon juuri | `LICENSE` ja `THIRD_PARTY_LICENSES` olemassa, riippuvuudet vastaavat `Package.resolved`:ia | Katselmointi |
-| T00-18 | Secretit | `release.yml` (kun tehty) | Ei `pull_request`-triggeriä, avain poistetaan `always()`-stepissä, ei kaikua | Katselmointi + Turvallisuus |
+| T00-01 | Clean build | A pull request with empty tvOS and iOS apps and the core | `ci.yml` green, the jobs that should run did run | Actions run status |
+| T00-02 | Path filter, draft | A draft pull request that changes only `spec/**` or `*.md` | Only `lint` runs. `test-tvos`, `test-ios`, and `full-ui` are skipped | Job list |
+| T00-02b | Path filter, ready | A ready pull request that changes only `spec/**` or `*.md` | `lint` and `full-ui` run. `test-tvos` and `test-ios` are skipped (v1.3.3: `full-ui` is not path-filtered) | Job list |
+| T00-03 | Path filter, positive | A pull request that changes `Packages/**` | `test-tvos` and `test-ios` run | Job list |
+| T00-04 | iOS gate | A pull request that changes only `Apps/tvOS/**` | `test-tvos` and `test-ios` both run (v1.3.3: they share the macOS path gate). A push to `main` does not run them | Job list |
+| T00-05 | Concurrency | Two pushes to the same pull request in a row | The first run is cancelled | Run history |
+| T00-06 | Cache | The same pull request runs twice | The second run is a cache hit (SPM and DerivedData), and the duration drops | Logs and duration |
+| T00-07 | `needs: lint` | A pull request with an intentional SwiftLint error | `lint` fails, macOS jobs do not start | Job list |
+| T00-08 | Lint blocks merge | The same pull request | Branch protection blocks the merge | Pull-request view |
+| T00-09 | CI greps | Separate test branches: `NSAllowsArbitraryLoads`, `X-Emby-Token`, `api_key=`, `print(` | Each fails the `lint` job with a clear message | Logs |
+| T00-10 | license-check, negative | A test branch plus `kingslay/FFmpegKit` | `license-check` fails | Logs |
+| T00-11 | license-check, positive | Clean main | Passes | Logs |
+| T00-12 | Units on both platforms | A pull request that changes `Packages/**`, or `workflow_dispatch` | Text results from both the tvOS and iOS simulators | Artifacts |
+| T00-13 | Smoke test + screenshot | A ready pull request or a push to main (`full-ui`) | XCUITest launches the app, the first view is visible, PNG in the artifact | Tester opens the PNG |
+| T00-14 | Artifacts on Linux | Download the run's artifacts | JUnit, PNGs, and coverage open without macOS (see Q2). Retention is 14 days. xcresult is not in the upload | Tester |
+| T00-15 | Timeouts and runners | Review the workflow | macOS 25 min, Linux lint 10 min, `permissions: contents: read`, `runs-on` only `ubuntu-latest` or `xcode-27`, no `self-hosted`, no `xlarge` | Review |
+| T00-16 | Minute tracking | The first 10 runs, while the repo was private | macOS minutes recorded, forecast ≤ 200 min/month or an escalation proposal. On the public repo, standard-runner minutes are free; this row is historical | Coder's report |
+| T00-17 | License files | Repository root | `LICENSE` and `THIRD_PARTY_LICENSES` exist, and dependencies match `Package.resolved` | Review |
+| T00-18 | Secrets | `release.yml` (when it exists) | No `pull_request` trigger, the key is deleted in an `always()` step, no echo. Concurrency `cancel-in-progress: true` | Review + Security |
+| T00-19 | Draft vs ready | A draft pull request that changes `Packages/**`, then mark it ready | The draft runs `lint`, `test-tvos`, and `test-ios`, and skips `full-ui`. Marking it ready starts `full-ui`. The `full-ci` label starts `full-ui` on the draft | Job list |
+| T00-20 | Artifact retention | Review `ci.yml` | Every `upload-artifact` sets `retention-days: 14` | Review |
 
-## M01 – testitapaukset
-| ID | Testi | Odotettu |
+## M01 – test cases
+| ID | Test | Expected |
 |---|---|---|
-| T01-01 | Import-raja | Core ei importtaa SwiftUI:ta tai UIKitiä ilman `#if os(...)` -adapteria (CI-grep failaa testihaarassa) |
-| T01-02 | Auth-header ennen kirjautumista | Täsmälleen `MediaBrowser Client="Glassfin", Device="…", DeviceId="…", Version="…"`, ei Token-kenttää |
-| T01-03 | Auth-header kirjautuneena | Sama + `Token="…"`; kenttäjärjestys ja lainausmerkit täsmäävät |
-| T01-04 | Erikoismerkit laitenimessä | Laitenimessä `"`, `,`, ääkköset ja emoji → header pysyy validina (escape tai sanitointi) |
-| T01-05 | Ei header + query yhtä aikaa | Media- ja kuva-URL:issa vain `ApiKey`, ei Authorization-headeria; API-pyynnöissä ei `ApiKey`:tä |
-| T01-06 | DeviceId pysyvä | Generoidaan kerran; sama arvo uudelleenkäynnistyksen jälkeen (mock-SecureStore); `-uitest-reset` vaihtaa sen |
-| T01-07 | Endpoint-matriisi | Jokaiselle P0-endpointille 6 tapausta: 200, 401, 404, 500, aikakatkaisu ja virheellinen JSON → oikea `APIError`-variantti, ei kaatumista |
-| T01-08 | 401-käsittely | 401 tuottaa `unauthorized`-virheen; verkkovirhe ei koskaan tuota sitä (K10) |
-| T01-09 | Quick Connect -reitti | Initiate käyttää POSTia (12.x); 10.10:llä toimii myös |
-| T01-10 | Ticks ↔ Duration | 0, 1 tick, 10 000 000 (1 s), > 24 h, `Int64.max`-raja, negatiivinen (ks. Q3), edestakainen muunnos häviöttä |
-| T01-11 | Mapperit | Jokainen DTO → domain -mapperi fixturella 12.x ja 10.10; puuttuvat valinnaiset kentät (nil overview, ei kuvia, ei trickplayta) eivät kaada |
-| T01-12 | Tuntematon enum | Tuntematon `Type`-merkkijono → `.other(String)`; tuntematon `MediaSegmentType` → `.unknown` |
-| T01-13 | Token ei UserSessionissa | `UserSession` ei sisällä tokenia; `description` tai `dump` ei vuoda sitä (myös Turvallisuus S-vaatimukset) |
-| T01-14 | WebSocket backoff | Katkot → viiveet 1, 2, 4, 8, 16, 30, 30 s (injektoitu kello); onnistuminen nollaa viiveen |
-| T01-15 | WebSocket-tapahtumat | Mock-socket lähettää `UserDataChanged` ja `LibraryChanged` → tapahtumat tulevat streamiin; `KeepAlive` ei tuota UI-tapahtumaa; tuntematon tyyppi ohitetaan |
-| T01-16 | ServerShuttingDown / Restarting | Ei kirjaa ulos; siirtyy reconnect-tilaan |
-| T01-17 | Peruutus | Peruttu `Task` → pyyntö peruuntuu, ei vuotoa, ei virhetoastia (tärkeä M09:n K6:lle) |
-| T01-18 | Concurrency | Swift 6 strict concurrency `complete` ilman varoituksia (build-loki) |
-| T01-19 | Coverage | Core ≥ 80 % rivikattavuus |
-| T01-20 | Integraatio | Kirjautuminen, UserViews, Resume ja PlaybackInfo 12.x:llä; sama 10.10.7:llä ja 10.11.x:llä (ks. Q5) |
+| T01-01 | Import boundary | Core does not import SwiftUI or UIKit without an `#if os(...)` adapter (CI grep fails on a test branch) |
+| T01-02 | Auth header before login | Exactly `MediaBrowser Client="Glassfin", Device="…", DeviceId="…", Version="…"`, no Token field |
+| T01-03 | Auth header when signed in | The same plus `Token="…"`; field order and quotes match |
+| T01-04 | Special characters in the device name | A device name with `"`, `,`, non-ASCII letters, and emoji → the header stays valid (escape or sanitize) |
+| T01-05 | No header and query together | Media and image URLs have only `ApiKey`, no Authorization header; API requests have no `ApiKey` |
+| T01-06 | DeviceId is stable | Generated once; the same value after restart (mock SecureStore); `-uitest-reset` changes it |
+| T01-07 | Endpoint matrix | For every P0 endpoint, 6 cases: 200, 401, 404, 500, timeout, and malformed JSON → the correct `APIError` variant, no crash |
+| T01-08 | 401 handling | 401 produces `unauthorized`; a network error never produces it (K10) |
+| T01-09 | Quick Connect route | Initiate uses POST (12.x); it also works on 10.10 |
+| T01-10 | Ticks ↔ Duration | 0, 1 tick, 10,000,000 (1 s), > 24 h, the `Int64.max` boundary, negative (see Q3), round-trip without loss |
+| T01-11 | Mappers | Every DTO → domain mapper with a 12.x and a 10.10 fixture; missing optional fields (nil overview, no images, no trickplay) do not crash |
+| T01-12 | Unknown enum | An unknown `Type` string → `.other(String)`; an unknown `MediaSegmentType` → `.unknown` |
+| T01-13 | Token is not in UserSession | `UserSession` does not contain the token; `description` or `dump` does not leak it (also Security S requirements) |
+| T01-14 | WebSocket backoff | Drops → delays with full jitter up to 30 s (injected clock); success resets the delay after 10 s stable (Q4) |
+| T01-15 | WebSocket events | A mock socket sends `UserDataChanged` and `LibraryChanged` → events arrive on the stream; `KeepAlive` does not produce a UI event; an unknown type is ignored |
+| T01-16 | ServerShuttingDown / Restarting | Does not sign the user out; moves to the reconnect state |
+| T01-17 | Cancellation | A cancelled `Task` → the request is cancelled, no leak, no error toast (important for M09 K6) |
+| T01-18 | Concurrency | Swift 6 strict concurrency `complete` with no warnings (build log) |
+| T01-19 | Coverage | Core ≥ 80% line coverage |
+| T01-20 | Integration | Login, UserViews, Resume, and PlaybackInfo on 12.x; the same on 10.10.7 and 10.11.x (see Q5). `workflow_dispatch` of `integration.yml` |
+| T01-30 | Docker matrix | The same three pinned Jellyfin versions in `scripts/docker-integration.sh` |
 
-## Hyväksyntä
-Moduuli on hyväksyttävissä, kun kaikki speksin hyväksymiskriteerit ja yllä olevat P0-testit ovat vihreinä CI:ssä, avoimet kysymykset Q1–Q5 on ratkaistu tai kirjattu tietoisesti auki, eikä avoimia kriittisiä bugeja ole.
+## Approval
+A module is acceptable when every acceptance criterion in the spec and the P0 tests above are green in CI, open questions Q1–Q5 are resolved or consciously left open, and there are no open critical bugs.

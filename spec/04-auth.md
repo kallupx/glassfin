@@ -1,52 +1,52 @@
-# M04 – Palvelimen lisäys ja kirjautuminen (P0)
+# M04 – Adding a server and signing in (P0)
 
-**Riippuvuudet:** M01, M02, M03 ja M05 (perus-UI-komponentit; voidaan tehdä rinnakkain). **iOS-UI:** P1 (M11).
+**Dependencies:** M01, M02, M03, and M05 (basic UI components; can be done in parallel). **iOS UI:** P1 (M11).
 
-## Käyttötapaukset
-- **UC-A1 (P0)** Ensikäynnistys: käyttäjä syöttää palvelimen osoitteen ja kirjautuu Quick Connectilla.
-- **UC-A2 (P0)** Kirjautuminen käyttäjätunnuksella ja salasanalla, kun Quick Connect ei ole käytössä tai käyttäjä haluaa salasanan.
-- **UC-A3 (P0)** Uudelleenkäynnistyksen jälkeen käyttäjä on yhä kirjautunut (kipupiste "uloskirjautuminen istuntojen välillä").
-- **UC-A4 (P0)** Uloskirjautuminen.
-- **UC-A5 (P0)** Itse allekirjoitettu tai salaamaton palvelin (varoitus- ja vahvistusvirta, 03-security S4).
-- **UC-A6 (P1)** Palvelimen automaattinen löytö LAN:ista. Jellyfinin UDP-discovery portissa 7359 vaatii tvOS:llä Local Network -luvan ja todennäköisesti Applen multicast-entitlementin (`com.apple.developer.networking.multicast`). ⚠️ Entitlementin tarve on varmistamatta. Se vaatii Applen hyväksynnän ja oletettavasti maksullisen jäsenyyden (SPEC.md §7).
-- **UC-A7 (P1)** Useita palvelimia ja käyttäjiä, käyttäjävalitsin käynnistyksessä (`GET /Users/Public`, profiilikuvat). Tämä on osa M15:tä.
+## Use cases
+- **UC-A1 (P0)** First launch: the user enters the server address and signs in with Quick Connect.
+- **UC-A2 (P0)** Sign in with username and password when Quick Connect is disabled or the user wants a password.
+- **UC-A3 (P0)** After a restart the user is still signed in (pain point "signed out between sessions").
+- **UC-A4 (P0)** Sign out.
+- **UC-A5 (P0)** A self-signed or unencrypted server (warning and confirmation flow, 03-security S4).
+- **UC-A6 (P1)** Automatic server discovery on the LAN. Jellyfin's UDP discovery on port 7359 requires the Local Network permission on tvOS and probably Apple's multicast entitlement (`com.apple.developer.networking.multicast`). Whether the entitlement is required is unverified. It needs Apple's approval and presumably a paid membership (SPEC.md §7).
+- **UC-A7 (P1)** Several servers and users, and a user picker at launch (`GET /Users/Public`, profile images). This is part of M15.
 
-## Näyttövirta (tvOS, Siri Remote)
+## Screen flow (tvOS, Siri Remote)
 ```
-Launch ──(token OK: GET /Users/Me 200)──────────────▶ Koti (M06)
+Launch ──(token OK: GET /Users/Me 200)──────────────▶ Home (M06)
    │
-   ├─(ei palvelinta)──▶ [A1 Tervetuloa] ──▶ [A2 Palvelimen osoite] ──▶ (GET /System/Info/Public)
-   │                                             │  ├─ HTTPS + luotettu ───────────────┐
-   │                                             │  ├─ HTTP ─▶ [A2b Varoitus: salaamaton] ─▶│
-   │                                             │  └─ itse allekirj. ─▶ [A2c Sertifikaatti + fingerprint] ─▶│
-   │                                             ▼                                     ▼
-   └─(token 401)──────────────────────────▶ [A3 Kirjautumistapa] ─┬─▶ [A4 Quick Connect -koodi]
-                                                                   └─▶ [A5 Tunnus + salasana]
+   ├─(no server)──▶ [A1 Welcome] ──▶ [A2 Server address] ──▶ (GET /System/Info/Public)
+   │                                        │  ├─ HTTPS + trusted ───────────────┐
+   │                                        │  ├─ HTTP ─▶ [A2b Warning: unencrypted] ─▶│
+   │                                        │  └─ self-signed ─▶ [A2c Certificate + fingerprint] ─▶│
+   │                                        ▼                                     ▼
+   └─(token 401)─────────────────────▶ [A3 Sign-in method] ─┬─▶ [A4 Quick Connect code]
+                                                             └─▶ [A5 Username + password]
 ```
-- **A1 Tervetuloa:** Glassfin-logo ja -nimi brändikuvan tai liikkeettömän taustan päällä sekä yksi `.glassProminent`-painike "Yhdistä palvelimeen" (oletusfokus). A2–A5 näytetään glass-paneelissa (M05 §2).
-- **A2 Palvelimen osoite:** tekstikenttä (tvOS-järjestelmänäppäimistö, myös iPhonen jatkuvuusnäppäimistö toimii automaattisesti) ja painike "Jatka".
-  - Syötteen normalisointi: jos skeema puuttuu, kokeillaan ensin `https://`, sitten `http://`. Oletusportit kokeillaan järjestyksessä: syötetty, sitten 8920 (https) ja 8096 (http).
-  - Lataustila näytetään painikkeessa. Virheet näytetään inline: "Palvelinta ei löytynyt", "Ei Jellyfin-palvelin", "Palvelimen versio X on liian vanha (vaaditaan ≥ MIN)".
-  - Kun palvelin vastaa, näytetään sen nimi (`ServerName`) ja versio.
-- **A3 Kirjautumistapa:** jos `GET /QuickConnect/Enabled` on true, **Quick Connect on oletusfokuksessa**, ja vaihtoehtona on "Käytä salasanaa".
-- **A4 Quick Connect:** iso 6-merkkinen koodi (`Code`) ja ohje "Avaa Jellyfin puhelimella tai selaimella → Käyttäjä → Quick Connect → syötä koodi". Taustalla pollataan 5 s välein (S3), ja onnistuminen siirtää suoraan kotiin. Valikkonapilla pääsee takaisin, mikä peruu pollauksen. Koodi uusitaan, kun se vanhenee.
-- **A5 Tunnus ja salasana:** kaksi kenttää (`.textContentType(.username/.password)`) ja painike "Kirjaudu". Salasanakenttä tyhjennetään virheen jälkeen. Virheviesti 401:lle on "Väärä käyttäjätunnus tai salasana".
-- **Fokus:** jokaisella näkymällä on yksi määritelty oletusfokus (`prefersDefaultFocus`). Valikkonappi vie aina edelliseen näkymään, ja A1:ssä se poistuu sovelluksesta (järjestelmän oletus).
+- **A1 Welcome:** the Glassfin logo and name over a brand image or a still background, and one `.glassProminent` button "Connect to server" (default focus). A2–A5 are shown in a glass panel (M05 §2).
+- **A2 Server address:** a text field (the tvOS system keyboard; the iPhone continuity keyboard works automatically) and a "Continue" button.
+  - Input normalization: if the scheme is missing, try `https://` first, then `http://`. Default ports are tried in order: the entered port, then 8920 (https) and 8096 (http).
+  - A loading state is shown on the button. Errors are inline: "Server not found", "Not a Jellyfin server", "Server version X is too old (required ≥ MIN)".
+  - When the server responds, show its name (`ServerName`) and version.
+- **A3 Sign-in method:** if `GET /QuickConnect/Enabled` is true, **Quick Connect has the default focus**, and the alternative is "Use a password".
+- **A4 Quick Connect:** a large 6-character code (`Code`) and the instruction "Open Jellyfin on a phone or in a browser → User → Quick Connect → enter the code". Polling runs in the background every 5 s (S3), and success goes straight to home. The menu button goes back, which cancels polling. The code is renewed when it expires.
+- **A5 Username and password:** two fields (`.textContentType(.username/.password)`) and a "Sign in" button. The password field is cleared after an error. The 401 message is "Wrong username or password".
+- **Focus:** every view has one defined default focus (`prefersDefaultFocus`). The menu button always goes to the previous view, and on A1 it leaves the app (the system default).
 
-## Toimintalogiikka
-1. Käynnistyksessä: jos aktiivinen palvelin ja token löytyvät, kutsutaan `GET /Users/Me` (aikakatkaisu 5 s).
-   - 200 → koti.
-   - 401 → A3 viestillä "Istunto päättyi".
-   - Verkkovirhe → **koti välimuistista offline-tilassa**. Käyttäjää ei kirjata ulos verkkovirheen takia (kipupiste UC-A3).
-2. Onnistunut kirjautuminen: token ja DeviceId Keychainiin (S1), palvelin UserDefaultsiin ja `POST /Sessions/Capabilities/Full` (PlayableMediaTypes `Video` ja `Audio`, SupportsMediaControl, DeviceProfile M08:sta). Sen jälkeen `AppState.phase = .signedIn`.
-3. Uloskirjautuminen (Asetukset → Kirjaudu ulos, vahvistusdialogi): S2.1.
+## Behavior
+1. At launch: if an active server and a token exist, call `GET /Users/Me` (timeout 5 s).
+   - 200 → home.
+   - 401 → A3 with the message "Session ended".
+   - Network error → **home from cache, offline**. The user is not signed out because of a network error (pain point UC-A3).
+2. Successful sign-in: token and DeviceId into the Keychain (S1), server into UserDefaults, and `POST /Sessions/Capabilities/Full` (PlayableMediaTypes `Video` and `Audio`, SupportsMediaControl, DeviceProfile from M08). Then `AppState.phase = .signedIn`.
+3. Sign out (Settings → Sign out, confirmation dialog): S2.1.
 
-## Hyväksymiskriteerit
-- [ ] UC-A1: puhdas asennus → Quick Connect → koti, kaikki pelkällä Siri Remotella. XCUITest mock-palvelimella, kuvakaappaukset A1–A4.
-- [ ] UC-A2: väärä salasana → inline-virhe, kenttä tyhjenee, fokus palaa salasanakenttään.
-- [ ] UC-A3: appin pakkosulku ja uudelleenkäynnistys → kotinäkymä ilman kirjautumista (UI-testi). Palvelin alhaalla käynnistyksessä → koti välimuistista ja offline-banneri, ei kirjautumisnäkymää.
-- [ ] UC-A4: uloskirjautuminen → `POST /Sessions/Logout` kutsuttu (mock verifioi) ja Keychain tyhjä.
-- [ ] UC-A5: HTTP-palvelin → varoitusnäkymä. Itse allekirjoitettu → fingerprint näkyy. Hylkäys → ei yhteyttä.
-- [ ] Liian vanha palvelinversio → estonäkymä.
-- [ ] Quick Connect: näkymästä poistuminen peruu pollauksen (ei verkkopyyntöjä poistumisen jälkeen, testi mock-clientillä).
-- [ ] Reverse proxy -alipolku (`https://host/jellyfin`) toimii (integraatiotesti tai mock).
+## Acceptance criteria
+- [ ] UC-A1: a clean install → Quick Connect → home, entirely with the Siri Remote. XCUITest against a mock server, screenshots of A1–A4.
+- [ ] UC-A2: a wrong password → an inline error, the field clears, and focus returns to the password field.
+- [ ] UC-A3: force-quit and relaunch → the home view without signing in (UI test). Server down at launch → home from cache and the offline banner, not the login view.
+- [ ] UC-A4: sign out → `POST /Sessions/Logout` was called (the mock verifies) and the Keychain is empty.
+- [ ] UC-A5: an HTTP server → the warning view. Self-signed → the fingerprint is visible. Rejection → no connection.
+- [ ] A server version that is too old → the blocking view.
+- [ ] Quick Connect: leaving the view cancels polling (no network requests after leaving, tested with a mock client).
+- [ ] A reverse-proxy subpath (`https://host/jellyfin`) works (integration test or mock).

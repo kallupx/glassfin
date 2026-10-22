@@ -1,91 +1,91 @@
-# M02 – Tilanhallinta, virheenkäsittely, välimuisti ja suorituskyky (P0, poikkileikkaava)
+# M02 – State, error handling, cache, and performance (P0, cross-cutting)
 
-**Riippuvuudet:** M01. Moduulin sisältö (AppState, välimuisti, virhemalli ja mittaus) toteutetaan ennen UI-moduuleja. Suorituskykyvaatimukset koskevat kaikkia moduuleja.
+**Dependencies:** M01. This module (AppState, cache, error model, and measurement) is implemented before the UI modules. The performance requirements apply to every module.
 
-## 1. Tilanhallinta
-- Käytetään **Observation-frameworkia (`@Observable`)** ja `@MainActor`-ViewModeleja. ViewModelit ovat `CoreState`-targetissa, joten iOS käyttää samoja.
-- Kerrokset:
-  - `AppState` (globaali, `@MainActor @Observable`) sisältää: `phase: .launching | .needsServer | .needsLogin(ServerInfo) | .signedIn(UserSession)`, `connectivity: .online | .offline | .serverUnreachable | .degraded`, `activeServer`.
-  - Näkymäkohtaiset ViewModelit (`HomeViewModel`, `LibraryViewModel`, `SeriesViewModel`, `PlayerViewModel`, `SearchViewModel`) julkaisevat `LoadState<T>`-arvon:
+## 1. State management
+- Use the **Observation framework (`@Observable`)** and `@MainActor` view models. View models live in the `CoreState` target, so iOS uses the same ones.
+- Layers:
+  - `AppState` (global, `@MainActor @Observable`) contains: `phase: .launching | .needsServer | .needsLogin(ServerInfo) | .signedIn(UserSession)`, `connectivity: .online | .offline | .serverUnreachable | .degraded`, `activeServer`.
+  - Per-view view models (`HomeViewModel`, `LibraryViewModel`, `SeriesViewModel`, `PlayerViewModel`, `SearchViewModel`) publish a `LoadState<T>`:
     ```swift
     public enum LoadState<T: Sendable>: Sendable { case idle, loading(previous: T?), loaded(T), failed(AppError, previous: T?) }
     ```
-    `previous` mahdollistaa vanhan sisällön näyttämisen päivityksen tai virheen aikana. Käyttäjä ei näe tyhjää ruutua, jos dataa on jo olemassa.
-  - `UserDataStore` (actor) on katsottu-, sijainti- ja suosikkitilan **ainoa totuuden lähde** muistissa. Kaikki näkymät lukevat tilan siitä. Päivityslähteet: (1) oma toisto ja toiminnot optimistisesti, (2) WebSocketin `UserDataChanged`, (3) uudelleenhaku. Tämä korjaa kipupisteen "katsottu-tila ei päivity".
-- Navigointi: `NavigationStack` ja tyypitetty `Route`-enum per välilehti. Tila (fokus ja scroll) palautetaan takaisin-navigoinnissa.
-- Rinnakkaisuus: structured concurrency. Näkymän poistuessa sen taskit perutaan (`.task`-modifier). Haun vanhentuneet pyynnöt perutaan.
+    `previous` lets the UI keep showing old content during a refresh or an error. The user does not see an empty screen when data already exists.
+  - `UserDataStore` (actor) is the **only in-memory source of truth** for played state, position, and favorite state. Every view reads that state from it. Update sources: (1) our own playback and actions, optimistically, (2) the WebSocket `UserDataChanged` event, (3) a refetch. This fixes the "played state does not update" pain point.
+- Navigation: `NavigationStack` and a typed `Route` enum per tab. State (focus and scroll) is restored on back navigation.
+- Concurrency: structured concurrency. When a view disappears, its tasks are cancelled (`.task` modifier). Stale search requests are cancelled.
 
-## 2. Välimuisti ja tallennus (tvOS-rajoitteet)
-- tvOS:llä on pysyvää tallennustilaa vain noin **500 KB** (UserDefaults, Tutkijan raportti osa 3), ja Caches-hakemisto voidaan tyhjentää, kun appi ei ole käynnissä. Siksi:
-  - **Keychain:** token ja DeviceId (ks. 03-security.md).
-  - **UserDefaults** (< 50 KB budjetti): palvelinlista (URL, nimi, id, sertifikaatin pin-fingerprint), aktiivinen käyttäjä-id ja käyttäjän asetukset.
-  - **Caches** (purgeable): kuvat (levy-LRU max 300 MB) ja viimeisin kotinäkymän JSON-snapshot nopeaa kylmäkäynnistystä varten (stale-while-revalidate).
-  - **Muisti:** NSCache-kuvat (max 150 MB, tyhjennetään memory warningissa) ja API-vastaukset TTL:llä (koti 60 s, kirjastolistat 5 min, invalidointi WebSocket-tapahtumasta).
-- Sovellus toimii oikein, vaikka Caches olisi tyhjennetty: silloin sisältö vain latautuu hitaammin.
+## 2. Cache and storage (tvOS limits)
+- tvOS has only about **500 KB** of persistent storage (UserDefaults, Researcher report part 3), and the Caches directory can be purged while the app is not running. Therefore:
+  - **Keychain:** token and DeviceId (see 03-security.md).
+  - **UserDefaults** (< 50 KB budget): server list (URL, name, id, certificate pin fingerprint), active user id, and user settings.
+  - **Caches** (purgeable): images (disk LRU, max 300 MB) and the latest home-screen JSON snapshot for a fast cold start (stale-while-revalidate).
+  - **Memory:** NSCache images (max 150 MB, cleared on a memory warning) and API responses with a TTL (home 60 s, library lists 5 min, invalidated by a WebSocket event).
+- The app still works if Caches has been purged: content just loads more slowly.
 
-## 3. Virheenkäsittely
-Yhtenäinen virhemalli:
+## 3. Error handling
+One error model:
 ```swift
 public enum AppError: Error, Sendable, Equatable {
-  case offline                    // laitteella ei verkkoa (NWPathMonitor)
-  case serverUnreachable          // DNS, yhteys evätty tai aikakatkaisu
-  case tlsUntrusted(CertificateInfo) // itse allekirjoitettu tai vaihtunut sertifikaatti → 03-security
-  case unauthorized               // 401: token vanhentunut tai mitätöity
-  case forbidden                  // 403: ei oikeuksia (esim. admin-toiminto)
+  case offline                    // the device has no network (NWPathMonitor)
+  case serverUnreachable          // DNS, connection refused, or timeout
+  case tlsUntrusted(CertificateInfo) // self-signed or changed certificate → 03-security
+  case unauthorized               // 401: token expired or revoked
+  case forbidden                  // 403: no permission (for example an admin action)
   case notFound
   case serverError(status: Int)
-  case unsupportedServer(version: String) // alle minimiversion
+  case unsupportedServer(version: String) // below the minimum version
   case playback(PlaybackError)
-  case decoding                   // odottamaton JSON
-  case cancelled                  // ei näytetä käyttäjälle
+  case decoding                   // unexpected JSON
+  case cancelled                  // not shown to the user
 }
 ```
 
-| Tilanne | Tunnistus | Käyttäytyminen | Hyväksymiskriteeri |
+| Situation | Detection | Behavior | Acceptance criterion |
 |---|---|---|---|
-| Offline | `NWPathMonitor` ja URLError `.notConnectedToInternet` | Ylälaitaan hienovarainen banneri "Ei verkkoyhteyttä". Välimuistissa oleva sisältö pysyy selattavana, ja toisto estetään selkeällä viestillä. Kun yhteys palaa, sisältö päivittyy automaattisesti. | Verkon katkaisu ja palautus simulaattorissa: banneri ilmestyy ≤ 2 s ja poistuu ≤ 2 s yhteyden palattua, ja koti päivittyy ilman käyttäjän toimia. |
-| Huono verkko | Pyynnön kesto > 3 s, toiston stallit | Skeleton- ja shimmer-tilat. API-pyyntöjen aikakatkaisu on 15 s, ja idempotentit GETit uusitaan 2 kertaa backoffilla (0,5 s, 1,5 s). Toistossa laskettu bitrate (transkoodaus) ja viesti, jos puskurointi kestää > 5 s. | Network Link Conditionerin "3G"-profiililla koti latautuu ilman kaatumista, ja jokaisella osiolla on skeleton- tai virhetila. |
-| Palvelin alhaalla | Yhteysvirhe tai 502/503/504, WebSocketin `ServerShuttingDown`/`ServerRestarting` | Koko ruudun tila "Palvelimeen ei saada yhteyttä" sekä toiminnot "Yritä uudelleen" ja "Vaihda palvelinta". Taustalla ping 10 s välein, ja kun palvelin palaa, tila palautuu automaattisesti. | Palvelimen pysäytys kesken selailun → virhetila ≤ 15 s. Palvelimen käynnistys → palautuminen ≤ 15 s ilman uudelleenkirjautumista. |
-| Token vanhentunut tai mitätöity | HTTP 401 mistä tahansa pyynnöstä | Kaikki käynnissä olevat pyynnöt keskeytetään. Token poistetaan Keychainista, ja käyttäjä ohjataan kirjautumiseen saman palvelimen kanssa viestillä "Istunto päättyi, kirjaudu uudelleen". **Uudelleenyrityssilmukkaa ei tehdä.** | Mock 401 → kirjautumisnäkymä yhden kerran (ei useita päällekkäisiä), ja token on poistettu Keychainista (yksikkötesti). |
-| 403 | HTTP 403 | Inline-viesti "Ei oikeuksia tähän toimintoon". Istuntoa ei kirjata ulos. | Admin-toiminto ilman oikeuksia → viesti, istunto säilyy. |
-| Vanha palvelin | `/System/Info/Public.Version` < minimi | Estävä näkymä, jossa kerrotaan vaadittu versio. | Mock-versio 10.9.11 → estonäkymä. |
-| Toistovirhe | AVPlayerItem `.failed` tai `PlaybackInfoResponse.ErrorCode` | Ks. 08-playback.md: automaattinen fallback direct play → direct stream → transcode, ja vasta sen jälkeen virheviesti. | Ks. 08. |
-| Odottamaton JSON | `DecodingError` | Kohde ohitetaan listasta ja virhe lokitetaan ilman tokenia. Koko näkymä ei kaadu. | Fixture, jossa yksi rikkinäinen item → muut näkyvät. |
+| Offline | `NWPathMonitor` and URLError `.notConnectedToInternet` | A subtle banner at the top: "No network connection". Cached content stays browsable, and playback is blocked with a clear message. When the connection returns, content refreshes automatically. | Disconnect and reconnect the network in the simulator: the banner appears within 2 s and disappears within 2 s of the connection returning, and home refreshes without user action. |
+| Poor network | Request duration > 3 s, playback stalls | Skeleton and shimmer states. API timeout is 15 s, and idempotent GETs are retried twice with backoff (0.5 s, 1.5 s). During playback, lower the bitrate (transcode) and show a message if buffering lasts > 5 s. | On the Network Link Conditioner "3G" profile, home loads without crashing, and every section has a skeleton or an error state. |
+| Server down | Connection error or 502/503/504, WebSocket `ServerShuttingDown` / `ServerRestarting` | A full-screen state "Cannot reach the server" with actions "Try again" and "Switch server". Ping in the background every 10 s, and when the server returns, the state recovers automatically. | Stopping the server during browsing → error state within 15 s. Starting the server → recovery within 15 s without signing in again. |
+| Token expired or revoked | HTTP 401 from any request | All in-flight requests are cancelled. The token is removed from the Keychain, and the user is sent to login for the same server with the message "Session ended, sign in again". **There is no retry loop.** | Mock 401 → the login view once (no stacked copies), and the token is gone from the Keychain (unit test). |
+| 403 | HTTP 403 | Inline message "You do not have permission for this action". The session is not signed out. | An admin action without permission → the message, and the session remains. |
+| Old server | `/System/Info/Public.Version` < minimum | A blocking view that states the required version. | Mock version 10.9.11 → the blocking view. |
+| Playback error | AVPlayerItem `.failed` or `PlaybackInfoResponse.ErrorCode` | See 08-playback.md: automatic fallback direct play → direct stream → transcode, and only then an error message. | See 08. |
+| Unexpected JSON | `DecodingError` | The item is skipped in the list and the error is logged without the token. The whole view does not crash. | A fixture with one broken item → the others still appear. |
 
-- Virheviestit kirjoitetaan selkokielellä. Tekniset yksityiskohdat näytetään vain Asetukset → Diagnostiikka -näkymässä.
-- Kaatumisraportointi: ❓ AVOIN, käytetäänkö MetricKitiä (oletus, ei kolmansia osapuolia) vai erillistä palvelua. Molemmissa tapauksissa tokenit ja URL:t suodatetaan (03-security.md).
+- Error messages are written in plain language. Technical detail is shown only in Settings → Diagnostics.
+- Crash reporting: OPEN, whether to use MetricKit (the default, no third parties) or a separate service. In either case tokens and URLs are filtered (03-security.md).
 
-## 4. Suorituskykyvaatimukset (mitattavat tavoitteet)
-Mittauslaitteet (varmistettu 21.10.2026: tvOS 26 tukee kaikkia Apple TV HD- ja 4K-malleja; Liquid Glass on vain 4K 2. ja 3. sukupolvessa):
-- Apple TV 4K (3. sukupolvi, A15)
-- **Apple TV 4K (2. sukupolvi, A12)**: vanhin glass-laite, glass-budjetti M05 G-4
-- **Apple TV HD (A8, 2015)**: vanhin tvOS 26 -laite, ei glassia (sarake "vanhin")
- Verkko: LAN gigabit ja Wi-Fi 5. Palvelin: Jellyfin 12.x, testikirjastossa 5 000 elokuvaa ja 500 sarjaa.
+## 4. Performance requirements (measurable targets)
+Measurement devices (verified 21 Oct 2026: tvOS 26 supports every Apple TV HD and 4K model; Liquid Glass is only on 4K 2nd and 3rd generation):
+- Apple TV 4K (3rd generation, A15)
+- **Apple TV 4K (2nd generation, A12)**: oldest glass device, glass budget M05 G-4
+- **Apple TV HD (A8, 2015)**: oldest tvOS 26 device, no glass ("oldest" column)
+ Network: LAN gigabit and Wi-Fi 5. Server: Jellyfin 12.x, a test library of 5,000 movies and 500 series.
 
-| # | Mittari | Tavoite (A15) | Tavoite (vanhin) | Mittaustapa |
+| # | Metric | Target (A15) | Target (oldest) | How to measure |
 |---|---|---|---|---|
-| P1 | Kylmäkäynnistys → kotinäkymän ensimmäinen rivi näkyy (kirjautunut, LAN) | ≤ 1,5 s | ≤ 3,0 s | XCTApplicationLaunchMetric ja os_signpost |
-| P2 | Kotinäkymän kaikki osiot ladattu (LAN, p95) | ≤ 1,0 s käynnistyksestä tai paluusta | ≤ 2,0 s | signpost |
-| P3 | Fokuksen siirto ja vieritys (rivit, 2 000 kohteen grid) | 60 fps, hitch-ratio < 5 ms/s | < 10 ms/s | XCTOSSignpostMetric / Instruments Hitches |
-| P4 | Juliste näkyy (välimuistista / LAN-verkosta) | ≤ 100 ms / ≤ 500 ms | ≤ 200 / ≤ 800 ms | signpost |
-| P5 | Toiston aloitus (Play → ensimmäinen ruutu), direct play LAN | ≤ 1,5 s | ≤ 2,5 s | signpost `playback.firstFrame` |
-| P6 | Toiston aloitus, transkoodaus | ≤ 4 s | ≤ 6 s | sama |
-| P7 | Kelaus (scrub-vahvistus → toisto jatkuu), direct play LAN | ≤ 1,0 s | ≤ 2,0 s | sama |
-| P8 | Trickplay-esikatselukuva näkyy scrubattaessa | ≤ 150 ms (tile välimuistissa) | ≤ 300 ms | signpost |
-| P9 | Raidanvaihto (ääni/tekstitys) kesken toiston, direct play / HLS | ≤ 1,0 s, ei toiston uudelleenkäynnistystä | ≤ 2,0 s | manuaalinen ja UI-testi |
-| P10 | Haku: ensimmäiset tulokset näppäilyn jälkeen (300 ms debouncen jälkeen, LAN) | ≤ 500 ms | ≤ 1 000 ms | signpost |
-| P11 | Muistinkäyttö selailussa | ≤ 250 MB | ≤ 200 MB | XCTMemoryMetric |
-| P12 | Muistinkäyttö toistossa (AVPlayer) / remux-polku | ≤ 400 MB / ≤ 500 MB | ≤ 300 / ≤ 400 MB | XCTMemoryMetric |
-| P13 | Muistivuoto: 10 toisto–pysäytys-sykliä | kasvu < 20 MB | sama | XCTMemoryMetric |
-| P14 | Katsottu-tilan päivitys toiston jälkeen kotinäkymässä | ≤ 2 s | ≤ 2 s | UI-testi |
-| P15 | Muutos toiselta clientiltä (WebSocket) näkyy | ≤ 5 s | ≤ 5 s | integraatiotesti |
+| P1 | Cold start → first home row visible (signed in, LAN) | ≤ 1.5 s | ≤ 3.0 s | XCTApplicationLaunchMetric and os_signpost |
+| P2 | All home sections loaded (LAN, p95) | ≤ 1.0 s from launch or return | ≤ 2.0 s | signpost |
+| P3 | Focus moves and scrolling (rows, a 2,000-item grid) | 60 fps, hitch ratio < 5 ms/s | < 10 ms/s | XCTOSSignpostMetric / Instruments Hitches |
+| P4 | Poster visible (from cache / from LAN) | ≤ 100 ms / ≤ 500 ms | ≤ 200 / ≤ 800 ms | signpost |
+| P5 | Playback start (Play → first frame), direct play LAN | ≤ 1.5 s | ≤ 2.5 s | signpost `playback.firstFrame` |
+| P6 | Playback start, transcode | ≤ 4 s | ≤ 6 s | same |
+| P7 | Seek (scrub confirm → playback resumes), direct play LAN | ≤ 1.0 s | ≤ 2.0 s | same |
+| P8 | Trickplay preview appears while scrubbing | ≤ 150 ms (tile cached) | ≤ 300 ms | signpost |
+| P9 | Track change (audio/subtitles) during playback, direct play / HLS | ≤ 1.0 s, playback does not restart | ≤ 2.0 s | manual and UI test |
+| P10 | Search: first results after typing (after the 300 ms debounce, LAN) | ≤ 500 ms | ≤ 1,000 ms | signpost |
+| P11 | Memory while browsing | ≤ 250 MB | ≤ 200 MB | XCTMemoryMetric |
+| P12 | Memory during playback (AVPlayer) / remux path | ≤ 400 MB / ≤ 500 MB | ≤ 300 / ≤ 400 MB | XCTMemoryMetric |
+| P13 | Memory leak: 10 play–stop cycles | growth < 20 MB | same | XCTMemoryMetric |
+| P14 | Played-state update on home after playback | ≤ 2 s | ≤ 2 s | UI test |
+| P15 | A change from another client (WebSocket) becomes visible | ≤ 5 s | ≤ 5 s | integration test |
 
-- P1, P3, P5, P11 ja P13 ajetaan `XCTMetric`-testeinä CI:ssä simulaattorilla regressioseurantaa varten. Simulaattorin luvut eivät vastaa laitetta, joten absoluuttiset tavoitteet vahvistetaan laitteella ennen jokaista julkaisua (Koodari tai käyttäjä, koska Testaajalla ei ole laitetta).
-- Kuvat pyydetään aina näytettävän koon mukaan (`maxWidth` = näytettävä pikselileveys × näytön skaala). Täysikokoisia kuvia ei ladata.
-- Listat ovat laiskoja (`LazyHGrid`/`LazyVGrid`) ja sivutettuja (`limit=50`, seuraava sivu, kun jäljellä on 10 kohdetta).
+- P1, P3, P5, P11, and P13 run as `XCTMetric` tests in CI on the simulator for regression tracking. Simulator numbers do not match a device, so the absolute targets are confirmed on device before each release (Coder or the user, because the Tester has no device).
+- Images are always requested at the displayed size (`maxWidth` = displayed pixel width × screen scale). Full-size images are not downloaded.
+- Lists are lazy (`LazyHGrid` / `LazyVGrid`) and paged (`limit=50`, next page when 10 items remain).
 
-## Hyväksymiskriteerit (moduuli)
-- [ ] `AppState`, `LoadState`, `AppError`, `UserDataStore` ja välimuistikerros on toteutettu ja yksikkötestattu.
-- [ ] Jokaiselle taulukon virhetilanteelle on vähintään yksi automaattinen testi (mock).
-- [ ] Signpost-instrumentointi P1–P15:lle on valmiina, ja `XCTMetric`-testit ajetaan CI:ssä.
-- [ ] UserDefaultsin koko testataan (< 50 KB 10 palvelimella ja 10 käyttäjällä).
+## Acceptance criteria (module)
+- [ ] `AppState`, `LoadState`, `AppError`, `UserDataStore`, and the cache layer are implemented and unit-tested.
+- [ ] Every error row in the table has at least one automatic test (mock).
+- [ ] Signpost instrumentation for P1–P15 is in place, and the `XCTMetric` tests run in CI.
+- [ ] The UserDefaults size is tested (< 50 KB with 10 servers and 10 users).
