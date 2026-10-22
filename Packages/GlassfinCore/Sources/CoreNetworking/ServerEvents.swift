@@ -1,11 +1,37 @@
+import CoreModels
 import Foundation
 
 #if canImport(FoundationNetworking)
     import FoundationNetworking
 #endif
 
+public struct UserDataChange: Sendable, Equatable {
+    public var itemID: String
+    public var played: Bool
+    public var positionTicks: Int64
+    public var isFavorite: Bool
+    public var unplayedCount: Int?
+    public var playedPercentage: Double?
+
+    public init(
+        itemID: String,
+        played: Bool,
+        positionTicks: Int64,
+        isFavorite: Bool,
+        unplayedCount: Int? = nil,
+        playedPercentage: Double? = nil
+    ) {
+        self.itemID = itemID
+        self.played = played
+        self.positionTicks = positionTicks
+        self.isFavorite = isFavorite
+        self.unplayedCount = unplayedCount
+        self.playedPercentage = playedPercentage
+    }
+}
+
 public enum ServerEvent: Sendable, Equatable {
-    case userDataChanged
+    case userDataChanged(items: [UserDataChange])
     case libraryChanged
     case play
     case playstate
@@ -26,7 +52,7 @@ public enum ServerEventParser {
     public static func parse(_ data: Data) -> ServerEvent? {
         guard let type = messageType(in: data) else { return nil }
         switch type {
-        case "UserDataChanged": return .userDataChanged
+        case "UserDataChanged": return .userDataChanged(items: userDataChanges(in: data))
         case "LibraryChanged": return .libraryChanged
         case "Play": return .play
         case "Playstate": return .playstate
@@ -48,6 +74,35 @@ public enum ServerEventParser {
     }
 
     public static let keepAliveReply = Data("{\"MessageType\":\"KeepAlive\"}".utf8)
+
+    /// Item ids that are not 32-hex GUIDs are dropped (S3, including WebSocket payloads).
+    /// The raw JSON is never logged.
+    public static func userDataChanges(in data: Data) -> [UserDataChange] {
+        struct Envelope: Decodable {
+            struct Payload: Decodable {
+                struct Entry: Decodable {
+                    var ItemId: String?
+                    var UserData: UserItemDataDTO?
+                }
+
+                var UserDataList: [Entry]?
+            }
+
+            var Data: Payload?
+        }
+        guard let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else { return [] }
+        return (envelope.Data?.UserDataList ?? []).compactMap { entry in
+            guard let raw = entry.ItemId, let id = ItemID(raw), let userData = entry.UserData else { return nil }
+            return UserDataChange(
+                itemID: id.value,
+                played: userData.Played ?? false,
+                positionTicks: userData.PlaybackPositionTicks ?? 0,
+                isFavorite: userData.IsFavorite ?? false,
+                unplayedCount: userData.UnplayedItemCount,
+                playedPercentage: userData.PlayedPercentage
+            )
+        }
+    }
 }
 
 public protocol RealtimeSocket: Sendable {

@@ -90,7 +90,7 @@ final class SecurityCredentialTests: XCTestCase {
         try pins.save(fingerprint: fingerprint, serverID: otherServer)
 
         let client = RecordingAPIClient(error: .network)
-        let failed = await SessionTermination.logOut(
+        let failed = await CoreNetworking.SessionTermination.logOut(
             serverID: serverID, userID: userID, vault: vault, client: client)
         XCTAssertEqual(client.calls().map(\.path), ["/Sessions/Logout"])
         XCTAssertEqual(client.calls().map(\.method), ["POST"])
@@ -102,7 +102,7 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertNil(try vault.loadToken(serverID: serverID, userID: userID))
 
         let ok = RecordingAPIClient(error: nil)
-        let succeeded = await SessionTermination.logOut(
+        let succeeded = await CoreNetworking.SessionTermination.logOut(
             serverID: serverID, userID: otherUser, vault: vault, client: ok)
         XCTAssertTrue(succeeded.serverCallSucceeded)
         XCTAssertTrue(succeeded.tokenRemoved)
@@ -126,7 +126,7 @@ final class SecurityCredentialTests: XCTestCase {
         ]
         for error in failures {
             let vault = try seededVault()
-            let effect = try SessionTermination.apply(
+            let effect = try CoreNetworking.SessionTermination.apply(
                 error: error, kind: .authenticated, serverID: serverID, userID: userID, vault: vault)
             XCTAssertEqual(effect, .keepToken)
             XCTAssertEqual(try vault.loadToken(serverID: serverID, userID: userID), token)
@@ -134,7 +134,7 @@ final class SecurityCredentialTests: XCTestCase {
         }
         let expired = try seededVault()
         XCTAssertEqual(
-            try SessionTermination.apply(
+            try CoreNetworking.SessionTermination.apply(
                 error: .unauthorized, kind: .authenticated, serverID: serverID, userID: userID, vault: expired),
             .endSession
         )
@@ -142,7 +142,7 @@ final class SecurityCredentialTests: XCTestCase {
 
         let login = try seededVault()
         XCTAssertEqual(
-            try SessionTermination.apply(
+            try CoreNetworking.SessionTermination.apply(
                 error: .unauthorized, kind: .login, serverID: serverID, userID: userID, vault: login),
             .invalidCredentials
         )
