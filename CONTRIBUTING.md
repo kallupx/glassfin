@@ -1,5 +1,7 @@
 # Contributing
 
+All code, comments and documentation are in English.
+
 ## Dependency pull requests
 
 Dependabot opens one grouped pull request for Swift packages and one for GitHub Actions (`open-pull-requests-limit: 1` in `.github/dependabot.yml`). Those runs execute the Linux `lint` job only.
