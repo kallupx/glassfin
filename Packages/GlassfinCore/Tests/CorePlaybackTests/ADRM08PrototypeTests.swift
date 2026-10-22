@@ -10,7 +10,6 @@ import XCTest
 #endif
 
 #if os(macOS)
-    import CryptoKit
     import Network
     import Security
 #endif
@@ -1233,7 +1232,7 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
             } else {
                 encoded = der
             }
-            return SHA256.hash(data: encoded).map { String(format: "%02x", $0) }.joined()
+            return CertificateFingerprint.sha256Hex(encoded)
         }
 
         private func startCertificateServer(

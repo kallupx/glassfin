@@ -33,7 +33,11 @@ public struct PlaybackURLResolver: Sendable {
     public var log: any GlassfinLog
     public var maxRedirects: Int
 
-    public init(client: any MediaOriginClient, log: any GlassfinLog = SilentLog(), maxRedirects: Int = 5) {
+    public init(
+        client: any MediaOriginClient,
+        log: any GlassfinLog = SilentLog(),
+        maxRedirects: Int = RedirectFollowLimit.maximum
+    ) {
         self.client = client
         self.log = log
         self.maxRedirects = maxRedirects

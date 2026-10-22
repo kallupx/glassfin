@@ -1,7 +1,7 @@
-#if canImport(AVFoundation) && canImport(CryptoKit) && canImport(Security)
+#if canImport(AVFoundation) && canImport(Security)
     import AVFoundation
     import CoreModels
-    import CryptoKit
+    import CoreNetworking
     import Foundation
     import Security
 
@@ -259,8 +259,8 @@
                 return nil
             }
             let data = SecCertificateCopyData(leaf) as Data
-            let digest = SHA256.hash(data: data)
-            return digest.map { String(format: "%02x", $0) }.joined()
+            let hex = CertificateFingerprint.sha256Hex(data)
+            return CertificateFingerprint.isValid(hex) ? hex : nil
         }
     }
 

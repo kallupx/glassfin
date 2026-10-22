@@ -1,10 +1,10 @@
+import CoreNetworking
 import Foundation
 
 /// How playback should treat the server certificate.
 ///
-/// M03 (PR #5, not on main) owns the pin store. Callers pass the fingerprint that store
-/// would return from `CertificatePinStore.fingerprint(for:)`. AVPlayer never sees that store:
-/// only the resource loader's `URLSession` can apply it.
+/// M03 owns `CertificatePinStore`. Callers pass the fingerprint from `fingerprint(for:)`.
+/// AVPlayer never sees that store: only the resource loader's `URLSession` can apply it.
 public enum ServerTrustClass: Sendable, Equatable {
     /// CA-validated HTTPS. AVPlayer's own stack can verify it. Do not pin.
     case publiclyTrusted
@@ -46,8 +46,8 @@ public enum PinnedTrustGate {
 
     /// Lowercase hex, separators removed. `nil` unless the result is 64 hex digits.
     public static func normalizeFingerprint(_ raw: String) -> String? {
-        let hex = raw.lowercased().filter(\.isHexDigit)
-        guard hex.count == 64 else { return nil }
+        let hex = CertificateFingerprint.normalize(raw)
+        guard CertificateFingerprint.isValid(hex) else { return nil }
         return hex
     }
 }
