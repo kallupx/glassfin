@@ -26,6 +26,13 @@ search 'api_key' 'legacy api_key query name must not appear as a literal'
 search '\bprint\(' 'print( is not allowed; use GlassfinLog'
 search 'AppCore' 'package name is GlassfinCore, not AppCore'
 
+runner_hits="$(grep -RInE 'self-hosted|xlarge' "$root/.github/workflows" || true)"
+if [[ -n "$runner_hits" ]]; then
+  echo "ci-grep: self-hosted runners and -xlarge labels are not allowed" >&2
+  echo "$runner_hits" >&2
+  fail=1
+fi
+
 ui_hits="$(grep -RInE --exclude-dir=.build --include='*.swift' 'import (SwiftUI|UIKit)' "$root/Packages" || true)"
 ui_hits="$(printf '%s\n' "$ui_hits" | grep -v '/Tests/' || true)"
 if [[ -n "$ui_hits" ]]; then
