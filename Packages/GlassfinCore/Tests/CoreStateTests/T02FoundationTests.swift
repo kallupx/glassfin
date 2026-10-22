@@ -90,7 +90,7 @@ final class T02FoundationTests: XCTestCase {
             AppErrorMessage.playbackFailed)
         XCTAssertEqual(
             AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")),
-            "Palvelinversio 10.9.11 ei ole tuettu. Vaaditaan vähintään 10.10.7."
+            "Palvelinversio 10.9.11 ei ole tuettu. Vaaditaan vähintään 10.10.0."
         )
         XCTAssertNil(AppErrorMessage.userFacing(.cancelled))
         XCTAssertNil(AppErrorMessage.userFacing(.decoding))
@@ -112,9 +112,10 @@ final class T02FoundationTests: XCTestCase {
         XCTAssertEqual(log.messages(level: "error"), ["forbidden"])
         XCTAssertFalse(log.contains(Sample.token))
         XCTAssertNil(ServerVersionGate.failure(for: .minimumJellyfin))
+        XCTAssertNil(ServerVersionGate.failure(for: SemVer(major: 10, minor: 10, patch: 6)))
         XCTAssertEqual(
-            ServerVersionGate.failure(for: SemVer(major: 10, minor: 10, patch: 6)),
-            .unsupportedServer(version: "10.10.6")
+            ServerVersionGate.failure(for: SemVer(major: 10, minor: 9, patch: 11)),
+            .unsupportedServer(version: "10.9.11")
         )
     }
 

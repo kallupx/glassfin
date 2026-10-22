@@ -344,14 +344,23 @@ public struct AuthenticatedSession: Sendable, Hashable {
     }
 }
 
-public struct QuickConnectChallenge: Sendable, Hashable {
+public struct QuickConnectChallenge: Sendable, Hashable, CustomStringConvertible, CustomDebugStringConvertible {
     public var code: String
     public var secret: String
+    public var authenticated: Bool
 
-    public init(code: String, secret: String) {
+    public init(code: String, secret: String, authenticated: Bool = false) {
         self.code = code
         self.secret = secret
+        self.authenticated = authenticated
     }
+
+    /// The secret is omitted. Do not log the value itself.
+    public var description: String {
+        "QuickConnectChallenge(code: \(code), authenticated: \(authenticated))"
+    }
+
+    public var debugDescription: String { description }
 }
 
 public struct ItemFilterSet: Sendable, Hashable {

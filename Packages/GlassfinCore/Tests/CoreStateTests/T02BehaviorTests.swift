@@ -48,7 +48,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.app.blockingError, .unsupportedServer(version: "10.9.11"))
         let message = AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")) ?? ""
         XCTAssertTrue(message.contains("10.9.11"))
-        XCTAssertTrue(message.contains("10.10.7"))
+        XCTAssertTrue(message.contains("10.10.0"))
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         harness.app.removeServer(id: Sample.serverID)

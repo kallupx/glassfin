@@ -30,6 +30,7 @@ let debugSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "GlassfinCore",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v26),
         .tvOS(.v26),
@@ -40,7 +41,11 @@ let package = Package(
     ],
     dependencies: packageDependencies,
     targets: [
-        .target(name: "CoreModels", swiftSettings: debugSettings),
+        .target(
+            name: "CoreModels",
+            resources: [.process("Localizable.xcstrings")],
+            swiftSettings: debugSettings
+        ),
         .target(name: "CoreNetworking", dependencies: ["CoreModels"], swiftSettings: debugSettings),
         // GlassfinServices, not CoreServices: that module name collides with the system
         // CoreServices framework Foundation imports, and `swift test` on macOS then

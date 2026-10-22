@@ -1,0 +1,130 @@
+import XCTest
+
+@MainActor
+final class T04AuthUITests: XCTestCase {
+    func testT04_01_welcomeIsTheConnectButton() {
+        let app = launch()
+        let root = app.descendants(matching: .any)["welcome.root"]
+        XCTAssertTrue(root.waitForExistence(timeout: 20))
+        let connect = app.descendants(matching: .any)["welcome.connect"]
+        XCTAssertTrue(connect.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["navigation.back"].exists)
+        save(app.screenshot(), name: "welcome")
+    }
+
+    func testT04_02_welcomeHasNoCustomMenuHandler() {
+        let app = launch()
+        XCTAssertTrue(app.descendants(matching: .any)["welcome.root"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.descendants(matching: .any)["navigation.back"].exists)
+    }
+
+    func testT04_03_quickConnectReachesHome() {
+        let app = launch()
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("media.example")
+        app.descendants(matching: .any)["address.continue"].tap()
+        let quick = app.descendants(matching: .any)["login.quickConnect"]
+        XCTAssertTrue(quick.waitForExistence(timeout: 10))
+        save(app.screenshot(), name: "login-method")
+        quick.tap()
+        let code = app.descendants(matching: .any)["quickconnect.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 10))
+        XCTAssertTrue(code.label.contains("482913") || (code.value as? String)?.contains("482913") == true)
+        save(app.screenshot(), name: "quick-connect")
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
+        save(app.screenshot(), name: "home")
+    }
+
+    func testT04_11_explicitPublicHTTPShowsTheKey() {
+        let app = launch()
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        field.tap()
+        field.typeText("http://203.0.113.5:8096")
+        app.descendants(matching: .any)["address.continue"].tap()
+        let error = app.descendants(matching: .any)["address.error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 10))
+        XCTAssertEqual(error.value as? String, publicHTTPSKey)
+        XCTAssertFalse(app.descendants(matching: .any)["address.httpSkipped"].exists)
+    }
+
+    func testT04_25_privateHTTPShowsCleartextCancelFirst() {
+        let app = launch()
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        field.tap()
+        field.typeText("http://192.168.1.10:8096")
+        app.descendants(matching: .any)["address.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["cleartext.cancel"].waitForExistence(timeout: 10))
+        app.descendants(matching: .any)["cleartext.accept"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
+    }
+
+    func testT04_45_passwordFieldIsSecure() {
+        let app = launch()
+        openPassword(app)
+        let password = app.secureTextFields["credentials.password"]
+        XCTAssertTrue(password.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["credentials.username"].exists)
+        save(app.screenshot(), name: "password")
+    }
+
+    func testT04_49_backFromQuickConnectReturnsToTheMethodScreen() {
+        let app = launch()
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        field.tap()
+        field.typeText("media.example")
+        app.descendants(matching: .any)["address.continue"].tap()
+        let quick = app.descendants(matching: .any)["login.quickConnect"]
+        XCTAssertTrue(quick.waitForExistence(timeout: 10))
+        quick.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["quickconnect.code"].waitForExistence(timeout: 10))
+        app.descendants(matching: .any)["navigation.back"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
+    }
+
+    private func launch() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments.append(contentsOf: ["-uitest-mock-server", "-uitest-reset"])
+        app.launch()
+        return app
+    }
+
+    private func openAddress(_ app: XCUIApplication) {
+        XCTAssertTrue(app.descendants(matching: .any)["welcome.connect"].waitForExistence(timeout: 20))
+        app.descendants(matching: .any)["welcome.connect"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["address.field"].waitForExistence(timeout: 10))
+    }
+
+    private func openPassword(_ app: XCUIApplication) {
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        field.tap()
+        field.typeText("media.example")
+        app.descendants(matching: .any)["address.continue"].tap()
+        let password = app.descendants(matching: .any)["login.password"]
+        XCTAssertTrue(password.waitForExistence(timeout: 10))
+        password.tap()
+    }
+
+    private func save(_ shot: XCUIScreenshot, name: String) {
+        let attachment = XCTAttachment(screenshot: shot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if let directory = ProcessInfo.processInfo.environment["GLASSFIN_SCREENSHOT_DIR"], !directory.isEmpty {
+            let folder = URL(fileURLWithPath: directory, isDirectory: true)
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try? shot.pngRepresentation.write(to: folder.appendingPathComponent("\(name).png"))
+        }
+    }
+
+    /// Catalog key, not a translated sentence.
+    private var publicHTTPSKey: String {
+        "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy."
+    }
+}

@@ -121,7 +121,7 @@ public struct JellyfinAuthenticationService: AuthenticationService {
         let dto = try await client.send(
             APIRequest(method: "POST", path: "/QuickConnect/Initiate"), as: QuickConnectResultDTO.self)
         guard let code = dto.Code, let secret = dto.Secret else { throw APIError.decoding }
-        return QuickConnectChallenge(code: code, secret: secret)
+        return QuickConnectChallenge(code: code, secret: secret, authenticated: dto.Authenticated ?? false)
     }
 
     public func quickConnectState(secret: String) async throws(APIError) -> QuickConnectChallenge {
@@ -131,7 +131,7 @@ public struct JellyfinAuthenticationService: AuthenticationService {
             as: QuickConnectResultDTO.self
         )
         guard let code = dto.Code, let value = dto.Secret else { throw APIError.decoding }
-        return QuickConnectChallenge(code: code, secret: value)
+        return QuickConnectChallenge(code: code, secret: value, authenticated: dto.Authenticated ?? false)
     }
 
     public func authenticate(quickConnectSecret: String) async throws(APIError) -> AuthenticatedSession {
