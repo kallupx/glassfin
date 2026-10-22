@@ -98,7 +98,8 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertFalse(failed.serverCallSucceeded)
         XCTAssertTrue(failed.tokenRemoved)
         XCTAssertTrue(failed.serverSessionMayRemain)
-        XCTAssertEqual(failed.userMessage, SessionEndCopy.serverSessionMayRemain)
+        XCTAssertEqual(failed.userMessageKey, SessionEndCopy.serverSessionMayRemainKey)
+        XCTAssertNotNil(failed.userMessage)
         XCTAssertNil(try vault.loadToken(serverID: serverID, userID: userID))
 
         let ok = RecordingAPIClient(error: nil)
@@ -107,6 +108,7 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertTrue(succeeded.serverCallSucceeded)
         XCTAssertTrue(succeeded.tokenRemoved)
         XCTAssertNil(succeeded.userMessage)
+        XCTAssertNil(succeeded.userMessageKey)
         XCTAssertEqual(try vault.loadToken(serverID: otherServer, userID: userID), "kept-token")
 
         try ServerDataRemoval.remove(serverID: serverID, vault: vault, pins: pins)
@@ -760,9 +762,9 @@ final class SecurityDiscoveryTests: XCTestCase {
 }
 
 final class SecurityHeaderAndLogTests: XCTestCase {
-    /// T03-26. Quotes, comma, equals, plus, space, emoji, and ääkköset round-trip. One Authorization header leaves.
+    /// T03-26. Quotes, comma, equals, plus, space, emoji, and non-ASCII letters round-trip. One Authorization header leaves.
     func testT03_26_headerEncodingRejectionAndSingleAuthorization() throws {
-        let device = "Olohuone + \"TV\", ää=kköset 📺"
+        let device = "Room + \"TV\", ää=ö 📺"
         let header = try AuthorizationHeader.value(
             client: "Glassfin", device: device, deviceID: "device-1", version: "1.0.0", token: "tok+en")
         let parts = AuthorizationHeaderParts.parse(header)
