@@ -53,17 +53,10 @@ let package = Package(
     targets: [
         .target(
             name: "CoreModels",
-            exclude: coreModelsExclude,
-            resources: coreModelsResources,
+            resources: [.process("Localizable.xcstrings")],
             swiftSettings: debugSettings
         ),
-        .target(
-            name: "CoreNetworking",
-            dependencies: ["CoreModels"],
-            exclude: coreNetworkingExclude,
-            resources: coreNetworkingResources,
-            swiftSettings: debugSettings
-        ),
+        .target(name: "CoreNetworking", dependencies: ["CoreModels"], swiftSettings: debugSettings),
         // GlassfinServices, not CoreServices: that module name collides with the system
         // CoreServices framework Foundation imports, and `swift test` on macOS then
         // reports a Foundation -> CoreServices -> CoreModels cycle.

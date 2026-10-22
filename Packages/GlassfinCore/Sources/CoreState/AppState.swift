@@ -270,11 +270,7 @@ public final class AppState {
             phase = .needsLogin(info)
             return
         }
-        guard let user = prefs.activeUser(),
-            let data = try? secureStore.data(
-                for: SessionCredential.account(serverID: info.id, userID: user.userID)),
-            !data.isEmpty
-        else {
+        guard let user = prefs.activeUser(), hasAccessToken(serverID: info.id, userID: user.userID) else {
             phase = .needsLogin(info)
             return
         }
@@ -284,28 +280,7 @@ public final class AppState {
     }
 
     public func didSignIn(_ session: UserSession, token: String) throws(PreferencesError) {
-        var prefs = preferences.load()
-        let stored = StoredServer(
-            id: session.server.id,
-            name: session.server.name,
-            url: session.server.url,
-            version: ServerVersionGate.dotted(session.server.version),
-            certificatePinSHA256: prefs.servers.first { $0.id == session.server.id }?.certificatePinSHA256
-        )
-        prefs = try prefs.upserting(server: stored)
-        let existing = prefs.users.first { $0.serverID == session.server.id && $0.userID == session.userID }
-        let user = StoredUser(
-            serverID: session.server.id,
-            userID: session.userID,
-            userName: session.userName,
-            isAdministrator: session.isAdministrator,
-            audioLanguage: existing?.audioLanguage,
-            subtitleLanguage: existing?.subtitleLanguage
-        )
-        prefs = prefs.upserting(user: user)
-        prefs.activeServerID = session.server.id
-        prefs.activeUserID = session.userID
-        try preferences.save(prefs)
+        try storePreferences(for: session)
         do {
             try secureStore.set(
                 Data(token.utf8),
@@ -316,13 +291,29 @@ public final class AppState {
             log.warning("Non-fatal invariant failure")
             throw .keychainFailed
         }
-        log.debug("Signed in.")
-        logoutStarted = false
-        sessionNoticeKey = nil
-        blockingError = nil
+        activate(session)
+    }
+
+    /// Preferences only. The caller already stored the token in ``CredentialVault``.
+    public func publishSignedIn(_ session: UserSession) throws(PreferencesError) {
+        try storePreferences(for: session)
+        activate(session)
+    }
+
+    /// Local sign-out that is not the HTTP 401 path. `notice` is an existing session string, if any.
+    public func signOutLocally(notice: String?) {
+        guard case .signedIn(let session) = phase else { return }
+        logoutStarted = true
+        scope.cancelAll()
+        pingTask?.cancel()
+        pingArmed = false
+        deleteAccessToken(serverID: session.server.id, userID: session.userID)
+        log.debug("Signed out.")
+        sessionNoticeKey = notice
         currentView = nil
-        phase = .signedIn(session)
+        phase = .needsLogin(session.server)
         activeServer = session.server
+        requestGeneration += 1
     }
 
     public func removeServer(id: String) {
@@ -331,6 +322,11 @@ public final class AppState {
         try? preferences.save(updated)
         for account in accounts {
             try? secureStore.remove(account: account)
+        }
+        try? SettingsCertificatePinStore(settings: preferences.store).remove(serverID: id)
+        if ItemID(id) != nil {
+            let vault = CredentialVault(secureStore: secureStore, settings: preferences.store, accessGroup: "")
+            try? vault.deleteTokens(serverID: id)
         }
         if case .signedIn(let session) = phase, session.server.id == id {
             currentView = nil
@@ -444,8 +440,7 @@ public final class AppState {
         scope.cancelAll()
         pingTask?.cancel()
         pingArmed = false
-        try? secureStore.remove(
-            account: SessionCredential.account(serverID: session.server.id, userID: session.userID))
+        deleteAccessToken(serverID: session.server.id, userID: session.userID)
         log.warning("Ended the session after HTTP 401.")
         sessionNoticeKey = AppErrorMessage.sessionExpiredKey
         currentView = nil
@@ -522,6 +517,60 @@ public final class AppState {
             }
             if Task.isCancelled { return }
             await probeServer()
+        }
+    }
+
+    private func storePreferences(for session: UserSession) throws(PreferencesError) {
+        var prefs = preferences.load()
+        let stored = StoredServer(
+            id: session.server.id,
+            name: session.server.name,
+            url: session.server.url,
+            version: ServerVersionGate.dotted(session.server.version),
+            certificatePinSHA256: prefs.servers.first { $0.id == session.server.id }?.certificatePinSHA256
+        )
+        prefs = try prefs.upserting(server: stored)
+        let existing = prefs.users.first { $0.serverID == session.server.id && $0.userID == session.userID }
+        let user = StoredUser(
+            serverID: session.server.id,
+            userID: session.userID,
+            userName: session.userName,
+            isAdministrator: session.isAdministrator,
+            audioLanguage: existing?.audioLanguage,
+            subtitleLanguage: existing?.subtitleLanguage
+        )
+        prefs = prefs.upserting(user: user)
+        prefs.activeServerID = session.server.id
+        prefs.activeUserID = session.userID
+        try preferences.save(prefs)
+    }
+
+    private func activate(_ session: UserSession) {
+        log.debug("Signed in.")
+        logoutStarted = false
+        sessionNoticeKey = nil
+        blockingError = nil
+        currentView = nil
+        phase = .signedIn(session)
+        activeServer = session.server
+    }
+
+    private func hasAccessToken(serverID: String, userID: String) -> Bool {
+        if let data = try? secureStore.data(for: SessionCredential.account(serverID: serverID, userID: userID)),
+            !data.isEmpty
+        {
+            return true
+        }
+        guard let account = try? CredentialVault.tokenAccount(serverID: serverID, userID: userID),
+            let data = try? secureStore.data(for: account), !data.isEmpty
+        else { return false }
+        return true
+    }
+
+    private func deleteAccessToken(serverID: String, userID: String) {
+        try? secureStore.remove(account: SessionCredential.account(serverID: serverID, userID: userID))
+        if let account = try? CredentialVault.tokenAccount(serverID: serverID, userID: userID) {
+            try? secureStore.remove(account: account)
         }
     }
 
