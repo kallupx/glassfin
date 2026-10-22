@@ -58,8 +58,8 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: dto.Name ?? "",
-            overview: dto.Overview,
+            name: MetadataSanitizer.plainText(dto.Name ?? ""),
+            overview: dto.Overview.map(MetadataSanitizer.plainText),
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,
@@ -77,7 +77,7 @@ public enum DTOMapper {
 
     public static func library(_ dto: BaseItemDTO) -> Library? {
         guard let id = dto.Id else { return nil }
-        return Library(id: id, name: dto.Name ?? "", collectionType: dto.CollectionType)
+        return Library(id: id, name: MetadataSanitizer.plainText(dto.Name ?? ""), collectionType: dto.CollectionType)
     }
 
     public static func page(_ dto: QueryResultDTO, log: any GlassfinLog) -> Page<MediaItem> {
@@ -141,7 +141,10 @@ public enum DTOMapper {
     private static func tracks(_ streams: [MediaStreamDTO], type: String) -> [Track] {
         streams.filter { $0.`Type` == type }.map { stream in
             Track(
-                id: stream.Index ?? 0, displayTitle: stream.DisplayTitle, language: stream.Language, codec: stream.Codec
+                id: stream.Index ?? 0,
+                displayTitle: stream.DisplayTitle.map(MetadataSanitizer.plainText),
+                language: stream.Language,
+                codec: stream.Codec
             )
         }
     }
@@ -149,7 +152,7 @@ public enum DTOMapper {
     private static func chapters(_ chapters: [ChapterDTO]?, log: any GlassfinLog) -> [ChapterMark] {
         (chapters ?? []).map { chapter in
             ChapterMark(
-                name: chapter.Name,
+                name: chapter.Name.map(MetadataSanitizer.plainText),
                 start: Ticks.positionDuration(from: chapter.StartPositionTicks ?? 0, log: log)
             )
         }

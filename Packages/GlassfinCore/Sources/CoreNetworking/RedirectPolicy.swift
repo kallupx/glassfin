@@ -105,9 +105,40 @@ public enum RedirectPolicy {
     }
 }
 
+/// Same-origin redirects stop after 5 follows. A repeated URL is a loop and is not followed.
+public enum RedirectFollowLimit {
+    public static let maximum = 5
+
+    public static func decide(
+        followed: Int,
+        seen: [URL],
+        original: URLRequest,
+        proposed: URLRequest
+    ) -> RedirectApplication {
+        if followed >= maximum {
+            return .reject(.notFollowed)
+        }
+        guard let next = proposed.url else { return .reject(.notFollowed) }
+        if seen.contains(where: { same($0, next) }) {
+            return .reject(.notFollowed)
+        }
+        return RedirectPolicy.apply(original: original, proposed: proposed)
+    }
+
+    static func same(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.absoluteString == rhs.absoluteString
+    }
+}
+
 public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private struct HopState {
+        var followed: Int
+        var seen: [URL]
+    }
+
     private let lock = NSLock()
     private var rejection: RedirectRejection?
+    private var hops: [Int: HopState] = [:]
 
     public func consumeRejection() -> RedirectRejection? {
         lock.lock()
@@ -125,14 +156,42 @@ public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @u
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
         let original = task.originalRequest ?? task.currentRequest ?? request
-        switch RedirectPolicy.apply(original: original, proposed: request) {
+        let decision: RedirectApplication = {
+            lock.lock()
+            defer { lock.unlock() }
+            var state = hops[task.taskIdentifier] ?? HopState(followed: 0, seen: [])
+            if state.seen.isEmpty, let originalURL = original.url {
+                state.seen.append(originalURL)
+            }
+            let decision = RedirectFollowLimit.decide(
+                followed: state.followed,
+                seen: state.seen,
+                original: original,
+                proposed: request
+            )
+            switch decision {
+            case .follow:
+                state.followed += 1
+                if let url = request.url {
+                    state.seen.append(url)
+                }
+            case .reject(let reason):
+                rejection = reason
+            }
+            hops[task.taskIdentifier] = state
+            return decision
+        }()
+        switch decision {
         case .follow(let next):
             completionHandler(next)
-        case .reject(let reason):
-            lock.lock()
-            rejection = reason
-            lock.unlock()
+        case .reject:
             completionHandler(nil)
         }
+    }
+
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        lock.lock()
+        hops[task.taskIdentifier] = nil
+        lock.unlock()
     }
 }

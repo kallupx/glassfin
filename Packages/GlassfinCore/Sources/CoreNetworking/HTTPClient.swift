@@ -125,7 +125,21 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         if request.body != nil {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        urlRequest.setValue(try identity.authorizationHeader(), forHTTPHeaderField: "Authorization")
+        let header: String
+        do {
+            header = try SafeAuthorizationHeader.value(
+                client: identity.clientName,
+                device: identity.deviceName,
+                deviceID: identity.deviceID,
+                version: identity.version,
+                token: identity.token
+            )
+        } catch is SecurityInvariantError {
+            throw APIError.headerRejected
+        } catch is AuthorizationHeaderError {
+            throw APIError.headerRejected
+        }
+        AuthorizationHeaderWriter.replace(header, on: &urlRequest)
         return urlRequest
     }
 
