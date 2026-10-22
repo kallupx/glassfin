@@ -383,24 +383,67 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertEqual(ServerTransportPolicy.evaluate(privateURL), .unencryptedLocal)
     }
 
-    /// T03-09. Non-canonical forms are hostnames. They are not parsed as a private address.
-    func testT03_09_ipBypassesFollowHostnameRules() throws {
-        XCTAssertEqual(ServerTransportPolicy.hostClass("0x7f000001"), .localHostname)
-        XCTAssertEqual(ServerTransportPolicy.hostClass("2130706433"), .localHostname)
+    /// T03-09. inet_aton shorthands are rejected. The class is the literal host, with no DNS lookup.
+    func testT03_09_nonCanonicalNumericHostsAreRejected() throws {
+        let rejected = [
+            "0x7f000001", "2130706433", "134744072", "0x08080808",
+            "127.1", "010.0.0.1", "0x7f.1", "0177.0.0.1",
+        ]
+        for host in rejected {
+            let url = try XCTUnwrap(URL(string: "http://\(host)/"))
+            XCTAssertEqual(url.host, host, host)
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
+            XCTAssertNotEqual(ServerTransportPolicy.hostClass(host), .localHostname, host)
+            XCTAssertNotEqual(ServerTransportPolicy.hostClass(host), .privateAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
+        }
+        XCTAssertEqual(ServerTransportPolicy.hostClass("nas"), .localHostname)
+        XCTAssertEqual(ServerTransportPolicy.hostClass("cafe"), .localHostname)
+        let rebound = "192.168.1.1.nip.io"
+        XCTAssertEqual(ServerTransportPolicy.hostClass(rebound), .publicHostname)
+        XCTAssertNotEqual(ServerTransportPolicy.hostClass(rebound), .privateAddress)
         XCTAssertEqual(
-            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://0x7f000001/"))), .unencryptedLocal)
-        XCTAssertEqual(
-            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://2130706433/"))), .unencryptedLocal)
-        XCTAssertEqual(ServerTransportPolicy.hostClass("127.1"), .publicHostname)
-        XCTAssertEqual(ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://127.1/"))), .publicHTTPRejected)
-        XCTAssertEqual(ServerTransportPolicy.hostClass("192.168.1.1.nip.io"), .publicHostname)
-        XCTAssertEqual(
-            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://192.168.1.1.nip.io/"))),
+            ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://\(rebound)/"))),
             .publicHTTPRejected
         )
-        XCTAssertNotEqual(ServerTransportPolicy.hostClass("0x7f000001"), .privateAddress)
-        XCTAssertNotEqual(ServerTransportPolicy.hostClass("127.1"), .privateAddress)
-        XCTAssertNotEqual(ServerTransportPolicy.hostClass("192.168.1.1.nip.io"), .privateAddress)
+    }
+
+    /// T03-28. Testaaja T03-11. Only a canonical four-octet IPv4 literal is accepted.
+    func testT03_28_nonCanonicalIPv4LiteralsAreRejected() throws {
+        let rejected = [
+            "134744072", "0x08080808", "0177.0.0.1", "010.0.0.1", "127.1", "127.0.1", "0x7f.1",
+            "192.168.1.1.", "192.168.001.010",
+        ]
+        for host in rejected {
+            let url = try XCTUnwrap(URL(string: "http://\(host)/"))
+            XCTAssertEqual(url.host, host, host)
+            XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
+        }
+    }
+
+    /// T03-29. Testaaja T03-12. Embedded IPv4 follows the IPv4 rules. A zone id does not crash.
+    func testT03_29_embeddedIPv4AndZoneID() throws {
+        let mapped = try XCTUnwrap(URL(string: "http://[::ffff:808:808]/"))
+        XCTAssertEqual(mapped.host, "::ffff:808:808")
+        XCTAssertEqual(ServerTransportPolicy.hostClass("::ffff:808:808"), .publicAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(mapped), .publicHTTPRejected)
+
+        let compatible = try XCTUnwrap(URL(string: "http://[::192.168.1.1]/"))
+        XCTAssertEqual(compatible.host, "::192.168.1.1")
+        XCTAssertEqual(ServerTransportPolicy.hostClass("::192.168.1.1"), .privateAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(compatible), .unencryptedLocal)
+
+        let nat64 = try XCTUnwrap(URL(string: "http://[64:ff9b::808:808]/"))
+        XCTAssertEqual(nat64.host, "64:ff9b::808:808")
+        XCTAssertEqual(ServerTransportPolicy.hostClass("64:ff9b::808:808"), .publicAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(nat64), .publicHTTPRejected)
+
+        let zoned = try XCTUnwrap(URL(string: "http://[fe80::1%25en0]/"))
+        XCTAssertEqual(zoned.host, "fe80::1%en0")
+        XCTAssertEqual(ServerTransportPolicy.hostClass("fe80::1%en0"), .privateAddress)
+        XCTAssertEqual(ServerTransportPolicy.hostClass("fe80::1%25en0"), .privateAddress)
+        XCTAssertEqual(ServerTransportPolicy.evaluate(zoned), .unencryptedLocal)
     }
 
     /// T03-20. App plists allow local networking and do not allow arbitrary loads.

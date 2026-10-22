@@ -59,21 +59,50 @@ public enum ServerTransportPolicy {
         }
     }
 
-    /// Only a canonical dotted-quad or IPv6 literal is an address. Other text is a hostname.
+    /// Classifies the literal host string. DNS is never consulted, so a name that would
+    /// resolve to a private address stays a hostname.
+    ///
+    /// An IPv4 literal is accepted only as four decimal octets with no leading zeros.
+    /// inet_aton shorthands (hex, octal, a single integer, one to three dotted parts,
+    /// a trailing dot) are rejected. A single-label hostname must not itself be one of those numbers.
     static func hostClass(_ host: String) -> HostClass {
         var trimmed = host.lowercased()
-        while trimmed.hasSuffix(".") { trimmed.removeLast() }
-        if trimmed.isEmpty { return .publicHostname }
-        if !trimmed.contains(":"), let octets = canonicalIPv4(trimmed) {
-            return isPrivateIPv4(octets) ? .privateAddress : .publicAddress
+        if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
+            trimmed.removeFirst()
+            trimmed.removeLast()
         }
-        if trimmed.contains(":"), let groups = canonicalIPv6(trimmed) {
+        if trimmed.isEmpty { return .publicHostname }
+        if trimmed.contains(":") {
+            guard let groups = canonicalIPv6(trimmed) else { return .publicAddress }
             return isPrivateIPv6(groups) ? .privateAddress : .publicAddress
         }
-        if trimmed == "localhost" || trimmed.hasSuffix(".local") || !trimmed.contains(".") && !trimmed.contains(":") {
+        let hadTrailingDot = trimmed.hasSuffix(".")
+        var bare = trimmed
+        while bare.hasSuffix(".") { bare.removeLast() }
+        if bare.isEmpty { return .publicHostname }
+        if isNumericIPv4Attempt(bare) {
+            if hadTrailingDot { return .publicAddress }
+            guard let octets = canonicalIPv4(bare) else { return .publicAddress }
+            return isPrivateIPv4(octets) ? .privateAddress : .publicAddress
+        }
+        if bare == "localhost" || bare.hasSuffix(".local") || (!bare.contains(".") && !bare.contains(":")) {
             return .localHostname
         }
         return .publicHostname
+    }
+
+    /// Decimal digits, a leading-zero octal component, or a `0x` hex component.
+    private static func isNumericIPv4Attempt(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.contains(where: { !$0.isEmpty }) else { return false }
+        return parts.allSatisfy { part in
+            if part.isEmpty { return false }
+            if part.hasPrefix("0x") {
+                let digits = part.dropFirst(2)
+                return !digits.isEmpty && digits.allSatisfy(\.isHexDigit)
+            }
+            return part.allSatisfy { $0.isASCII && $0.isNumber }
+        }
     }
 
     /// Four decimal octets, no leading zeros. Hex, short forms, and integer forms are not addresses.
@@ -124,7 +153,9 @@ public enum ServerTransportPolicy {
             let tail = String(text[text.index(after: colon)...])
             guard let octets = canonicalIPv4(tail) else { return nil }
             ipv4 = octets
-            text = String(text[..<colon])
+            let head = text[..<colon]
+            // `::192.168.1.1` loses one colon of the compression marker when the tail is removed.
+            text = head.hasSuffix(":") ? head + ":" : String(head)
         }
         let groups: [UInt16]
         if text.contains("::") {
@@ -161,17 +192,40 @@ public enum ServerTransportPolicy {
     }
 
     private static func isPrivateIPv6(_ groups: [UInt16]) -> Bool {
-        if groups[0] == 0 && groups[1] == 0 && groups[2] == 0 && groups[3] == 0 && groups[4] == 0 && groups[5] == 0xffff
-        {
-            let octets = [
-                UInt8(groups[6] >> 8), UInt8(groups[6] & 0xff), UInt8(groups[7] >> 8), UInt8(groups[7] & 0xff),
-            ]
-            return isPrivateIPv4(octets)
+        if isIPv4Mapped(groups) || isNAT64(groups) {
+            return isPrivateIPv4(embeddedIPv4(groups))
         }
         if groups == [0, 0, 0, 0, 0, 0, 0, 1] { return true }
+        if isIPv4Compatible(groups) {
+            let octets = embeddedIPv4(groups)
+            if octets == [0, 0, 0, 0] { return false }
+            return isPrivateIPv4(octets)
+        }
         if groups[0] & 0xffc0 == 0xfe80 { return true }
         if groups[0] & 0xfe00 == 0xfc00 { return true }
         return false
+    }
+
+    /// `::ffff:0:0/96`, including the hex form `::ffff:808:808`.
+    private static func isIPv4Mapped(_ groups: [UInt16]) -> Bool {
+        groups[0] == 0 && groups[1] == 0 && groups[2] == 0 && groups[3] == 0 && groups[4] == 0 && groups[5] == 0xffff
+    }
+
+    /// Deprecated `::/96` IPv4-compatible addresses, such as `::192.168.1.1`.
+    private static func isIPv4Compatible(_ groups: [UInt16]) -> Bool {
+        groups[0] == 0 && groups[1] == 0 && groups[2] == 0 && groups[3] == 0 && groups[4] == 0 && groups[5] == 0
+    }
+
+    /// Well-known NAT64 prefix `64:ff9b::/96`.
+    private static func isNAT64(_ groups: [UInt16]) -> Bool {
+        groups[0] == 0x0064 && groups[1] == 0xff9b && groups[2] == 0 && groups[3] == 0 && groups[4] == 0
+            && groups[5] == 0
+    }
+
+    private static func embeddedIPv4(_ groups: [UInt16]) -> [UInt8] {
+        [
+            UInt8(groups[6] >> 8), UInt8(groups[6] & 0xff), UInt8(groups[7] >> 8), UInt8(groups[7] & 0xff),
+        ]
     }
 }
 
