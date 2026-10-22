@@ -10,12 +10,12 @@ including raw strings: `"value \\(dump(x))"` and `#"raw \\#(print(1))"#`
 (any number of `#` delimiters, nested parentheses). A line may opt out of the
 call check and the public-log check with `// allow-print: reason`.
 
-Those call checks cover shipping code only. Any path component ending in
-`Tests` (`Tests`, `UITests`, `GlassfinCoreTests`) is test code and is skipped
-for `print` / `debugPrint` / `dump` / `NSLog`. Legacy headers, plist ATS keys,
-and `.public` credential lines are not part of that skip: they apply in test
-directories too. xcresult bundles are not uploaded from CI; the macOS jobs
-upload the redacted text export only.
+Call checks skip a path only when a component is named exactly `Tests`
+(for example `Packages/GlassfinCore/Tests`). `UITests` is scanned: UI tests
+run the real build and their output reaches CI job logs. Legacy headers,
+plist ATS keys, and `.public` credential lines are not part of that skip:
+they apply in `Tests` directories too. xcresult bundles are not uploaded
+from CI; the macOS jobs upload the redacted text export only.
 
 Legacy header names are matched case-insensitively and are ignored in
 comments. They are still reported inside string literals, because that is how
@@ -238,8 +238,12 @@ def hidden(path: Path) -> bool:
 
 
 def is_test_code(path: Path) -> bool:
-    """True for Tests, UITests, GlassfinCoreTests, and any other *Tests directory."""
-    return any(part.endswith("Tests") for part in path.parts)
+    """True only when a path component is named exactly Tests.
+
+    UITests is scanned. UI tests run the real build and their output reaches
+    CI job logs.
+    """
+    return any(part == "Tests" for part in path.parts)
 
 
 def scan(root: Path) -> list[str]:
@@ -354,6 +358,8 @@ def self_test() -> int:
         ("Interpolated.swift", "print("),
         ("Still.swift", "X-Emby-Token"),
         ("Still.swift", "token"),
+        ("UITests/Calls.swift", "print("),
+        ("GlassfinCoreTests/Calls.swift", "print("),
         ("UITests/Bad.plist", "NSExceptionAllowsInsecureHTTPLoads"),
         ("Public.swift", "token"),
         ("Public.swift", "Password"),
@@ -381,8 +387,8 @@ def self_test() -> int:
         print("forbidden-call self-test missed a raw or nested interpolation", file=sys.stderr)
         failed = True
     for hit in findings:
-        if "forbidden call" in hit and any(part.endswith("Tests") for part in Path(hit.split(":", 1)[0]).parts):
-            print(f"forbidden-call self-test counted a call in test code: {hit}", file=sys.stderr)
+        if "forbidden call" in hit and any(part == "Tests" for part in Path(hit.split(":", 1)[0]).parts):
+            print(f"forbidden-call self-test counted a call under Tests/: {hit}", file=sys.stderr)
             failed = True
         if any(name in hit for name in ("Quiet.swift", "Clean.plist", "Allowed.swift")):
             print(f"forbidden-call self-test counted an ignored line: {hit}", file=sys.stderr)
