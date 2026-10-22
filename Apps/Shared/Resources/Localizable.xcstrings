@@ -1,0 +1,293 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "design.action.addFavorite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add favorite" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Lisää suosikki" } }
+      }
+    },
+    "design.action.favorite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Favorite" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Suosikki" } }
+      }
+    },
+    "design.action.markPlayed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mark as watched" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Merkitse katsotuksi" } }
+      }
+    },
+    "design.action.markUnplayed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mark as unwatched" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Merkitse katsomattomaksi" } }
+      }
+    },
+    "design.action.more" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "More" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Lisää" } }
+      }
+    },
+    "design.action.play" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Toista" } }
+      }
+    },
+    "design.action.played" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Watched" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Katsottu" } }
+      }
+    },
+    "design.action.playNow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play now" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Toista nyt" } }
+      }
+    },
+    "design.action.removeFavorite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove favorite" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Poista suosikki" } }
+      }
+    },
+    "design.action.resume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Jatka" } }
+      }
+    },
+    "design.action.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Yritä uudelleen" } }
+      }
+    },
+    "design.action.switchServer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch server" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Vaihda palvelinta" } }
+      }
+    },
+    "design.badge.unplayedCount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld unplayed" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "%lld katsomatta" } }
+      }
+    },
+    "design.badge.watched" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Watched" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Katsottu" } }
+      }
+    },
+    "design.banner.offline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No network connection" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Ei verkkoyhteyttä" } }
+      }
+    },
+    "design.error.forbidden" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You do not have access" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Sinulla ei ole käyttöoikeutta" } }
+      }
+    },
+    "design.error.notFound" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not found" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Ei löydy" } }
+      }
+    },
+    "design.error.playback" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Playback failed" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Toisto epäonnistui" } }
+      }
+    },
+    "design.error.server" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The server returned an error" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Palvelin palautti virheen" } }
+      }
+    },
+    "design.error.serverUnreachable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The server cannot be reached" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Palvelimeen ei saada yhteyttä" } }
+      }
+    },
+    "design.error.unauthorized" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The session has ended" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Istunto on päättynyt" } }
+      }
+    },
+    "design.error.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version %@ is not supported" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Versio %@ ei ole tuettu" } }
+      }
+    },
+    "design.nav.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Detail" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Tiedot" } }
+      }
+    },
+    "design.nav.library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Library" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Kirjasto" } }
+      }
+    },
+    "design.nav.root" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Koti" } }
+      }
+    },
+    "design.prototype.focus" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Focus sample" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Fokusnäyte" } }
+      }
+    },
+    "design.prototype.interactive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Interactive probe" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Interaktiivinen näyte" } }
+      }
+    },
+    "design.prototype.login" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Kirjaudu" } }
+      }
+    },
+    "design.prototype.nextUp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Next up" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Seuraavaksi" } }
+      }
+    },
+    "design.prototype.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subtitle" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Tekstitys" } }
+      }
+    },
+    "design.remainingMinutes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld min left" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "%lld min jäljellä" } }
+      }
+    },
+    "design.row.posters" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Posters" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Julisteet" } }
+      }
+    },
+    "design.row.primary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Jatka" } }
+      }
+    },
+    "design.season.picker" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Season" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Kausi" } }
+      }
+    },
+    "design.tab.home" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Koti" } }
+      }
+    },
+    "design.tab.libraries" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Libraries" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Kirjastot" } }
+      }
+    },
+    "design.tab.search" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Haku" } }
+      }
+    },
+    "design.tab.settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Asetukset" } }
+      }
+    },
+    "welcome.connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Yhdistä" } }
+      }
+    },
+    "welcome.designSystem" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Design system" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Design-järjestelmä" } }
+      }
+    },
+    "welcome.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Glassfin" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Glassfin" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
