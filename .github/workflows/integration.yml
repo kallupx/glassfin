@@ -1,9 +1,7 @@
 name: integration
 
-# TODO: Docker integration is confirmed but deferred until after M00 and M01.
-# When implemented, this workflow starts throwaway jellyfin/jellyfin containers for
-# 10.10.7, 10.11.11, and 12.2. Credentials come from GitHub Secrets only.
-# It must stay workflow_dispatch-only so it does not spend minutes on every PR.
+# Live Jellyfin matrix. workflow_dispatch only, so pull requests do not start containers.
+# Run locally with scripts/docker-integration.sh. Credentials are generated per run.
 on:
   workflow_dispatch:
 
@@ -17,15 +15,10 @@ concurrency:
 jobs:
   docker-matrix:
     runs-on: ubuntu-latest
-    # Same pinned swift:6.4 index as ci.yml (Swift 6.4.1).
-    container: swift:6.4@sha256:6fbd5978b56a5a9ff05a48f8f678079fc45be496ecda15b4e74e8944fab857be
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
-      - name: Swift from the official image
-        run: swift --version
-      - name: Deferred
-        run: |
-          echo "TODO: jellyfin/jellyfin 10.10.7, 10.11.11, and 12.2"
-          echo "Use throwaway credentials from GitHub Secrets. Do not commit them."
-          echo "Containers are not started. WebSocket follow-up, per version: open /socket with only the Authorization header and wait for the first KeepAlive or ForceKeepAlive."
-          echo "Integration is not implemented in this workflow yet."
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: T01-20 and T01-30
+        run: bash scripts/docker-integration.sh

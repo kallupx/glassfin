@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class WelcomeSmokeTests: XCTestCase {
     func testWelcomeScreenAppears() {
         let app = XCUIApplication()

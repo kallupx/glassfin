@@ -83,7 +83,8 @@ final class ServiceEndpointTests: XCTestCase {
         }
     }
 
-    func testImageAndStreamRequestsNeverCombineHeaderAndAPIKey() throws {
+    /// T01-24. Image and stream requests never send the header and an ApiKey query together.
+    func testT01_24_imageAndStreamNeverCombineHeaderAndApiKey() throws {
         let identity = ClientIdentity(
             deviceName: "Living Room", deviceID: "device-1", version: "0.1.0", token: "token-secret")
         let media = JellyfinMediaURLService(server: server, identity: identity)
