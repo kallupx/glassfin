@@ -2,14 +2,20 @@ import SwiftUI
 
 struct WelcomeView: View {
     var body: some View {
-        VStack(spacing: 24) {
-            Text(LocalizedStringResource("welcome.title", bundle: .main))
+        VStack(spacing: SpacingToken.l) {
+            Copy.text(.welcomeTitle)
                 .font(.title)
                 .accessibilityIdentifier("welcome.root")
             Button(action: {}) {
-                Text(LocalizedStringResource("welcome.connect", bundle: .main))
+                Copy.text(.welcomeConnect)
             }
-            .accessibilityIdentifier("welcome.connect")
+            .accessibilityIdentifier(CopyKey.welcomeConnect.rawValue)
+            NavigationLink {
+                DesignSystemFocusDemo()
+            } label: {
+                Copy.text(.welcomeDesignSystem)
+            }
+            .accessibilityIdentifier(CopyKey.welcomeDesignSystem.rawValue)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
