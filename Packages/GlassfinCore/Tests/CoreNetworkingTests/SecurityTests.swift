@@ -171,14 +171,13 @@ final class SecurityCredentialTests: XCTestCase {
 final class SecurityCertificateTests: XCTestCase {
     private let serverID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-    /// T03-01. Confirming fingerprint B while the connection presents C cancels. Nothing is pinned or written to the keychain.
+    /// T03-01. Confirming fingerprint B while the connection presents C cancels. The pin store keeps A.
     func testT03_01_acceptedFingerprintMismatchOnChangeCancels() throws {
         let leafA = presentation(Data("leaf-a".utf8), subject: "CN=old")
         let leafB = presentation(Data("leaf-b".utf8), subject: "CN=accepted")
         let leafC = presentation(Data("leaf-c".utf8), subject: "CN=presented")
         let settings = InMemorySettingsStore()
         let store = SettingsCertificatePinStore(settings: settings)
-        let keychain = AttributeSecureStore()
         try store.save(fingerprint: leafA.sha256, serverID: serverID)
 
         let outcome = SelfSignedTrustFlow.handle(
@@ -197,7 +196,6 @@ final class SecurityCertificateTests: XCTestCase {
         let dump = settings.allValues().values.joined(separator: "\n")
         XCTAssertFalse(dump.contains(CertificateFingerprint.normalize(leafB.sha256)))
         XCTAssertFalse(dump.contains(CertificateFingerprint.normalize(leafC.sha256)))
-        XCTAssertEqual(keychain.accounts(), [])
     }
 
     /// T03-02. The same mismatch on first acceptance, with no prior pin, cancels and stores nothing.
@@ -206,7 +204,6 @@ final class SecurityCertificateTests: XCTestCase {
         let leafC = presentation(Data("leaf-c".utf8), subject: "CN=presented")
         let settings = InMemorySettingsStore()
         let store = SettingsCertificatePinStore(settings: settings)
-        let keychain = AttributeSecureStore()
         let outcome = SelfSignedTrustFlow.handle(
             isSystemTrusted: false,
             leaf: leafC,
@@ -217,7 +214,6 @@ final class SecurityCertificateTests: XCTestCase {
         XCTAssertNil(outcome.pinToStore)
         XCTAssertNil(try store.fingerprint(for: serverID))
         XCTAssertTrue(settings.allValues().isEmpty)
-        XCTAssertEqual(keychain.accounts(), [])
     }
 
     /// T03-03. A confirmed fingerprint that matches the leaf is pinned. The next connection does not prompt.
@@ -235,12 +231,10 @@ final class SecurityCertificateTests: XCTestCase {
         }
         let settings = InMemorySettingsStore()
         let store = SettingsCertificatePinStore(settings: settings)
-        let keychain = AttributeSecureStore()
         let first = SelfSignedTrustFlow.handle(
             isSystemTrusted: false, leaf: leaf, pinnedSHA256: nil, userAcceptedFingerprint: mixed)
         try store.save(fingerprint: try XCTUnwrap(first.pinToStore), serverID: serverID)
         XCTAssertEqual(try store.fingerprint(for: serverID), hex)
-        XCTAssertEqual(keychain.accounts(), [])
 
         let next = SelfSignedTrustFlow.handle(
             isSystemTrusted: false, leaf: leaf, pinnedSHA256: colon, userAcceptedFingerprint: nil)
@@ -255,7 +249,6 @@ final class SecurityCertificateTests: XCTestCase {
         let leafD = presentation(Data("leaf-d".utf8), subject: "CN=new")
         let settings = InMemorySettingsStore()
         let store = SettingsCertificatePinStore(settings: settings)
-        let keychain = AttributeSecureStore()
         try store.save(fingerprint: grouped(leafA.sha256, separator: ":"), serverID: serverID)
         let outcome = SelfSignedTrustFlow.handle(
             isSystemTrusted: false,
@@ -272,7 +265,6 @@ final class SecurityCertificateTests: XCTestCase {
         XCTAssertNil(outcome.pinToStore)
         XCTAssertEqual(try store.fingerprint(for: serverID), CertificateFingerprint.normalize(leafA.sha256))
         XCTAssertFalse(settings.allValues().values.joined().contains(CertificateFingerprint.normalize(leafD.sha256)))
-        XCTAssertEqual(keychain.accounts(), [])
     }
 
     /// T03-21. NIST SHA-256 vectors, and a system-trusted leaf is not pinned.
@@ -320,8 +312,8 @@ final class SecurityCertificateTests: XCTestCase {
 }
 
 final class SecurityTransportTests: XCTestCase {
-    /// T03-05. Public IPv4 HTTP is rejected before any request is built.
-    func testT03_05_publicIPv4HTTPIsRejectedBeforeAnyRequest() throws {
+    /// T03-05. Public IPv4 HTTP is rejected before the transport is called.
+    func testT03_05_publicIPv4HTTPIsRejectedBeforeAnyRequest() async throws {
         for host in ["203.0.113.5", "8.8.8.8"] {
             let url = try XCTUnwrap(URL(string: "http://\(host)/library"))
             XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
@@ -330,7 +322,20 @@ final class SecurityTransportTests: XCTestCase {
                 ServerTransportPolicy.message(for: .publicHTTPRejected),
                 "Julkiset osoitteet vaativat HTTPS:n"
             )
-            XCTAssertNil(URLRequest(url: url).value(forHTTPHeaderField: "Authorization"))
+            let transport = RecordingRequestTransport()
+            let client = HTTPJellyfinClient(
+                server: url,
+                identity: ClientIdentity(
+                    deviceName: "TV", deviceID: "device-1", version: "1.0.0", token: "secret-token"),
+                transport: transport
+            )
+            do {
+                _ = try await client.send(APIRequest(method: "GET", path: "/library"))
+                XCTFail("Expected public HTTP to be rejected before the transport is called")
+            } catch {
+                XCTAssertEqual(error, .invalidURL, host)
+            }
+            XCTAssertEqual(transport.calls(), [], host)
         }
     }
 
@@ -1008,11 +1013,32 @@ private final class AttributeSecureStore: SecureStore, @unchecked Sendable {
         defer { lock.unlock() }
         return written[account]
     }
+}
 
-    func accounts() -> [String] {
+private final class RecordingRequestTransport: RequestTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [URLRequest] = []
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+        record(request)
+        guard let url = request.url ?? URL(string: "http://invalid.example/"),
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        else {
+            throw URLError(.badURL)
+        }
+        return (Data(), response, nil)
+    }
+
+    private func record(_ request: URLRequest) {
+        lock.lock()
+        stored.append(request)
+        lock.unlock()
+    }
+
+    func calls() -> [URLRequest] {
         lock.lock()
         defer { lock.unlock() }
-        return Array(values.keys)
+        return stored
     }
 }
 

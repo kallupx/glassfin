@@ -62,27 +62,87 @@ public struct ClientIdentity: Sendable, Equatable {
     }
 }
 
+protocol RequestTransport: Sendable {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?)
+}
+
+struct URLSessionRequestTransport: RequestTransport {
+    var session: URLSession
+    var redirects: RedirectSessionDelegate
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+        let proxy = RedirectTaskProxy(owner: redirects)
+        let (data, response) = try await session.data(for: request, delegate: proxy)
+        return (data, response, proxy.capturedTaskIdentifier())
+    }
+}
+
 public struct HTTPJellyfinClient: JellyfinAPIClient {
     public var server: URL
     public var identity: ClientIdentity
     public var session: URLSession
     public var redirectDelegate: RedirectSessionDelegate
     public var log: any GlassfinLog
+    var transport: any RequestTransport
 
     public init(server: URL, identity: ClientIdentity, log: any GlassfinLog = SilentLog()) {
         let delegate = RedirectSessionDelegate()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        self.init(
+            server: server,
+            identity: identity,
+            session: session,
+            redirectDelegate: delegate,
+            log: log,
+            transport: URLSessionRequestTransport(session: session, redirects: delegate)
+        )
+    }
+
+    init(
+        server: URL,
+        identity: ClientIdentity,
+        transport: any RequestTransport,
+        log: any GlassfinLog = SilentLog()
+    ) {
+        let delegate = RedirectSessionDelegate()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.httpShouldSetCookies = false
+        self.init(
+            server: server,
+            identity: identity,
+            session: URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil),
+            redirectDelegate: delegate,
+            log: log,
+            transport: transport
+        )
+    }
+
+    init(
+        server: URL,
+        identity: ClientIdentity,
+        session: URLSession,
+        redirectDelegate: RedirectSessionDelegate,
+        log: any GlassfinLog,
+        transport: any RequestTransport
+    ) {
         self.server = server
         self.identity = identity
-        self.redirectDelegate = delegate
-        self.session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        self.session = session
+        self.redirectDelegate = redirectDelegate
         self.log = log
+        self.transport = transport
     }
 
     public func send(_ request: APIRequest) async throws(APIError) -> Data {
         if Task.isCancelled { throw APIError.cancelled }
+        // S4.3. Public cleartext is refused before a request is built or handed to the transport.
+        if ServerTransportPolicy.evaluate(server) == .publicHTTPRejected {
+            throw APIError.invalidURL
+        }
         let urlRequest: URLRequest
         do {
             urlRequest = try makeURLRequest(request)
@@ -92,13 +152,12 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.invalidURL
         }
         do {
-            let proxy = RedirectTaskProxy(owner: redirectDelegate)
-            let (data, response) = try await session.data(for: urlRequest, delegate: proxy)
+            let (data, response, taskIdentifier) = try await transport.data(for: urlRequest)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
             if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
                 if case .redirectRejected = failure {
                     let reason =
-                        proxy.capturedTaskIdentifier().flatMap { redirectDelegate.consumeRejection(for: $0) }
+                        taskIdentifier.flatMap { redirectDelegate.consumeRejection(for: $0) }
                         ?? redirectDelegate.consumeRejection()
                     if let reason {
                         throw APIError.redirectRejected(reason)
