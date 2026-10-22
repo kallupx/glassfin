@@ -5,10 +5,17 @@ SwiftLint custom rules do not run on the Linux lint job (they need SourceKit).
 This script is the check that does run there.
 
 `print(`, `debugPrint(`, `dump(`, and `NSLog(` are calls only outside comments
-and string literals. A line may opt out with `// allow-print: reason`.
+and string literals. Code inside `\\(` ... `)` string interpolation is scanned
+as code, so `"\\(print(x))"` is a hit. A line may opt out of the call check
+and the public-log check with `// allow-print: reason`.
 Legacy header names are ignored in comments and under `Tests/`, and are still
 reported inside string literals, because that is how the header is set.
-`NSAllowsArbitraryLoads` is forbidden in every plist.
+`NSAllowsArbitraryLoads` is a substring match, so it also catches
+`NSAllowsArbitraryLoadsForMedia` and `NSAllowsArbitraryLoadsInWebContent`.
+`NSExceptionAllowsInsecureHTTPLoads` is forbidden in every plist.
+A non-test line that contains `.public` and a credential word (`token`,
+`password`, `apiKey`, or `secret`, case-insensitive) fails unless that line
+has an `// allow-print: reason` comment.
 """
 
 from __future__ import annotations
@@ -21,64 +28,139 @@ from pathlib import Path
 CALL_RE = re.compile(r"\b(?:print|debugPrint|dump|NSLog)\s*\(")
 HEADER_RE = re.compile(r"X-Emby-Token|X-MediaBrowser-Token|X-Emby-Authorization")
 ALLOW_RE = re.compile(r"//\s*allow-print:\s+\S")
+PUBLIC_RE = re.compile(r"\.public\b")
+SENSITIVE_RE = re.compile(r"\b(?:token|password|apikey|secret)\b", re.IGNORECASE)
 SKIP_PARTS = {".git", ".build", "checkouts"}
 
 
 def classify(source: str) -> str:
-    """Return a same-length mask: c code, m comment, s string."""
-    mask = ["c"] * len(source)
-    i = 0
-    n = len(source)
+    """Return a same-length mask: c code, m comment, s string.
 
-    def fill(start: int, end: int, kind: str) -> None:
-        for index in range(start, end):
+    Interpolation expressions are code. The `\\(` introducer and its closing
+    parenthesis stay string text.
+    """
+    mask = ["c"] * len(source)
+    n = len(source)
+    i = 0
+    # Frames: ("code",), ("block", depth), ("line",), ("string", closer, hashes), ("interp", depth).
+    stack: list[tuple] = [("code",)]
+
+    def paint(start: int, end: int, kind: str) -> None:
+        for index in range(start, min(end, n)):
             if source[index] != "\n":
                 mask[index] = kind
 
     while i < n:
-        if source.startswith("/*", i):
-            depth = 1
-            start = i
-            i += 2
-            while i < n and depth:
-                if source.startswith("/*", i):
-                    depth += 1
-                    i += 2
-                    continue
-                if source.startswith("*/", i):
-                    depth -= 1
-                    i += 2
-                    continue
+        frame = stack[-1]
+        kind = frame[0]
+        if kind == "block":
+            if source.startswith("/*", i):
+                stack[-1] = ("block", frame[1] + 1)
+                paint(i, i + 2, "m")
+                i += 2
+                continue
+            if source.startswith("*/", i):
+                paint(i, i + 2, "m")
+                i += 2
+                depth = frame[1] - 1
+                if depth == 0:
+                    stack.pop()
+                else:
+                    stack[-1] = ("block", depth)
+                continue
+            paint(i, i + 1, "m")
+            i += 1
+            continue
+        if kind == "line":
+            if source[i] == "\n":
+                stack.pop()
                 i += 1
-            fill(start, i, "m")
+                continue
+            paint(i, i + 1, "m")
+            i += 1
+            continue
+        if kind == "string":
+            closer, hashes = frame[1], frame[2]
+            introducer = "\\" + ("#" * hashes) + "("
+            if source.startswith(introducer, i):
+                paint(i, i + len(introducer), "s")
+                i += len(introducer)
+                stack.append(("interp", 1))
+                continue
+            if source.startswith(closer, i):
+                paint(i, i + len(closer), "s")
+                i += len(closer)
+                stack.pop()
+                continue
+            if hashes == 0 and closer == '"' and source[i] == "\\":
+                paint(i, i + 2, "s")
+                i += 2
+                continue
+            if source[i] == "\n" and closer == '"':
+                stack.pop()
+                i += 1
+                continue
+            paint(i, i + 1, "s")
+            i += 1
+            continue
+        if kind == "interp":
+            if source.startswith("/*", i):
+                stack.append(("block", 1))
+                paint(i, i + 2, "m")
+                i += 2
+                continue
+            if source.startswith("//", i):
+                stack.append(("line",))
+                paint(i, i + 2, "m")
+                i += 2
+                continue
+            opener = opening_string(source, i)
+            if opener is not None:
+                opener_len, string_closer, hashes = opener
+                paint(i, i + opener_len, "s")
+                i += opener_len
+                stack.append(("string", string_closer, hashes))
+                continue
+            if source[i] == "(":
+                stack[-1] = ("interp", frame[1] + 1)
+                paint(i, i + 1, "c")
+                i += 1
+                continue
+            if source[i] == ")":
+                depth = frame[1] - 1
+                i += 1
+                if depth == 0:
+                    paint(i - 1, i, "s")
+                    stack.pop()
+                else:
+                    paint(i - 1, i, "c")
+                    stack[-1] = ("interp", depth)
+                continue
+            paint(i, i + 1, "c")
+            i += 1
+            continue
+        if source.startswith("/*", i):
+            stack.append(("block", 1))
+            paint(i, i + 2, "m")
+            i += 2
             continue
         if source.startswith("//", i):
-            start = i
-            while i < n and source[i] != "\n":
-                i += 1
-            fill(start, i, "m")
+            stack.append(("line",))
+            paint(i, i + 2, "m")
+            i += 2
             continue
         opener = opening_string(source, i)
         if opener is not None:
-            opener_len, closer = opener
-            start = i
+            opener_len, string_closer, hashes = opener
+            paint(i, i + opener_len, "s")
             i += opener_len
-            while i < n and not source.startswith(closer, i):
-                if closer == '"' and source[i] == "\\":
-                    i += 2
-                    continue
-                if source[i] == "\n" and closer == '"':
-                    break
-                i += 1
-            if source.startswith(closer, i):
-                i += len(closer)
-            fill(start, min(i, n), "s")
+            stack.append(("string", string_closer, hashes))
             continue
         i += 1
     return "".join(mask)
 
 
-def opening_string(source: str, index: int) -> tuple[int, str] | None:
+def opening_string(source: str, index: int) -> tuple[int, str, int] | None:
     hashes = 0
     while index + hashes < len(source) and source[index + hashes] == "#":
         hashes += 1
@@ -89,7 +171,7 @@ def opening_string(source: str, index: int) -> tuple[int, str] | None:
         quote = '"""'
     else:
         quote = '"'
-    return hashes + len(quote), quote + ("#" * hashes)
+    return hashes + len(quote), quote + ("#" * hashes), hashes
 
 
 def allows_print(line: str, line_mask: str) -> bool:
@@ -106,11 +188,17 @@ def swift_hits(text: str) -> list[tuple[int, str]]:
     for number, line in enumerate(text.splitlines(), start=1):
         line_mask = mask[offset : offset + len(line)]
         offset += len(line) + 1
+        if len(line_mask) < len(line):
+            line_mask = line_mask + ("c" * (len(line) - len(line_mask)))
         code = "".join(char if kind == "c" else " " for char, kind in zip(line, line_mask))
         readable = "".join(char if kind != "m" else " " for char, kind in zip(line, line_mask))
-        if not allows_print(line, line_mask):
+        allowed = allows_print(line, line_mask)
+        if not allowed:
             for match in CALL_RE.finditer(code):
                 hits.append((number, f"forbidden call {match.group(0)}"))
+            if PUBLIC_RE.search(readable):
+                for match in SENSITIVE_RE.finditer(readable):
+                    hits.append((number, f"public log mentions {match.group(0)}"))
         for match in HEADER_RE.finditer(readable):
             hits.append((number, f"legacy auth header {match.group(0)}"))
     return hits
@@ -119,8 +207,8 @@ def swift_hits(text: str) -> list[tuple[int, str]]:
 def plist_hits(text: str) -> list[tuple[int, str]]:
     hits: list[tuple[int, str]] = []
     for number, line in enumerate(text.splitlines(), start=1):
-        if "NSAllowsArbitraryLoads" in line:
-            hits.append((number, "NSAllowsArbitraryLoads is not allowed"))
+        if "NSAllowsArbitraryLoads" in line or "NSExceptionAllowsInsecureHTTPLoads" in line:
+            hits.append((number, line.strip()))
     return hits
 
 
@@ -161,9 +249,27 @@ def self_test() -> int:
         'let sample = "print( debugPrint( dump( NSLog("\n'
         'let raw = #"print("#\n'
         "print(1) // allow-print: startup probe\n"
+        "// privacy: .public token password apiKey secret\n"
+        'logger.log(privacy: .private, "token")\n'
+        'logger.log(privacy: .public, "name")\n'
     )
-    tests = calls + headers
-    plist = "<plist><dict><key>NSAllowsArbitraryLoads</key><true/></dict></plist>\n"
+    interpolated = 'let value = "\\(print(x))"\nlet nested = "\\(print(foo(1)))"\n'
+    public_hits = (
+        'logger.log(privacy: .public, "token")\n'
+        'logger.log(privacy: .public, "Password")\n'
+        'logger.log(privacy: .public, "apiKey")\n'
+        'logger.log(privacy: .public, "secret")\n'
+    )
+    allowed = 'logger.log(privacy: .public, "token") // allow-print: redacted sample\n'
+    tests = calls + headers + public_hits
+    plist = (
+        "<plist><dict>\n"
+        "<key>NSAllowsArbitraryLoads</key><true/>\n"
+        "<key>NSAllowsArbitraryLoadsForMedia</key><true/>\n"
+        "<key>NSAllowsArbitraryLoadsInWebContent</key><true/>\n"
+        "<key>NSExceptionAllowsInsecureHTTPLoads</key><true/>\n"
+        "</dict></plist>\n"
+    )
     clean_plist = "<plist><dict><key>NSAllowsLocalNetworking</key><true/></dict></plist>\n"
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -172,6 +278,9 @@ def self_test() -> int:
         (source / "Calls.swift").write_text(calls, encoding="utf-8")
         (source / "Headers.swift").write_text(headers, encoding="utf-8")
         (source / "Quiet.swift").write_text(quiet, encoding="utf-8")
+        (source / "Interpolated.swift").write_text(interpolated, encoding="utf-8")
+        (source / "Public.swift").write_text(public_hits, encoding="utf-8")
+        (source / "Allowed.swift").write_text(allowed, encoding="utf-8")
         nested = root / "Packages" / "GlassfinCore" / "Tests"
         nested.mkdir(parents=True)
         (nested / "Ignored.swift").write_text(tests, encoding="utf-8")
@@ -186,18 +295,40 @@ def self_test() -> int:
         ("Headers.swift", "X-Emby-Token"),
         ("Headers.swift", "X-MediaBrowser-Token"),
         ("Headers.swift", "X-Emby-Authorization"),
+        ("Interpolated.swift", "print("),
+        ("Public.swift", "token"),
+        ("Public.swift", "Password"),
+        ("Public.swift", "apiKey"),
+        ("Public.swift", "secret"),
         ("Info.plist", "NSAllowsArbitraryLoads"),
+        ("Info.plist", "NSAllowsArbitraryLoadsForMedia"),
+        ("Info.plist", "NSAllowsArbitraryLoadsInWebContent"),
+        ("Info.plist", "NSExceptionAllowsInsecureHTTPLoads"),
     )
     failed = False
     for name, token in expected:
         if not any(name in hit and token in hit for hit in findings):
             print(f"forbidden-call self-test missed {token} in {name}", file=sys.stderr)
             failed = True
+    # The plain NSAllowsArbitraryLoads key must not be the only ATS hit.
+    loads_hits = [hit for hit in findings if "Info.plist" in hit and "NSAllowsArbitraryLoads" in hit]
+    if len(loads_hits) < 3:
+        print("forbidden-call self-test missed an NSAllowsArbitraryLoads variant", file=sys.stderr)
+        failed = True
+    interpolated_hits = [hit for hit in findings if "Interpolated.swift" in hit and "print(" in hit]
+    if len(interpolated_hits) < 2:
+        print("forbidden-call self-test missed an interpolated print(", file=sys.stderr)
+        failed = True
     for hit in findings:
-        if "Quiet.swift" in hit or "/Tests/" in hit or "Clean.plist" in hit or "Ignored.swift" in hit:
+        if any(
+            name in hit
+            for name in ("Quiet.swift", "/Tests/", "Clean.plist", "Ignored.swift", "Allowed.swift")
+        ):
             print(f"forbidden-call self-test counted an ignored line: {hit}", file=sys.stderr)
             failed = True
     if failed:
+        for hit in findings:
+            print(hit, file=sys.stderr)
         return 1
     print("forbidden-call self-test passed")
     return 0
