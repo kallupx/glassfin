@@ -30,6 +30,7 @@ let debugSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "GlassfinCore",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v26),
         .tvOS(.v26),
@@ -40,7 +41,11 @@ let package = Package(
     ],
     dependencies: packageDependencies,
     targets: [
-        .target(name: "CoreModels", swiftSettings: debugSettings),
+        .target(
+            name: "CoreModels",
+            resources: [.process("Localizable.xcstrings")],
+            swiftSettings: debugSettings
+        ),
         .target(name: "CoreNetworking", dependencies: ["CoreModels"], swiftSettings: debugSettings),
         // GlassfinServices, not CoreServices: that module name collides with the system
         // CoreServices framework Foundation imports, and `swift test` on macOS then
@@ -56,7 +61,11 @@ let package = Package(
             dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"] + coreAPIExternal,
             swiftSettings: debugSettings
         ),
-        .target(name: "CoreState", dependencies: ["CoreModels"], swiftSettings: debugSettings),
+        .target(
+            name: "CoreState",
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"],
+            swiftSettings: debugSettings
+        ),
         .target(name: "CorePlayback", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),
         .target(
             name: "CoreTestSupport",
@@ -77,6 +86,12 @@ let package = Package(
             swiftSettings: debugSettings
         ),
         .testTarget(name: "CoreModelsTests", dependencies: ["CoreModels"]),
+        .testTarget(
+            name: "CoreStateTests",
+            dependencies: [
+                "CoreState", "CoreModels", "CoreNetworking", "GlassfinServices", "CoreTestSupport",
+            ]
+        ),
         .testTarget(name: "CoreNetworkingTests", dependencies: ["CoreNetworking", "CoreModels"]),
         .testTarget(
             name: "CoreServicesTests",

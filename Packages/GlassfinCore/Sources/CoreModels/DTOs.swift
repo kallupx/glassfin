@@ -5,6 +5,7 @@ public struct PublicSystemInfoDTO: Decodable, Sendable {
     public var Version: String?
     public var Id: String?
     public var StartupWizardCompleted: Bool?
+    public var ProductName: String?
 }
 
 public struct UserPolicyDTO: Decodable, Sendable {

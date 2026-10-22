@@ -121,7 +121,7 @@ public struct JellyfinAuthenticationService: AuthenticationService {
         let dto = try await client.send(
             APIRequest(method: "POST", path: "/QuickConnect/Initiate"), as: QuickConnectResultDTO.self)
         guard let code = dto.Code, let secret = dto.Secret else { throw APIError.decoding }
-        return QuickConnectChallenge(code: code, secret: secret)
+        return QuickConnectChallenge(code: code, secret: secret, authenticated: dto.Authenticated ?? false)
     }
 
     public func quickConnectState(secret: String) async throws(APIError) -> QuickConnectChallenge {
@@ -131,7 +131,7 @@ public struct JellyfinAuthenticationService: AuthenticationService {
             as: QuickConnectResultDTO.self
         )
         guard let code = dto.Code, let value = dto.Secret else { throw APIError.decoding }
-        return QuickConnectChallenge(code: code, secret: value)
+        return QuickConnectChallenge(code: code, secret: value, authenticated: dto.Authenticated ?? false)
     }
 
     public func authenticate(quickConnectSecret: String) async throws(APIError) -> AuthenticatedSession {
@@ -211,9 +211,9 @@ public struct JellyfinLibraryService: LibraryService {
             items.append(URLQueryItem(name: "nameStartsWith", value: nameStartsWith))
         }
         if let searchTerm = query.searchTerm { items.append(URLQueryItem(name: "searchTerm", value: searchTerm)) }
-        let dto = try await client.send(
-            APIRequest(method: "GET", path: "/Items", query: items), as: QueryResultDTO.self)
-        return DTOMapper.page(dto, log: log)
+        let data = try await client.send(APIRequest(method: "GET", path: "/Items", query: items))
+        let decoded = try ResilientItemDecoder.mediaItems(from: data, log: log)
+        return Page(items: decoded.items, totalCount: decoded.totalCount)
     }
 
     public func resume(limit: Int) async throws(APIError) -> [MediaItem] {
@@ -236,7 +236,7 @@ public struct JellyfinLibraryService: LibraryService {
     }
 
     public func latest(in library: Library.ID, limit: Int) async throws(APIError) -> [MediaItem] {
-        let dto = try await client.send(
+        let data = try await client.send(
             APIRequest(
                 method: "GET",
                 path: "/Items/Latest",
@@ -245,10 +245,9 @@ public struct JellyfinLibraryService: LibraryService {
                     URLQueryItem(name: "limit", value: String(limit)),
                     URLQueryItem(name: "groupItems", value: "true"),
                 ]
-            ),
-            as: [BaseItemDTO].self
+            )
         )
-        return dto.compactMap { DTOMapper.mediaItem($0, log: log) }
+        return try ResilientItemDecoder.mediaItems(from: data, log: log).items
     }
 
     public func seasons(series: MediaItem.ID) async throws(APIError) -> [MediaItem] {
@@ -320,8 +319,8 @@ public struct JellyfinLibraryService: LibraryService {
     }
 
     private func list(path: String, query: [URLQueryItem]) async throws(APIError) -> [MediaItem] {
-        let dto = try await client.send(APIRequest(method: "GET", path: path, query: query), as: QueryResultDTO.self)
-        return DTOMapper.page(dto, log: log).items
+        let data = try await client.send(APIRequest(method: "GET", path: path, query: query))
+        return try ResilientItemDecoder.mediaItems(from: data, log: log).items
     }
 }
 
@@ -334,18 +333,8 @@ public struct JellyfinSearchService: SearchService {
     }
 
     public func hints(term: String, limit: Int) async throws(APIError) -> [MediaItem] {
-        let dto = try await client.send(
-            QueryTransport.searchHints(term: term, limit: limit),
-            as: SearchHintResultDTO.self
-        )
-        return (dto.SearchHints ?? []).compactMap { hint in
-            guard let id = hint.ItemId ?? hint.Id else { return nil }
-            return MediaItem(
-                id: id,
-                kind: MediaKind.from(serverType: hint.`Type` ?? ""),
-                name: MetadataSanitizer.plainText(hint.Name ?? "")
-            )
-        }
+        let data = try await client.send(QueryTransport.searchHints(term: term, limit: limit))
+        return try ResilientItemDecoder.searchHints(from: data, log: log)
     }
 }
 
