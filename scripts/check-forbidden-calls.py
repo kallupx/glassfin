@@ -10,16 +10,21 @@ including raw strings: `"value \\(dump(x))"` and `#"raw \\#(print(1))"#`
 (any number of `#` delimiters, nested parentheses). A line may opt out of the
 call check and the public-log check with `// allow-print: reason`.
 
-Those call rules skip a file when any path component ends in `Tests`
-(`Tests`, `UITests`, `GlassfinCoreTests`). Legacy headers, plist ATS keys,
+Those call checks cover shipping code only. Any path component ending in
+`Tests` (`Tests`, `UITests`, `GlassfinCoreTests`) is test code and is skipped
+for `print` / `debugPrint` / `dump` / `NSLog`. Legacy headers, plist ATS keys,
 and `.public` credential lines are not part of that skip: they apply in test
-directories too.
+directories too. xcresult bundles are not uploaded from CI; the macOS jobs
+upload the redacted text export only.
 
 Legacy header names are matched case-insensitively and are ignored in
 comments. They are still reported inside string literals, because that is how
 the header is set. `NSAllowsArbitraryLoads` is a substring match, so it also
 catches `NSAllowsArbitraryLoadsForMedia` and `NSAllowsArbitraryLoadsInWebContent`.
 `NSExceptionAllowsInsecureHTTPLoads` is forbidden in every plist.
+`NSExceptionMinimumTLSVersion` followed by `<string>TLSv1.0</string>` or
+`<string>TLSv1.1</string>` is forbidden. `TLSv1.2`, `TLSv1.3`, and
+`NSAllowsLocalNetworking` are allowed.
 A line that contains `.public` and a credential word (`token`, `password`,
 `apiKey`, or `secret`, case-insensitive) fails unless that line has an
 `// allow-print: reason` comment.
@@ -40,6 +45,9 @@ HEADER_RE = re.compile(r"X-Emby-Token|X-MediaBrowser-Token|X-Emby-Authorization"
 ALLOW_RE = re.compile(r"//\s*allow-print:\s+\S")
 PUBLIC_RE = re.compile(r"\.public\b")
 SENSITIVE_RE = re.compile(r"\b(?:token|password|apikey|secret)\b", re.IGNORECASE)
+WEAK_TLS_RE = re.compile(
+    r"NSExceptionMinimumTLSVersion\s*</key>\s*<string>\s*(TLSv1\.0|TLSv1\.1)\s*</string>"
+)
 SKIP_PARTS = {".git", ".build", "checkouts"}
 
 
@@ -219,6 +227,9 @@ def plist_hits(text: str) -> list[tuple[int, str]]:
     for number, line in enumerate(text.splitlines(), start=1):
         if "NSAllowsArbitraryLoads" in line or "NSExceptionAllowsInsecureHTTPLoads" in line:
             hits.append((number, line.strip()))
+    for match in WEAK_TLS_RE.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        hits.append((line, f"NSExceptionMinimumTLSVersion {match.group(1)} is not allowed"))
     return hits
 
 
@@ -288,7 +299,22 @@ def self_test() -> int:
         "<key>NSExceptionAllowsInsecureHTTPLoads</key><true/>\n"
         "</dict></plist>\n"
     )
-    clean_plist = "<plist><dict><key>NSAllowsLocalNetworking</key><true/></dict></plist>\n"
+    weak_tls = (
+        "<plist><dict>\n"
+        "<key>NSExceptionMinimumTLSVersion</key>\n"
+        "<string>TLSv1.0</string>\n"
+        "<key>NSExceptionMinimumTLSVersion</key><string>TLSv1.1</string>\n"
+        "</dict></plist>\n"
+    )
+    clean_plist = (
+        "<plist><dict>\n"
+        "<key>NSAllowsLocalNetworking</key><true/>\n"
+        "<key>NSExceptionMinimumTLSVersion</key>\n"
+        "<string>TLSv1.2</string>\n"
+        "<key>NSExceptionMinimumTLSVersion</key>\n"
+        "<string>TLSv1.3</string>\n"
+        "</dict></plist>\n"
+    )
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         source = root / "Sources"
@@ -312,6 +338,7 @@ def self_test() -> int:
         uitests_plist = root / "Apps" / "Shared" / "UITests" / "Bad.plist"
         uitests_plist.write_text(plist, encoding="utf-8")
         (root / "Info.plist").write_text(plist, encoding="utf-8")
+        (root / "WeakTLS.plist").write_text(weak_tls, encoding="utf-8")
         (source / "Clean.plist").write_text(clean_plist, encoding="utf-8")
         findings = scan(root)
     expected = (
@@ -336,6 +363,8 @@ def self_test() -> int:
         ("Info.plist", "NSAllowsArbitraryLoadsForMedia"),
         ("Info.plist", "NSAllowsArbitraryLoadsInWebContent"),
         ("Info.plist", "NSExceptionAllowsInsecureHTTPLoads"),
+        ("WeakTLS.plist", "TLSv1.0"),
+        ("WeakTLS.plist", "TLSv1.1"),
     )
     failed = False
     for name, token in expected:
