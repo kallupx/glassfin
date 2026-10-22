@@ -26,6 +26,8 @@ bash ../../scripts/ci-grep.sh
 bash ../../scripts/check-entitlements.sh
 python3 ../../scripts/check-debug-only-strings.py --self-test
 python3 ../../scripts/check-debug-only-strings.py
+python3 ../../scripts/check-forbidden-calls.py --self-test
+python3 ../../scripts/check-forbidden-calls.py
 swift-format lint --recursive --strict Package.swift Sources Tests ../../Apps
 ```
 
@@ -43,7 +45,7 @@ The macOS jobs run `scripts/check-release-binary.sh` on the Release `.app` execu
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pull requests to `main` and `cursor/m00-m01-glassfin-core-bd57`, pushes to `main`, and `workflow_dispatch`.
+`.github/workflows/ci.yml` runs on pull requests to `main`, pushes to `main`, and `workflow_dispatch`.
 
 - `lint` (Ubuntu, 10 minutes) runs first and gates GlassfinCore line coverage at 80% (T01-19). macOS jobs `needs: lint`.
 - `test-tvos` and `test-ios` (`xcode-27`, 25 minutes) run on pull requests and `workflow_dispatch` when code, the project, or workflows change. They do not run on push. A spec-only change stays on Linux. iOS runs on a pull request when `Apps/iOS` or `Packages` change. Dependabot skips macOS until the `full-ci` label or `workflow_dispatch`. A grouped dependency pull request needs a green macOS build before merge. See `CONTRIBUTING.md`.

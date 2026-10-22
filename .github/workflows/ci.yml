@@ -4,8 +4,7 @@ on:
   pull_request:
     # `labeled` lets the full-ci label start macOS on a Dependabot pull request.
     types: [opened, synchronize, reopened, labeled]
-    # Stacked PRs target the M00/M01 branch as well as main.
-    branches: [main, cursor/m00-m01-glassfin-core-bd57]
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -80,6 +79,10 @@ jobs:
         run: |
           python3 scripts/check-debug-only-strings.py --self-test
           python3 scripts/check-debug-only-strings.py
+      - name: Forbidden calls
+        run: |
+          python3 scripts/check-forbidden-calls.py --self-test
+          python3 scripts/check-forbidden-calls.py
       - name: Artifact redaction self-test
         run: python3 scripts/redact_artifacts.py --self-test
       - name: Linux package tests and coverage gate
