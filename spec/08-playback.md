@@ -1,18 +1,20 @@
-# M08 – Videotoisto (P0, sovelluksen tärkein moduuli)
+# M08 – Video playback (P0, the application's most important module)
 
-**Riippuvuudet:** M01, M02, M03, M05 ja M07. **Edellytys M08b:lle:** suorituskykyprototyyppi R2 on läpäisty, ja LGPL-ehdot L1–L5 täyttyvät (SPEC.md §7 R9). Lisenssi ei enää ole blokkeri, koska appi on avointa lähdekoodia ja lisenssiehdotus on MPL-2.0.
-**Taustaa (Tutkija, osa 3):** AVPlayer ei avaa MKV:ta eikä tue DTS:ää, TrueHD:ta, PGS:ää tai ASS:ää. Sen vahvuudet ovat natiivi UI, frame rate- ja HDR-matchaus sekä Dolby Vision P5/P8. Apple TV ei bitstreamaa TrueHD:ta tai DTS:ää millään clientillä, ja Atmos onnistuu vain DD+:n (E-AC-3 JOC) kautta.
+**Spec version:** v1.3.3 (22.10.2026). Changes are shown in SPEC.md's change history.
 
-## Jako
-| Osa | Sisältö | Prioriteetti |
+**Dependencies:** M01, M02, M03, M05, and M07. **Prerequisite for M08b:** the R2 performance prototype has passed, and the LGPL conditions L1–L5 are met (SPEC.md §7 R9). The license is no longer a blocker, because the app is open source and the license proposal is MPL-2.0.
+**Background (Researcher, part 3):** AVPlayer does not open MKV and does not support DTS, TrueHD, PGS, or ASS. Its strengths are a native UI, frame-rate and HDR matching, and Dolby Vision P5/P8. Apple TV does not bitstream TrueHD or DTS with any client, and Atmos works only through DD+ (E-AC-3 JOC).
+
+## Split
+| Part | Contents | Priority |
 |---|---|---|
-| **M08a** | AVPlayer-polku: direct play (MP4/MOV/M4V) sekä palvelimen DirectStream (remux HLS:ksi, video kopioidaan) ja Transcode. DeviceProfile, raportointi, natiivi transport bar, raidat, media segments, trickplay ja seuraava jakso. | **P0 (MVP)** |
-| **M08b** | Laitteella tehtävä FFmpeg-remux (MKV → fMP4/HLS paikallisesti) → AVPlayer. Vähentää palvelinkuormaa ja säilyttää DV:n MKV:ssä. | **P1** (edellytys: R2-prototyyppi, LGPL-ehdot L1–L5) |
-| **M14** | Vaihtoehtoinen toistomoottori (VLCKit tai MPVKit) PGS-, ASS- ja DTS/TrueHD-dekoodaukselle ilman transkoodausta. Infuse-pariteetti. | P1 (LGPL-ehdot L1–L5) |
+| **M08a** | The AVPlayer path: direct play (MP4/MOV/M4V) plus the server's DirectStream (remux to HLS, video is copied) and Transcode. DeviceProfile, reporting, the native transport bar, tracks, media segments, trickplay, and the next episode. | **P0 (MVP)** |
+| **M08b** | On-device FFmpeg remux (MKV → fMP4/HLS locally) → AVPlayer. Reduces server load and preserves DV in MKV. | **P1** (prerequisite: the R2 prototype, LGPL conditions L1–L5) |
+| **M14** | An alternative playback engine (VLCKit or MPVKit) for PGS, ASS, and DTS/TrueHD decoding without transcoding. Infuse parity. | P1 (LGPL conditions L1–L5) |
 
-**OLETUS – vaatii käyttäjän vahvistuksen:** MVP:n toistopolku on **AVPlayer ja palvelimen DirectStream/Transcode-fallback**. Fallback tarvitaan joka tapauksessa. Lisenssin osalta laiteremux on nyt sallittu (MPL-2.0-ehdotus ja LGPL-ehdot, SPEC.md §7 R9), mutta se pysyy P1:ssä, koska sen suorituskyky 50–80 Gt:n tiedostoilla on varmistamatta (R2). Se lisätään M08b:ssä, kun R2-prototyyppi läpäisee mittarit.
+**ASSUMPTION – requires user confirmation:** the MVP playback path is **AVPlayer and the server's DirectStream/Transcode fallback**. The fallback is needed in any case. As for the license, on-device remux is now allowed (the MPL-2.0 proposal and the LGPL conditions, SPEC.md §7 R9), but it stays in P1, because its performance on 50–80 GB files is unverified (R2). It is added in M08b once the R2 prototype passes the metrics.
 
-## Player-abstraktio (GlassfinCore/CorePlayback)
+## Player abstraction (GlassfinCore/CorePlayback)
 ```swift
 public protocol PlaybackEngine: AnyObject, Sendable {           // AVPlayerEngine (P0), RemuxEngine (M08b), VLCEngine/MPVEngine (M14)
   var state: AsyncStream<PlaybackState> { get }                 // idle, loading, playing, paused, buffering, ended, failed(PlaybackError)
@@ -21,86 +23,113 @@ public protocol PlaybackEngine: AnyObject, Sendable {           // AVPlayerEngin
   func play(); func pause(); func seek(to: Duration) async
   func select(audio: Track.ID?) async throws; func select(subtitle: Track.ID?) async throws
 }
-public protocol PlaybackCoordinator { /* PlaybackInfo → engine valinta → raportointi → segments → next-up; testattava ilman UI:ta */ }
+public protocol PlaybackCoordinator { /* PlaybackInfo → engine selection → reporting → segments → next-up; testable without UI */ }
 ```
-- `PlaybackCoordinator` on UI-riippumaton, joten iOS käyttää sitä sellaisenaan. tvOS-UI on `AVPlayerViewController`-wrapper (`UIViewControllerRepresentable`).
+- `PlaybackCoordinator` is UI-independent, so iOS uses it as-is. The tvOS UI is an `AVPlayerViewController` wrapper (`UIViewControllerRepresentable`).
 
-## Toiston aloitus (sekvenssi)
-1. Käyttäjä painaa Toista tai Jatka → `POST /Items/{id}/PlaybackInfo` bodyllä `{DeviceProfile, UserId, StartTimeTicks, MaxStreamingBitrate, AudioStreamIndex?, SubtitleStreamIndex?, MediaSourceId?, EnableDirectPlay:true, EnableDirectStream:true, EnableTranscoding:true, AllowVideoStreamCopy:true, AllowAudioStreamCopy:true}`.
-2. Vastauksesta valitaan `MediaSources[0]` (tai käyttäjän valitsema versio):
-   - `SupportsDirectPlay` → `GET /Videos/{id}/stream?static=true&mediaSourceId=&playSessionId=&deviceId=&ApiKey=` (PlayMethod `DirectPlay`).
-   - muuten `TranscodingUrl` (palvelimen HLS; `DirectStream`, jos video ja ääni kopioidaan, muuten `Transcode`). URL on suhteellinen, joten se liitetään palvelimen base-URL:iin. Tarkistetaan, että se sisältää `ApiKey`:n tai lisätään se. **URL:ia ei lokiteta** (S5.1).
-3. `AVURLAsset` → `AVPlayerItem`. `preferredForwardBufferDuration` saa olla oletus.
-4. Ensimmäinen ruutu → `POST /Sessions/Playing` (PlaybackStartInfo: ItemId, MediaSourceId, PlaySessionId, PlayMethod, PositionTicks, AudioStreamIndex, SubtitleStreamIndex, CanSeek).
-5. Edistyminen: `POST /Sessions/Playing/Progress` 10 s välein **sekä heti** pausessa, jatkossa, kelauksen jälkeen ja raidanvaihdossa (`IsPaused`, `PositionTicks`). Transkoodaussessioissa lisäksi `POST /Sessions/Playing/Ping`, jos palvelin sitä vaatii (OLETUS: 30 s).
-6. Lopetus (Menu, loppu tai virhe) → `POST /Sessions/Playing/Stopped {PositionTicks, PlaySessionId, Failed}`. Raportointi sietää verkkovirheen: yksi uudelleenyritys, ja epäonnistunut Stopped tallennetaan muistiin ja lähetetään, kun yhteys palaa (sama appi-istunto).
-7. **Automaattinen fallback:** jos AVPlayerItem menee tilaan `.failed` tai ensimmäistä ruutua ei tule 10 sekunnissa direct playssä, PlaybackInfo pyydetään uudelleen `EnableDirectPlay=false`-asetuksella (→ DirectStream), ja sen jälkeen `AllowVideoStreamCopy=false` (→ Transcode). Käyttäjä näkee vain latausindikaattorin, ellei kaikki epäonnistu. Lopullinen virhe näytetään selkokielisenä ("Tätä tiedostoa ei voitu toistaa", lisätiedot Diagnostiikassa).
+## Playback start (sequence)
+1. The user presses "Play" (fi: "Toista") or "Resume" (fi: "Jatka") → `POST /Items/{id}/PlaybackInfo` with the body `{DeviceProfile, UserId, StartTimeTicks, MaxStreamingBitrate, AudioStreamIndex?, SubtitleStreamIndex?, MediaSourceId?, EnableDirectPlay:true, EnableDirectStream:true, EnableTranscoding:true, AllowVideoStreamCopy:true, AllowAudioStreamCopy:true}`.
+2. `MediaSources[0]` is chosen from the response (or the version the user chose):
+   - `SupportsDirectPlay` → `GET /Videos/{id}/stream?static=true&mediaSourceId=&playSessionId=&deviceId=` (PlayMethod `DirectPlay`). The token is passed per ADR M08-2: primarily a header, fallback `ApiKey=` (only `MediaURLBuilder`).
+   - otherwise `TranscodingUrl` (the server's HLS; `DirectStream` if video and audio are copied, otherwise `Transcode`). The URL is relative, so it is joined to the server's base URL. The token is passed per ADR M08-2. If the URL returned by the server already contains `ApiKey`/`api_key`, it is removed on the header path, so that a header and a query are not used at the same time. **The URL is not logged** (S5.1).
+3. `AVURLAsset` → `AVPlayerItem`. `preferredForwardBufferDuration` may be the default.
+   - **ADR M08-2 – passing the token to media and self-signed servers (one prototype resolves S1.5 and R3), done before M08a's implementation:**
+     - (a) `AVURLAsset(url:, options: ["AVURLAssetHTTPHeaderFieldsKey": ["Authorization": …]])`. ⚠️ **An undocumented key**: behavior on tvOS 26/27, coverage of HLS segments and variant playlists, and App Store acceptability are unverified. It does not solve R3.
+     - (b) **`AVAssetResourceLoaderDelegate`** with a custom scheme (`glassfin-media://`): the app fetches the data with its own URLSession, which adds the header, applies S4.4 pinning, and applies the S4.6 redirect rules. A documented API, which would also solve R3.
+       - ⚠️ **Limitation (Researcher, v1.2; forum reports, unverified on tvOS 26):** the delegate intercepts only custom-scheme URLs. In HLS it in practice intercepts only **playlists and keys, not media segments**: AVPlayer fetches the segments itself, so they get neither a header nor pinning.
+       - Other risks: performance (P5/P7), URL rewriting of playlists, AirPlay, and HDR/DV matching.
+     - (c) Fallback: `ApiKey=` only in media URLs, and mandatory S5 redaction.
+     - **The prototype tests three cases separately** (a result per case into the ADR):
+       1. **Direct play, one file** (`/Videos/{id}/stream?static=true`): does (b) work for the whole file with range requests, or (a)? The goal is a header without `ApiKey`.
+       2. **The server's HLS transcoding** (`TranscodingUrl`): playlists can go through (b), but **segments probably need the `ApiKey` fallback** (c). This is a **risk accepted by Security (v1.2)**, as long as S5 redaction and the S4.6 redirect rule are in effect.
+       3. **Our own loopback remux (M08b):** a local `127.0.0.1` HLS that fetches the source with the app's URLSession (header, pinning, S4.6). **It does not need a token for AVPlayer.** This is the long-term path, which removes `ApiKey` and also solves R3 for HLS.
+     - **Metrics for the ADR:** the three cases work, start P5/P6, seek P7, and a self-signed server plays (cases 1 and 3). The server's logs do not show a token on the header paths.
+     - **Default order:** case 1: (b) → (a) → (c). Case 2: playlist (b) or (a), and segments (c). Case 3: no token. The decision is recorded in ADR M08-2.
+   - **Redirects and the resolved URL ([AGREED] with Security, v1.2, 03-security.md S4.6):**
+     - AVPlayer follows redirects itself, past the app's URLSession delegate. Therefore `MediaURLBuilder` **resolves the final URL with the app's URLSession** under the S4.6 rules (direct play: `HEAD /Videos/{id}/stream`; HLS: `GET` of the master playlist), and **AVPlayer is given only this resolved URL**.
+     - If an `ApiKey` URL redirects to another host or HTTPS → HTTP, playback is rejected (`AppError.insecureRedirect`), and the URL is not given to AVPlayer.
+     - `ApiKey` in the URLs of transcoded HLS segments is an accepted risk, as long as redaction and the redirect rule are in effect.
+4. The first frame → `POST /Sessions/Playing` (PlaybackStartInfo: ItemId, MediaSourceId, PlaySessionId, PlayMethod, PositionTicks, AudioStreamIndex, SubtitleStreamIndex, CanSeek).
+5. Progress: `POST /Sessions/Playing/Progress` every 10 s **and immediately** on pause, resume, after a seek, and on a track change (`IsPaused`, `PositionTicks`). For transcoding sessions, also `POST /Sessions/Playing/Ping` if the server requires it (ASSUMPTION: 30 s).
+6. Stop (Menu, the end, or an error) → `POST /Sessions/Playing/Stopped {PositionTicks, PlaySessionId, Failed}`. Reporting tolerates a network error: one retry, and a failed Stopped is kept in memory and sent when the connection returns (the same app session).
+7. **Automatic fallback:** if the AVPlayerItem goes to `.failed`, or the first frame does not arrive within 10 seconds in direct play, PlaybackInfo is requested again with `EnableDirectPlay=false` (→ DirectStream), and after that with `AllowVideoStreamCopy=false` (→ Transcode). The user sees only a loading indicator, unless everything fails. The final error is shown in plain language ("This file could not be played" (fi: "Tätä tiedostoa ei voitu toistaa"), with further details in Diagnostics).
 
-## DeviceProfile (kipupiste: "tarpeeton transkoodaus")
-- Rakennetaan **ajonaikaisesti laitteen kyvyistä**, ei kovakoodatusta listasta. Swiftfinin `DeviceProfile`-laajennus toimii referenssinä (Tutkijan raportti).
+## DeviceProfile (pain point: "unnecessary transcoding")
+- Built **at runtime from the device's capabilities**, not from a hardcoded list. Swiftfin's `DeviceProfile` extension is the reference (the Researcher's report).
 - DirectPlayProfiles (AVPlayer):
   - Container `mp4, m4v, mov`.
-  - Video `h264, hevc` sekä `av1` vain, jos `VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)`.
-  - Audio `aac, ac3, eac3, alac, flac, mp3`, ja `opus` vain, jos tuki varmistetaan.
-- CodecProfiles: HEVC- ja H.264-levelit ja bit depth. `VideoRangeType` sallii `SDR, HDR10, HLG, DOVI, DOVIWithHDR10, DOVIWithSDR` vain, jos näyttö ja laite tukevat niitä (`AVPlayer.availableHDRModes`, `eligibleForHDRPlayback`). Muuten palvelin tone-mappaa.
-- TranscodingProfiles: `Type=Video, Protocol=hls, Container=mp4 (fMP4)`, VideoCodec `hevc,h264`, AudioCodec `eac3,ac3,aac`, `MaxAudioChannels=8`, `BreakOnNonKeyFrames=true` (tarkistetaan SDK:n kenttänimet).
+  - Video `h264, hevc`, and `av1` only if `VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)`.
+  - Audio `aac, ac3, eac3, alac, flac, mp3`, and `opus` only if support is verified.
+- CodecProfiles: HEVC and H.264 levels and bit depth. `VideoRangeType` allows `SDR, HDR10, HLG, DOVI, DOVIWithHDR10, DOVIWithSDR` only if the display and the device support them (`AVPlayer.availableHDRModes`, `eligibleForHDRPlayback`). Otherwise the server tone-maps.
+- TranscodingProfiles: `Type=Video, Protocol=hls, Container=mp4 (fMP4)`, VideoCodec `hevc,h264`, AudioCodec `eac3,ac3,aac`, `MaxAudioChannels=8`, `BreakOnNonKeyFrames=true` (the SDK's field names are checked).
 - SubtitleProfiles: `vtt` (External/Hls), `mov_text` (Embed). `pgssub, dvdsub, ass/ssa`:
-  - MVP: `Encode` (burn-in palvelimella) PGS:lle, VobSubille ja ASS:lle, kun ne valitaan. ASS:lle vaihtoehto on `vtt`-konversio, jolloin tyylit katoavat (asetus, oletus = konversio).
-  - M14: client-renderöinti.
-- `MaxStreamingBitrate`: LAN 120 Mbps (OLETUS) ja etäyhteys käyttäjän asetus (oletus 20 Mbps). P1: automaattinen arvo `GET /Playback/BitrateTest`-mittauksella.
-- **Diagnostiikka-overlay** (Asetukset → Näytä toistotiedot, tai toistossa Info-paneeli): PlayMethod, `TranscodeReasons`, lähteen ja kohteen koodekit, bitrate ja puskuri. Käyttäjä ja Testaaja näkevät heti, miksi transkoodataan.
+  - MVP: `Encode` (burn-in on the server) for PGS, VobSub, and ASS when they are selected. For ASS, the alternative is a `vtt` conversion, in which case styles are lost (a setting, default = conversion).
+  - M14: client-side rendering.
+- `MaxStreamingBitrate`: LAN 120 Mbps (ASSUMPTION) and, for a remote connection, the user's setting (default 20 Mbps). P1: an automatic value measured with `GET /Playback/BitrateTest`.
+- **Diagnostics overlay** (Settings → "Show playback info" (fi: "Asetukset → Näytä toistotiedot"), or the Info panel during playback): PlayMethod, `TranscodeReasons`, the source and target codecs, bitrate, and buffer. The user and the Tester immediately see why transcoding happens.
 
-## Toistonäkymä ja Siri Remote
-- **Liquid Glass:** toiston kromi on järjestelmän (`AVPlayerViewController`), jonka oletetaan saavan glass-ulkoasun tvOS 26:ssa automaattisesti (⚠️ varmistetaan ADR M05-1:ssä). Omaa transport baria tai kromia ei tehdä, paitsi M14:n VLC-polulla, jossa oma bar matkii järjestelmän glass-ulkoasua (`glassEffect` `GlassEffectContainer`issa). Toiston aikana näkyvissä on max yksi oma glass-overlay (G-3). Tekstitykset eivät ole glassia.
-- **Natiivi `AVPlayerViewController`** (transport bar, clickpad-scrubbaus, ±10 s klikkaus vasemmalle/oikealle, swaipattava scrubbaus ja Info-paneeli alas pyyhkäisemällä).
-- Paneelin sisältö: `transportBarCustomMenuItems` (tvOS 15+) ääni-, tekstitys-, laatu- ja nopeusvalikoille, jos natiivi `AVMediaSelectionGroup`-valikko ei kata kaikkia raitoja (esim. palvelimen ulkoiset tekstitykset). `customInfoViewControllers` näyttää jakson tiedot ja Seuraavat jaksot -välilehden.
-- **Frame rate- ja dynamic range -matchaus:** `appliesPreferredDisplayCriteriaAutomatically = true`. Toiminta riippuu käyttäjän tvOS-asetuksista (Match Content), ja asetuksissa kerrotaan siitä.
-- Now Playing ja MPRemoteCommandCenter: otsikko, sarja, kuva ja kesto Ohjauskeskukseen. Toimii myös iPhonen Remote-sovelluksella.
-- **Fokus toistossa:** kun transport bar on piilossa, ainoa fokusoitava elementti on mahdollinen "Ohita intro" -painike.
+## The playback view and the Siri Remote
+- **Liquid Glass:** playback chrome is the system's (`AVPlayerViewController`), which is assumed to get a glass appearance on tvOS 26 automatically (⚠️ verified in ADR M05-1). The only custom chrome elements are the trickplay overlay (PB2, ADR M08-1) and a possible custom scrub bar. A custom transport bar is otherwise not built, except on M14's VLC path, where a custom bar mimics the system's glass appearance (`glassEffect` inside a `GlassEffectContainer`). During playback, at most one custom glass overlay is visible (G-3). Subtitles are not glass.
+- **The native `AVPlayerViewController`** (the transport bar, clickpad scrubbing, a ±10 s click left/right, swipe scrubbing, and the Info panel by swiping down).
+- The panel's contents: `transportBarCustomMenuItems` (tvOS 15+) for audio, subtitle, quality, and speed menus, if the native `AVMediaSelectionGroup` menu does not cover every track (for example the server's external subtitles). `customInfoViewControllers` shows the episode's details and a Next Up tab (fi: "Seuraavat jaksot").
+- **Frame-rate and dynamic-range matching:** `appliesPreferredDisplayCriteriaAutomatically = true`. Behavior depends on the user's tvOS settings (Match Content), and settings tell the user about it.
+- Now Playing and MPRemoteCommandCenter: title, series, image, and runtime to Control Center. It also works with the iPhone's Remote app.
+- **Focus during playback:** when the transport bar is hidden, the only focusable element is a possible "Skip intro" (fi: "Ohita intro") button.
 
-## Ominaisuudet ja hyväksymiskriteerit
-| ID | Ominaisuus (kipupiste) | Vaatimus | Hyväksymiskriteeri |
+## Features and acceptance criteria
+| ID | Feature (pain point) | Requirement | Acceptance criterion |
 |---|---|---|---|
-| PB1 | Scrubbaus ja kelaus (kipupiste 1) | Natiivi scrubbaus kaikissa PlayMethodeissa. Transkoodauksessa kelaus pyytää uuden streamin `StartTimeTicks`-arvolla, jos HLS ei ulotu kohtaan. | Kelaus mihin tahansa kohtaan toimii direct playssä (P7 ≤ 1,0 s) ja transkoodauksessa (≤ 3 s). ±10 s klikkaus toimii. 20 peräkkäistä kelausta ei jumita toistoa. |
-| PB2 | Trickplay-esikatselu | Kun `Trickplay`-data on olemassa (`fields=Trickplay`), scrubbaus näyttää thumbnailin. Kuvat haetaan `GET /Videos/{id}/Trickplay/{width}/{index}.jpg` (tile-kuva, josta rajataan `Interval`/`TileWidth`/`TileHeight`), ja tilet esiladataan scrubbauksen alkaessa. ⚠️ **Avoin tekninen päätös (ADR M08-1):** AVPlayerViewControllerissa ei ole tvOS:llä julkista API:a omille scrub-thumbnaileille (varmistamatta). Vaihtoehdot: (a) palvelimen HLS I-frame/image-playlist, jos AVPlayer hyödyntää sitä; (b) oma overlay natiivin transport barin päälle; (c) oma transport bar. Koodari tekee 1–2 päivän prototyypin ennen toteutusta ja kirjaa päätöksen. | Trickplay-data olemassa → thumbnail näkyy P8:n rajoissa. Ei dataa → scrubbaus toimii ilman thumbnailia. |
-| PB3 | Raidanvaihto lennossa (kipupiste 3) | Ääni ja tekstitys ovat yhden painalluksen päässä Info-paneelissa. Upotetut raidat (MP4/HLS) vaihdetaan `AVMediaSelectionGroup`illa ilman uudelleenlatausta. Jos raita vaatii palvelimen muutoksen (esim. transkoodaus tai burn-in), PlaybackInfo pyydetään uudella `AudioStreamIndex`/`SubtitleStreamIndex`-arvolla, ja toisto jatkuu samasta kohdasta. | Upotettu raita vaihtuu ≤ 1 s ilman katkosta (P9). Palvelinvaihto ≤ 4 s, ja kohta säilyy ± 2 s. Valinta raportoidaan Progressissa. |
-| PB4 | Raitojen oletusvalinta | Käytetään käyttäjän Jellyfin-asetuksia (`AudioLanguagePreference`, `SubtitleLanguagePreference`, `SubtitleMode`). ⚠️ Kentät tulevat `/Users/Me`-vastauksen `Configuration`-osasta, tarkistettava. Sarjakohtainen muisti: jos käyttäjä vaihtaa raidan jaksossa, sama kieli valitaan seuraavassa jaksossa (P1). | Fixture: käyttäjän kieli fi + elokuvassa fi- ja en-raidat → fi valitaan. |
-| PB5 | Tekstitysten renderöinti (tvOS 26:n CJK-neliöbugi) | Tekstiä sisältävät ulkoiset tekstitykset (SRT/VTT → palvelimelta `Stream.vtt`) renderöidään omalla `SubtitleOverlay`-näkymällä järjestelmäfontilla, jossa on CJK-fallback, tai natiivisti, jos testi osoittaa natiivin toimivan. Tyyliasetukset: koko, tausta ja sijainti (P1). | Testimedia, jossa on japanilainen, kiinalainen ja korealainen SRT sekä ASS (konvertoituna) → merkit näkyvät oikein tvOS 26- ja 27 -simulaattorissa ja laitteella (kuvakaappaus). Ei neliöitä. |
-| PB6 | Media segments: intro, recap, outro, preview ja commercial (kipupiste 7) | `GET /MediaSegments/{id}` toiston alussa. Kun segmentti alkaa, näytetään `contextualActions`-painike "Ohita intro" / "Ohita kertaus" (tvOS 15+ natiivi). Asetus segmenttityypeittäin: **Kysy (oletus) / Ohita automaattisesti / Älä tee mitään** (Android TV:n malli). Painike häviää segmentin päättyessä. | Mock-segmentti Intro 60–150 s → painike näkyy 60 s kohdalla ja häviää 150 s kohdalla. Painallus kelaa 150 s kohtaan. Auto-tila ohittaa ilman painallusta. Ei segmenttejä (palvelin < 10.10 tai ei dataa) → ei virhettä. |
-| PB7 | Seuraava jakso automaattisesti (kipupiste 4) | Jaksolle haetaan seuraava `GET /Shows/{seriesId}/Episodes?startItemId=&limit=2` tai NextUp. Kun Outro-segmentti alkaa (tai 30 s ennen loppua, jos segmenttiä ei ole), näytetään kortti "Seuraava: S1E3 – nimi" (oma `glassEffect`-paneeli, ConcentricRectangle, thumbnail, Reduce Transparency → läpinäkymätön) ja 10 s lähtölaskenta, ja toiminnot ovat "Toista nyt" (`.glassProminent`, oletusfokus) ja "Peru" (`.glass`). Lähtölaskennan jälkeen seuraava jakso alkaa samoilla raitakielillä. Asetus päälle/pois. P1: "Katsotko vielä?" kolmen automaattisen jakson jälkeen ilman käyttäjän toimintaa. | Viimeinen jakso → ei korttia. Muuten lähtölaskenta 10 s → seuraava jakso alkaa, ja edellinen raportoidaan Stopped-kutsulla ja merkitään katsotuksi palvelimella. "Peru" → toisto jatkuu loppuun, ja menu palaa jaksonäkymään, jossa fokus on seuraavassa jaksossa. |
-| PB8 | Jatka katselua | `StartTimeTicks` = `UserData.PlaybackPositionTicks`. Detailissä on "Jatka" ja "Alusta". | Jatka alkaa ± 2 s tallennetusta kohdasta. |
-| PB9 | Katsottu-tila päivittyy (kipupiste 2) | Raportointi kohtien 4–6 mukaan. Stopped päivittää `UserDataStore`n heti. | P14 ≤ 2 s. Palvelimen dashboardilla näkyy aktiivinen sessio oikealla PlayMethodilla. |
-| PB10 | HDR ja Dolby Vision | DV P5/P8 ja HDR10 toistuvat natiivisti, kun näyttö tukee niitä. Muuten palvelin tone-mappaa (DeviceProfile). | Testimatriisin HDR10-, DV P5- ja DV P8.1 MP4 -tiedostot → DirectPlay ja oikea näyttötila (laitetesti). |
-| PB11 | Äänet | E-AC-3 (Atmos JOC) ja AC-3 suoraan. DTS, DTS-HD ja TrueHD → palvelin transkoodaa äänen (E-AC-3 tai monikanavainen AAC, kanavat säilyttäen), ja video kopioidaan (DirectStream). Selitys käyttäjälle Info-paneelissa. | MKV (HEVC + TrueHD 7.1) → DirectStream, video copy, audio transcode (diagnostiikka näyttää sen), ja toisto alkaa P6:n rajoissa. |
-| PB12 | Virhe kesken toiston | Verkkokatkos → puskurointi-indikaattori. Jos toisto ei palaudu 30 sekunnissa, virheviesti ja "Yritä uudelleen", joka jatkaa samasta kohdasta. Token 401 → 02-virhetaulukon mukaan. | Verkkoyhteyden katkaisu 10 s ajaksi → toisto jatkuu yhteyden palattua ilman käyttäjän toimia. |
-| PB13 | Kuvasuhde ja zoom | P1: Aspect fill / fit (`videoGravity`). | – |
-| PB14 | Toistonopeus | P1: 0,5–2× (`AVPlayer.rate`, natiivi nopeusvalikko tvOS 16+). | – |
-| PB15 | Kappaleet (Chapters) | P1: kappalelista Info-paneelissa (`fields=Chapters`) ja hyppy kappaleeseen. | – |
+| PB1 | Scrubbing and seeking (pain point 1) | Native scrubbing in every PlayMethod. During transcoding, a seek requests a new stream with `StartTimeTicks` if HLS does not extend to the position. | Seeking to any position works in direct play (P7 ≤ 1.0 s) and in transcoding (≤ 3 s). A ±10 s click works. 20 consecutive seeks do not stall playback. |
+| PB2 | Trickplay preview | **ADR M08-1 DECIDED (v1.1, the Researcher verified):** `AVPlayerViewController` shows scrub thumbnails only if the HLS master has an `#EXT-X-I-FRAME-STREAM-INF` variant. **Jellyfin does not produce it**, because its trickplay is JPEG sprites (tile images). Therefore **a custom scrubbing overlay is built with Jellyfin's trickplay sprites**, and no server plugin is required. Metadata comes from the field `fields=Trickplay` (`TrickplayInfoDto{Width, Height, TileWidth, TileHeight, ThumbnailCount, Interval}`), and images from `GET /Videos/{id}/Trickplay/{width}/{index}.jpg` (the tile is cropped from the index `floor(pos/Interval)`). Tiles are preloaded when scrubbing starts (the current ± 2 tiles), and the LRU memory is at most 20 tiles. The overlay shows the thumbnail and the timestamp above the scrub position in a glass panel (M05, G-3: at most one custom overlay). Implementation: tracking the native transport bar's scrub state, or, if that cannot be read reliably, a custom scrub bar (`playbackControlsIncludeTransportBar = false` + Siri Remote pan gestures) alongside the native info and menu panels. ⚠️ Which one is possible is resolved in the prototype. A native-like feel is a requirement (clickpad scrubbing, a ±10 s click). **Optional alternative:** a third-party "native trickplay" server plugin that produces an I-frame variant (10.11 only) is mentioned to users, but it is not required. | Trickplay data exists → the thumbnail appears within P8's limits (≤ 150 ms from cache). No data → scrubbing works without a thumbnail. Scrubbing feels native (a UI test and the Tester's assessment of a screen recording). |
+| PB3 | Track change on the fly (pain point 3) | Audio and subtitles are one press away in the Info panel. Embedded tracks (MP4/HLS) are switched with `AVMediaSelectionGroup` without a reload. If a track requires a server-side change (for example transcoding or burn-in), PlaybackInfo is requested with a new `AudioStreamIndex`/`SubtitleStreamIndex`, and playback continues from the same position. | An embedded track switches in ≤ 1 s without an interruption (P9). A server-side switch ≤ 4 s, and the position is preserved within ± 2 s. The selection is reported in Progress. |
+| PB4 | Default track selection | The user's Jellyfin settings are used (`AudioLanguagePreference`, `SubtitleLanguagePreference`, `SubtitleMode`). ⚠️ The fields come from the `Configuration` part of the `/Users/Me` response, to be checked. Per-series memory: if the user changes the track on an episode, the same language is chosen for the next episode (P1). | Fixture: the user's language is fi and the movie has fi and en tracks → fi is chosen. |
+| PB5 | Subtitle rendering (tvOS 26's CJK-box bug) | External subtitles that contain text (SRT/VTT → `Stream.vtt` from the server) are rendered with a custom `SubtitleOverlay` view using the system font, which has a CJK fallback, or natively if a test shows that native works. Style settings: size, background, and position (P1). | Test media with Japanese, Chinese, and Korean SRT plus ASS (converted) → the characters render correctly in the tvOS 26 and 27 simulators and on device (screenshot). No boxes. |
+| PB6 | Media segments: intro, recap, outro, preview, and commercial (pain point 7) | `GET /MediaSegments/{id}` at the start of playback. When a segment starts, a `contextualActions` button is shown, "Skip intro" (fi: "Ohita intro") / "Skip recap" (fi: "Ohita kertaus") (tvOS 15+ native). A setting per segment type: **"Ask" (fi: "Kysy") (default) / "Skip automatically" (fi: "Ohita automaattisesti") / "Do nothing" (fi: "Älä tee mitään")** (the Android TV model). The button disappears when the segment ends. | A mock segment Intro 60–150 s → the button is visible at 60 s and disappears at 150 s. A press seeks to 150 s. Auto mode skips without a press. No segments (server < 10.10, or no data) → no error. |
+| PB7 | The next episode automatically (pain point 4) | The next episode is fetched with `GET /Shows/{seriesId}/Episodes?startItemId=&limit=2` or NextUp. When the Outro segment starts (or 30 s before the end, if there is no segment), a card is shown, "Next: S1E3 – name" (fi: "Seuraava: S1E3 – nimi") (a custom `glassEffect` panel, ConcentricRectangle, a thumbnail, Reduce Transparency → opaque) and a 10 s countdown, and the actions are "Play now" (fi: "Toista nyt") (`.glassProminent`, default focus) and "Cancel" (fi: "Peru") (`.glass`). After the countdown the next episode starts with the same track languages. A setting on/off. P1: "Are you still watching?" (fi: "Katsotko vielä?") after three automatic episodes with no user action. | The last episode → no card. Otherwise a 10 s countdown → the next episode starts, and the previous one is reported with Stopped and marked played on the server. "Cancel" (fi: "Peru") → playback continues to the end, and Menu returns to the episode view with focus on the next episode. |
+| PB8 | Resume | `StartTimeTicks` = `UserData.PlaybackPositionTicks`. Detail has "Resume" (fi: "Jatka") and "Start over" (fi: "Alusta"). | Resume starts within ± 2 s of the saved position. |
+| PB9 | The played state updates (pain point 2) | Reporting per items 4–6. Stopped updates `UserDataStore` immediately. | P14 ≤ 2 s. The server's dashboard shows an active session with the correct PlayMethod. |
+| PB10 | HDR and Dolby Vision | DV P5/P8 and HDR10 play natively when the display supports them. Otherwise the server tone-maps (DeviceProfile). | The test matrix's HDR10, DV P5, and DV P8.1 MP4 files → DirectPlay and the correct display mode (device test). |
+| PB11 | Audio | E-AC-3 (Atmos JOC) and AC-3 directly. DTS, DTS-HD, and TrueHD → the server transcodes the audio (E-AC-3 or multichannel AAC, keeping the channels), and the video is copied (DirectStream). An explanation for the user in the Info panel. | MKV (HEVC + TrueHD 7.1) → DirectStream, video copy, audio transcode (diagnostics shows it), and playback starts within P6's limits. |
+| PB12 | An error during playback | A network drop → a buffering indicator. If playback does not recover within 30 seconds, an error message and "Try again" (fi: "Yritä uudelleen"), which continues from the same position. Token 401 → per 02's error table. | Cutting the network for 10 s → playback continues when the connection returns, without user action. |
+| PB13 | Aspect ratio and zoom | P1: Aspect fill / fit (`videoGravity`). | – |
+| PB14 | Playback speed | P1: 0.5–2× (`AVPlayer.rate`, the native speed menu on tvOS 16+). | – |
+| PB15 | Chapters | P1: a chapter list in the Info panel (`fields=Chapters`) and a jump to a chapter. | – |
 
-## Testimediamatriisi (CI-integraatio ja laitetestit)
-Testaaja ylläpitää listaa, ja tiedostot ovat testipalvelimella:
+## Test-media matrix (CI integration and device tests)
+The Tester maintains the list, and the files are on the test server:
 1. MP4 H.264 AAC stereo (DirectPlay)
 2. MP4 HEVC 10-bit HDR10, E-AC-3 5.1 Atmos (DirectPlay)
 3. MP4 DV P8.1, MP4 DV P5 (DirectPlay)
-4. MKV H.264 AC-3, SRT ulkoinen + upotettu (DirectStream)
-5. MKV HEVC TrueHD 7.1, PGS (DirectStream ja audio transcode, PGS burn-in → Transcode)
-6. MKV HEVC DTS-HD MA, ASS (DirectStream ja audio transcode, ASS → VTT)
+4. MKV H.264 AC-3, external SRT + embedded (DirectStream)
+5. MKV HEVC TrueHD 7.1, PGS (DirectStream and audio transcode, PGS burn-in → Transcode)
+6. MKV HEVC DTS-HD MA, ASS (DirectStream and audio transcode, ASS → VTT)
 7. AVI MPEG-4 Part 2 (Transcode)
-8. 50–80 Gt UHD remux MKV (R2-suorituskyky)
-9. Jakso, jossa intro- ja outro-segmentit sekä trickplay-data
-10. CJK-tekstitykset (ja, zh, ko)
-11. VobSub (12.0 tukee)
+8. A 50–80 GB UHD remux MKV (R2 performance)
+9. An episode with intro and outro segments and trickplay data
+10. CJK subtitles (ja, zh, ko)
+11. VobSub (12.0 supports it)
 
-## Moduulin hyväksymiskriteerit
-- [ ] PB1–PB12 täyttyvät. Jokaisesta on automaattinen testi, kun se on mahdollista (PlaybackCoordinator mockatulla enginellä ja API:lla), ja laitetesti on kirjattu.
-- [ ] Testimatriisin tiedostot 1–7 ja 9–11 toistuvat odotetulla PlayMethodilla (diagnostiikka kirjattu).
-- [ ] Raportointisekvenssi Start → Progress×N → Stopped on verifioitu mock-API:lla, mukaan lukien pause, seek, raidanvaihto ja virhe (`Failed=true`).
-- [ ] Ei token-URL:eja lokeissa (S5).
-- [ ] Muisti P12/P13 ja aloitus P5/P6 täyttyvät.
-- [ ] ADR M08-1 (trickplay-toteutus) on kirjattu ennen PB2:ta.
+## Module acceptance criteria
+- [ ] PB1–PB12 are met. Each has an automatic test where that is possible (PlaybackCoordinator with a mocked engine and API), and a device test is recorded.
+- [ ] Test-matrix files 1–7 and 9–11 play with the expected PlayMethod (diagnostics recorded).
+- [ ] The reporting sequence Start → Progress×N → Stopped is verified with the mock API, including pause, seek, a track change, and an error (`Failed=true`).
+- [ ] No token URLs in logs (S5).
+- [ ] Memory P12/P13 and start P5/P6 are met.
+- [ ] ADR M08-1 (a custom trickplay overlay) is recorded: tracking the native scrub state, or a custom scrub bar.
+- [ ] ADR M08-2 (media-token header / resource loader / ApiKey fallback, and self-signed media) is recorded before M08a's playback path is implemented, and it has a separate result for the three cases: direct play, the server's HLS transcoding, and our own loopback remux.
+- [ ] The URL given to AVPlayer is always the final URL resolved by `MediaURLBuilder`. Mock tests: a cross-host or HTTPS→HTTP redirect of an `ApiKey` URL → playback is rejected, and same-host HTTPS → playback starts.
+- [ ] Reporting never has a negative `PositionTicks` value (M01's tick rules), and an unknown duration does not show a progress bar.
 
-## M08b – laitteella tehtävä remux (P1)
-- **Edellytykset:** LGPL-ehdot L1–L5 (SPEC.md §7 R9): FFmpeg ilman `--enable-gpl`- ja `--enable-nonfree`-optioita, dynaaminen framework, CI-tarkistus, `THIRD_PARTY_LICENSES` ja lisenssinäkymä. Lisäksi R2-prototyyppi läpäissyt: 80 Gt:n UHD-remux käynnistyy ≤ 3 s, kelaus ≤ 2 s, muisti ≤ 500 MB ja 2 tunnin toistossa ei ole drop-outeja.
-- Laajuus: `RemuxEngine` toteuttaa `PlaybackEngine`n (FFmpeg demux MKV → fMP4-segmentit → paikallinen HLS-palvelin tai `AVAssetResourceLoader`). Valitaan DeviceProfilessa direct playksi MKV-containerille, kun koodekit ovat AVPlayer-yhteensopivia.
-- FFmpeg-pohjainen kirjasto: vain LGPL-build. Esim. dynaamisina frameworkeina toimitettu LGPL-2.1+-FFmpeg-build tai oma build. **kingslay/FFmpegKit (GPL-3.0) on kielletty.** Tietoturvapäivitykset S6.3:n mukaan.
-- Lisähyöty: itse allekirjoitettujen palvelinten toisto (S4.4-riski), koska verkkoliikenne kulkee appin oman URLSessionin kautta.
+## M08b – on-device remux (P1)
+- **Prerequisites:** the LGPL conditions L1–L5 (SPEC.md §7 R9): FFmpeg without the `--enable-gpl` and `--enable-nonfree` options, a dynamic framework, a CI check, `THIRD_PARTY_LICENSES`, and the license view. Also, the R2 prototype has passed: an 80 GB UHD remux starts in ≤ 3 s, a seek in ≤ 2 s, memory ≤ 500 MB, and a 2-hour playback has no dropouts.
+- Scope: `RemuxEngine` implements `PlaybackEngine` (FFmpeg demuxes MKV → fMP4 segments → a local HLS server or `AVAssetResourceLoader`). It is chosen in the DeviceProfile as direct play for an MKV container when the codecs are AVPlayer-compatible.
+- An FFmpeg-based library: an LGPL build only. For example an LGPL-2.1+ FFmpeg build shipped as dynamic frameworks, or our own build. **kingslay/FFmpegKit (GPL-3.0) is forbidden.** Security updates per S6.3.
+- An extra benefit: playback from self-signed servers (the S4.4 risk), because the network traffic goes through the app's own URLSession.
+
+## Clarifications v1.3.3 (22.10.2026)
+- **Q8-2-01, the scope of ADR M08-2 and the test environment:**
+  - Queue C resolves case 1 (direct play) and case 2 (the server's HLS). Case 3 (loopback remux) moves to M08b, because it requires FFmpeg. The ADR records for case 3 only the planned token-free model.
+  - macOS runners do not have Docker. Therefore simulator tests run against an in-test mock HTTP(S) server. The mock server serves a small static MP4 plus an HLS playlist and segments, some of which require a header and some `ApiKey`.
+  - The self-signed certificate is created during the CI run with `openssl`. The key is not committed.
+  - Against a real Jellyfin server (Linux Docker), only URL and token construction plus `PlaybackInfo` and `TranscodingUrl` are tested, not playback.
+  - Verification of real transcoding and playback on a device or a local server is done before M08a is merged.
