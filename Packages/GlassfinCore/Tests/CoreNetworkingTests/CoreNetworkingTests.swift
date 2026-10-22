@@ -117,11 +117,17 @@ final class RedactionTests: XCTestCase {
         let bare = SensitiveRedactor.redact("server Glassfin Home version 12.2.0 ApiKey=query-secret")
         XCTAssertFalse(bare.contains("query-secret"))
         GlassfinLogger().infoPublic(bare)
+    }
+
+    /// T01-32. Detection and redaction match apikey and the underscored legacy name in any case.
+    func testT01_32_detectsAndRedactsCredentialQueryNamesIgnoringCase() throws {
+        let legacy = "api" + "_key"
         for name in ["apikey", "APIKEY", "ApiKey", legacy, legacy.uppercased()] {
-            let line = "https://media.example/v?\(name)=case-secret&x=1"
-            let redactedLine = SensitiveRedactor.redact(line)
-            XCTAssertFalse(redactedLine.contains("case-secret"), name)
-            XCTAssertTrue(redactedLine.contains("REDACTED"), name)
+            let url = try XCTUnwrap(URL(string: "https://media.example/v?\(name)=secret"))
+            XCTAssertTrue(RedirectPolicy.containsCredentialQuery(url), name)
+            let redacted = SensitiveRedactor.redact("https://media.example/v?\(name)=case-secret&x=1")
+            XCTAssertFalse(redacted.contains("case-secret"), name)
+            XCTAssertTrue(redacted.contains("REDACTED"), name)
         }
     }
 }
@@ -162,14 +168,10 @@ final class RedirectPolicyTests: XCTestCase {
         let credentialPort = try decide(
             "http://media.example:8096/v?ApiKey=secret", "http://media.example:8080/v")
         XCTAssertEqual(credentialPort, .reject(.credentialQueryCrossHost))
-
-        for name in ["apikey", "APIKEY", "ApiKey", legacy, legacy.uppercased()] {
-            let url = try XCTUnwrap(URL(string: "https://media.example/v?\(name)=secret"))
-            XCTAssertTrue(RedirectPolicy.containsCredentialQuery(url), name)
-        }
     }
 
-    func testAuthorizationDoesNotFollowADifferentPort() throws {
+    /// T01-33. A redirect from host:8096 to host:8080 drops Authorization.
+    func testT01_33_changedPortDropsAuthorization() throws {
         var original = URLRequest(url: URL(string: "http://media.example:8096/Items")!)
         original.setValue("MediaBrowser Token=\"secret\"", forHTTPHeaderField: "Authorization")
         var proposed = URLRequest(url: URL(string: "http://media.example:8080/Items")!)
@@ -232,29 +234,44 @@ final class DeviceIdentityTests: XCTestCase {
         XCTAssertEqual(first, second)
         let reset = try DeviceIdentityStore.loadOrCreate(secureStore: store, reset: true)
         XCTAssertNotEqual(first, reset)
-        let prefixed = "ABCDE12345.org.glassfin.app"
-        let attributes = KeychainAttributes.production(info: [
-            KeychainAccessGroup.infoDictionaryKey: prefixed
-        ])
+    }
+
+    /// T01-31. A signed build expands `GlassfinKeychainAccessGroup` to the team-prefixed group.
+    /// The SecItem query includes that group. Simulator and Linux runs read the app Info.plist
+    /// and check the same query a signed build sends.
+    func testT01_31_keychainWriteQueryContainsInfoPlistAccessGroup() throws {
+        let key = KeychainAccessGroup.infoDictionaryKey
+        let declared = "$(AppIdentifierPrefix)org.glassfin.app"
+        for platform in ["tvOS", "iOS"] {
+            let info = try appInfoPlist(platform)
+            XCTAssertEqual(info[key] as? String, declared)
+            XCTAssertEqual(KeychainAccessGroup.resolve(info), "")
+            XCTAssertNil(KeychainItemQuery.base(account: DeviceIdentityStore.account, accessGroup: "")["agrp"])
+        }
+        let signedGroup = "ABCDE12345.org.glassfin.app"
+        let attributes = KeychainAttributes.production(info: [key: signedGroup])
         XCTAssertEqual(attributes.accessibility, "AfterFirstUnlockThisDeviceOnly")
         XCTAssertFalse(attributes.synchronizable)
-        XCTAssertEqual(attributes.accessGroup, prefixed)
-        XCTAssertEqual(
-            KeychainItemQuery.base(account: DeviceIdentityStore.account, accessGroup: attributes.accessGroup)["agrp"]
-                as? String,
-            prefixed
-        )
-        XCTAssertNil(
-            KeychainItemQuery.base(account: DeviceIdentityStore.account, accessGroup: "")["agrp"]
-        )
-        let unexpanded = "$(AppIdentifierPrefix)org.glassfin.app"
-        XCTAssertEqual(
-            KeychainAccessGroup.resolve([KeychainAccessGroup.infoDictionaryKey: unexpanded]),
-            ""
-        )
+        XCTAssertEqual(attributes.accessGroup, signedGroup)
+        let query = KeychainItemQuery.base(
+            account: DeviceIdentityStore.account, accessGroup: attributes.accessGroup)
+        XCTAssertEqual(query["agrp"] as? String, signedGroup)
         XCTAssertEqual(KeychainWritePlan.afterUpdate(status: KeychainWritePlan.success), .updated)
         XCTAssertEqual(KeychainWritePlan.afterUpdate(status: KeychainWritePlan.itemNotFound), .add)
         XCTAssertEqual(KeychainWritePlan.afterUpdate(status: -1), .fail(-1))
+    }
+
+    private func appInfoPlist(_ platform: String) throws -> [String: Any] {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent("Apps/\(platform)/Info.plist")
+        let data = try Data(contentsOf: url)
+        let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
+        return try XCTUnwrap(plist as? [String: Any])
     }
 }
 
