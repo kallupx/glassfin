@@ -77,20 +77,20 @@ final class T02FoundationTests: XCTestCase {
 
     func testT02_09_userFacingCopyAndDiagnosticsOmitTokens() {
         let log = CapturingLog()
-        XCTAssertEqual(AppErrorMessage.userFacing(.offline), "Ei verkkoyhteyttä")
-        XCTAssertEqual(AppErrorMessage.userFacing(.serverUnreachable), "Palvelimeen ei saada yhteyttä")
-        XCTAssertEqual(AppErrorMessage.userFacing(.forbidden), "Ei oikeuksia tähän toimintoon")
-        XCTAssertEqual(AppErrorMessage.userFacing(.unauthorized), "Istunto päättyi, kirjaudu uudelleen")
-        XCTAssertEqual(AppErrorMessage.userFacing(.invalidCredentials), "Virheellinen käyttäjätunnus tai salasana")
-        XCTAssertEqual(AppErrorMessage.userFacing(.insecureRedirect), "Yhteys ohjattiin turvattomaan osoitteeseen")
-        XCTAssertEqual(AppErrorMessage.userFacing(.notFound), "Kohdetta ei löydy")
-        XCTAssertEqual(AppErrorMessage.userFacing(.serverError(status: 500)), "Palvelin palautti virheen")
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .offline), AppErrorMessage.offlineKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .serverUnreachable), AppErrorMessage.serverDownKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .forbidden), AppErrorMessage.forbiddenKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .unauthorized), AppErrorMessage.sessionEndedKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .invalidCredentials), AppErrorMessage.invalidCredentialsKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .insecureRedirect), AppErrorMessage.insecureRedirectKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .notFound), AppErrorMessage.notFoundKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .serverError(status: 500)), AppErrorMessage.serverErrorKey)
         XCTAssertEqual(
-            AppErrorMessage.userFacing(.playback(.itemFailed(code: "NoCompatibleStream"))),
-            AppErrorMessage.playbackFailed)
+            AppErrorMessage.messageKey(for: .playback(.itemFailed(code: "NoCompatibleStream"))),
+            AppErrorMessage.playbackFailedKey)
         XCTAssertEqual(
-            AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")),
-            "Palvelinversio 10.9.11 ei ole tuettu. Vaaditaan vähintään 10.10.7."
+            AppErrorMessage.messageKey(for: .unsupportedServer(version: "10.9.11")),
+            AppErrorMessage.unsupportedServerKey
         )
         XCTAssertNil(AppErrorMessage.userFacing(.cancelled))
         XCTAssertNil(AppErrorMessage.userFacing(.decoding))
@@ -116,6 +116,33 @@ final class T02FoundationTests: XCTestCase {
             ServerVersionGate.failure(for: SemVer(major: 10, minor: 10, patch: 6)),
             .unsupportedServer(version: "10.10.6")
         )
+    }
+
+    func testAppErrorMessageKeysCoverEveryCase() {
+        let cases: [(AppError, String?)] = [
+            (.offline, AppErrorMessage.offlineKey),
+            (.serverUnreachable, AppErrorMessage.serverDownKey),
+            (.tlsUntrusted(.unavailable), AppErrorMessage.tlsUntrustedKey),
+            (.unauthorized, AppErrorMessage.sessionEndedKey),
+            (.invalidCredentials, AppErrorMessage.invalidCredentialsKey),
+            (.insecureRedirect, AppErrorMessage.insecureRedirectKey),
+            (.forbidden, AppErrorMessage.forbiddenKey),
+            (.notFound, AppErrorMessage.notFoundKey),
+            (.serverError(status: 500), AppErrorMessage.serverErrorKey),
+            (.unsupportedServer(version: "10.9.11"), AppErrorMessage.unsupportedServerKey),
+            (.playback(.itemFailed(code: "NoCompatibleStream")), AppErrorMessage.playbackFailedKey),
+            (.playback(.itemFailed(code: nil)), AppErrorMessage.playbackFailedKey),
+            (.playback(.stalled), AppErrorMessage.playbackFailedKey),
+            (.playback(.fallbackExhausted), AppErrorMessage.playbackFailedKey),
+            (.decoding, nil),
+            (.cancelled, nil),
+            (.internalInvariant, nil),
+        ]
+        for (error, expectedKey) in cases {
+            let key = AppErrorMessage.messageKey(for: error)
+            XCTAssertEqual(key, expectedKey, "\(error)")
+            XCTAssertEqual(AppErrorMessage.userFacing(error) != nil, key != nil, "\(error)")
+        }
     }
 
     func testT02_11_oneBrokenItemIsSkippedWithoutLoggingThePayload() throws {

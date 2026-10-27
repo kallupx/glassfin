@@ -133,8 +133,16 @@ public final class AppState {
     public private(set) var phase: Phase = .launching
     public private(set) var connectivity: Connectivity = .online
     public private(set) var activeServer: ServerInfo?
-    public private(set) var banner: String?
-    public private(set) var sessionNotice: String?
+    public private(set) var bannerKey: String?
+    public private(set) var sessionNoticeKey: String?
+
+    public var banner: String? {
+        bannerKey != nil ? AppErrorMessage.offline : nil
+    }
+
+    public var sessionNotice: String? {
+        sessionNoticeKey != nil ? AppErrorMessage.sessionEnded : nil
+    }
     /// Set when the saved server is below the minimum. The phase enum has no blocked case.
     public private(set) var blockingError: AppError?
     public private(set) var securityNotice: AppError?
@@ -167,11 +175,25 @@ public final class AppState {
     @ObservationIgnored public var onReconnect: (@MainActor () -> Void)?
 
     public var showsServerDown: Bool { connectivity == .serverUnreachable }
+    public var serverDownTitleKey: String { AppErrorMessage.serverDownKey }
     public var serverDownTitle: String { AppErrorMessage.serverDown }
+    public var retryTitleKey: String { AppErrorMessage.retryKey }
     public var retryTitle: String { AppErrorMessage.retry }
+    public var switchServerTitleKey: String { AppErrorMessage.switchServerKey }
     public var switchServerTitle: String { AppErrorMessage.switchServer }
     public var scheduledPingDelay: Duration { NetworkThresholds.serverPingInterval }
     public var playbackBlocked: Bool { connectivity == .offline || connectivity == .serverUnreachable }
+
+    public var playbackBlockedMessageKey: String? {
+        switch connectivity {
+        case .offline:
+            AppErrorMessage.playbackOfflineKey
+        case .serverUnreachable:
+            AppErrorMessage.playbackUnreachableKey
+        case .online, .degraded:
+            nil
+        }
+    }
 
     public var playbackBlockedMessage: String? {
         switch connectivity {
@@ -216,7 +238,7 @@ public final class AppState {
         self.scope = RequestScope()
         if !path.isOnline {
             self.connectivity = .offline
-            self.banner = AppErrorMessage.offline
+            self.bannerKey = AppErrorMessage.offlineKey
         }
     }
 
@@ -290,7 +312,7 @@ public final class AppState {
         }
         log.debug("Signed in.")
         logoutStarted = false
-        sessionNotice = nil
+        sessionNoticeKey = nil
         blockingError = nil
         phase = .signedIn(session)
         activeServer = session.server
@@ -307,7 +329,7 @@ public final class AppState {
             logoutStarted = true
             phase = .needsServer
             activeServer = nil
-            sessionNotice = nil
+            sessionNoticeKey = nil
         } else if activeServer?.id == id {
             phase = .needsServer
             activeServer = nil
@@ -414,7 +436,7 @@ public final class AppState {
         try? secureStore.remove(
             account: SessionCredential.account(serverID: session.server.id, userID: session.userID))
         log.warning("Ended the session after HTTP 401.")
-        sessionNotice = AppErrorMessage.sessionEnded
+        sessionNoticeKey = AppErrorMessage.sessionEndedKey
         phase = .needsLogin(session.server)
         activeServer = session.server
         requestGeneration += 1
@@ -422,7 +444,7 @@ public final class AppState {
 
     private func enterOffline() {
         connectivity = .offline
-        banner = AppErrorMessage.offline
+        bannerKey = AppErrorMessage.offlineKey
         pingArmed = false
         pingTask?.cancel()
     }
@@ -433,14 +455,14 @@ public final class AppState {
             return
         }
         connectivity = .serverUnreachable
-        banner = nil
+        bannerKey = nil
         pingArmed = true
         armPingLoop()
     }
 
     private func recoverFromServerDown() {
         pingArmed = false
-        banner = nil
+        bannerKey = nil
         if connectivity == .serverUnreachable || connectivity == .offline {
             connectivity = .online
         }
@@ -453,7 +475,7 @@ public final class AppState {
             return
         }
         guard connectivity == .offline else { return }
-        banner = nil
+        bannerKey = nil
         connectivity = .online
         onReconnect?()
         scheduleProbe()

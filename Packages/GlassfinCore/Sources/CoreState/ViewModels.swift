@@ -423,7 +423,11 @@ public final class SeriesViewModel {
 @Observable
 public final class PlayerViewModel {
     public private(set) var state: LoadState<PlaybackSource> = .idle
-    public private(set) var stallMessage: String?
+    public private(set) var stallMessageKey: String?
+
+    public var stallMessage: String? {
+        stallMessageKey != nil ? AppErrorMessage.buffering : nil
+    }
     public private(set) var method: PlayMethod?
 
     @ObservationIgnored private let playback: any PlaybackInfoService
@@ -487,9 +491,9 @@ public final class PlayerViewModel {
 
     public func noteBuffering(elapsed: Duration) {
         if elapsed > NetworkThresholds.stallMessageAfter {
-            stallMessage = AppErrorMessage.buffering
+            stallMessageKey = AppErrorMessage.bufferingKey
         } else {
-            stallMessage = nil
+            stallMessageKey = nil
         }
     }
 
