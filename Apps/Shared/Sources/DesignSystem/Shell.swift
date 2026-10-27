@@ -25,7 +25,8 @@ struct LibraryTabShell: View {
         .accessibilityIdentifier("design.shell.root")
     }
 
-    private var homeTab: some View {
+    @TabContentBuilder<String>
+    private var homeTab: some TabContent<String> {
         Tab(value: "home") {
             home
         } label: {
@@ -33,7 +34,8 @@ struct LibraryTabShell: View {
         }
     }
 
-    private func libraryTab(_ library: LibraryTabItem) -> some View {
+    @TabContentBuilder<String>
+    private func libraryTab(_ library: LibraryTabItem) -> some TabContent<String> {
         Tab(value: library.id) {
             Text(verbatim: library.title)
                 .accessibilityIdentifier("design.library.\(library.id)")
@@ -47,7 +49,8 @@ struct LibraryTabShell: View {
         }
     }
 
-    private var overflowTab: some View {
+    @TabContentBuilder<String>
+    private var overflowTab: some TabContent<String> {
         Tab(value: "libraries") {
             VStack(alignment: .leading, spacing: SpacingToken.m) {
                 Copy.text(.tabLibraries)
@@ -64,7 +67,8 @@ struct LibraryTabShell: View {
         }
     }
 
-    private var searchTab: some View {
+    @TabContentBuilder<String>
+    private var searchTab: some TabContent<String> {
         Tab(value: "search", role: .search) {
             Copy.text(.tabSearch)
                 .accessibilityIdentifier("design.search.root")
@@ -73,7 +77,8 @@ struct LibraryTabShell: View {
         }
     }
 
-    private var settingsTab: some View {
+    @TabContentBuilder<String>
+    private var settingsTab: some TabContent<String> {
         Tab(value: "settings") {
             Copy.text(.tabSettings)
                 .accessibilityIdentifier("design.settings.root")
