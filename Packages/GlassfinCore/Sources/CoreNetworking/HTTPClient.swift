@@ -97,6 +97,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         self.init(
             server: server,
@@ -118,6 +119,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         self.init(
             server: server,
             identity: identity,
@@ -181,7 +183,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.cancelled
         } catch {
             if Task.isCancelled { throw APIError.cancelled }
-            log.error("Request failed for \(SensitiveRedactor.redact(urlRequest.url?.absoluteString ?? request.path))")
+            log.error("Request failed.")
             throw APIError.network
         }
     }

@@ -58,8 +58,8 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: MetadataSanitizer.plainText(dto.Name ?? ""),
-            overview: dto.Overview.map(MetadataSanitizer.plainText),
+            name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            overview: dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) },
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,
@@ -77,7 +77,9 @@ public enum DTOMapper {
 
     public static func library(_ dto: BaseItemDTO) -> Library? {
         guard let id = dto.Id else { return nil }
-        return Library(id: id, name: MetadataSanitizer.plainText(dto.Name ?? ""), collectionType: dto.CollectionType)
+        return Library(
+            id: id, name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            collectionType: dto.CollectionType)
     }
 
     public static func page(_ dto: QueryResultDTO, log: any GlassfinLog) -> Page<MediaItem> {
