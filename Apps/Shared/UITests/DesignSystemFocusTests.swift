@@ -36,7 +36,10 @@ final class DesignSystemFocusTests: XCTestCase {
             remote(.down)
             waitUntilFocused(card)
             remote(.select, forDuration: 1.5)
-            require(app.buttons["design.context.play"], timeout: 8)
+            // tvOS exposes the native menu action as an identified Other inside a focused Cell.
+            let play = app.cells.containing(.any, identifier: "design.context.play").firstMatch
+            require(play, timeout: 8)
+            waitUntilFocused(play)
         }
 
         func testT05_12_rowFocusReturnsToTheRememberedPoster() {

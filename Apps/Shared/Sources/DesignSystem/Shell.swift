@@ -154,16 +154,45 @@ struct NavigationPrototype: View {
 
     @ViewBuilder
     private func navScreen(_ key: CopyKey, identifier: String) -> some View {
-        let screen = Copy.text(key)
-            .font(.largeTitle)
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityIdentifier(identifier)
         #if os(tvOS)
-            // Menu commands need a focus target inside the navigation stack.
-            screen.focusable()
+            NavigationFocusScreen(title: key, identifier: identifier)
         #else
-            screen
+            Copy.text(key)
+                .font(.largeTitle)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier(identifier)
         #endif
     }
 }
+
+#if os(tvOS)
+    private struct NavigationFocusScreen: View {
+        var title: CopyKey
+        var identifier: String
+
+        @FocusState private var focused: Bool
+        @Namespace private var focusScope
+
+        var body: some View {
+            VStack {
+                Button(action: {}) {
+                    Copy.text(title)
+                        .font(.largeTitle)
+                        .foregroundStyle(.primary)
+                }
+                .focused($focused)
+                .prefersDefaultFocus(in: focusScope)
+                .accessibilityIdentifier(identifier)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .focusScope(focusScope)
+            .onAppear {
+                // Wait until the pushed or revealed screen has joined the focus hierarchy.
+                DispatchQueue.main.async {
+                    focused = true
+                }
+            }
+        }
+    }
+#endif

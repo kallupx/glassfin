@@ -50,6 +50,8 @@ struct HeroHeader: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 640)
+        // The full hero guides Down from the tab bar to the action bar's default Play button.
+        .designFocusSection()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.hero.root")
     }
