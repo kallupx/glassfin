@@ -30,8 +30,24 @@ public struct BoundedMediaBody: Sendable {
         if !playlist, data.count <= 64 {
             playlist = PlaylistSniffer.isPlaylist(contentType: contentType, body: data)
         }
-        guard data.count < (playlist ? MediaLoaderLimits.playlistBytes : byteLimit) else { throw .decoding }
+        guard remainingByteCount > 0 else { throw .decoding }
         data.append(byte)
+    }
+
+    /// Keeps the same accepted prefix on failure as repeated single-byte appends.
+    public mutating func append(contentsOf bytes: Data) throws(APIError) {
+        var pending = bytes[...]
+        // Preserve prefix sniffing before each limit check, even across chunks.
+        while !pending.isEmpty, !playlist, data.count <= 64 {
+            try append(pending.removeFirst())
+        }
+        let accepted = min(pending.count, remainingByteCount)
+        data.append(contentsOf: pending.prefix(accepted))
+        guard accepted == pending.count else { throw .decoding }
+    }
+
+    var remainingByteCount: Int {
+        (playlist ? MediaLoaderLimits.playlistBytes : byteLimit) - data.count
     }
 }
 
