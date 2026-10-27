@@ -90,31 +90,133 @@ def authenticate(username: str) -> str:
     raise SystemExit(1)
 
 
+def decoded(raw: bytes):
+    try:
+        return json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+def report(message: str, token: str = "") -> None:
+    # Log only selected fields, never response bodies or request headers.
+    message = message.replace(PASSWORD, "[redacted]")
+    if token:
+        message = message.replace(token, "[redacted]")
+    print(f"bootstrap: {message}", file=sys.stderr, flush=True)
+
+
+def virtual_folders(token: str):
+    status, raw = request("GET", "/Library/VirtualFolders", token=token)
+    folders = decoded(raw)
+    return status, folders if isinstance(folders, list) else []
+
+
+def scheduled_tasks(token: str):
+    status, raw = request("GET", "/ScheduledTasks", token=token)
+    tasks = decoded(raw)
+    return status, tasks if isinstance(tasks, list) else []
+
+
+def scan_task(tasks: list) -> dict | None:
+    return next((task for task in tasks if task.get("Key") == "RefreshLibrary" and task.get("Id")), None)
+
+
+def diagnostics(token: str) -> None:
+    status, folders = virtual_folders(token)
+    paths = [
+        {"Name": folder.get("Name"), "Locations": folder.get("Locations"),
+         "PathInfos": (folder.get("LibraryOptions") or {}).get("PathInfos")}
+        for folder in folders
+    ]
+    report(f"GET /Library/VirtualFolders HTTP {status}: {json.dumps(paths)}", token)
+    status, tasks = scheduled_tasks(token)
+    states = [
+        {"Key": task.get("Key"), "State": task.get("State"),
+         "LastStatus": (task.get("LastExecutionResult") or {}).get("Status")}
+        for task in tasks
+    ]
+    report(f"GET /ScheduledTasks HTTP {status}: {json.dumps(states)}", token)
+
+
+def fail(message: str, token: str) -> None:
+    report(message, token)
+    diagnostics(token)
+    raise SystemExit(1)
+
+
+def wait_for_scan_ready(token: str) -> None:
+    """Wait for the worker and let any startup scan finish before changing libraries.
+
+    In 12.2 CancelIfRunning can race with a finishing worker clearing its token
+    source. Two idle reads avoid cancelling the initial scan during that window.
+    """
+    deadline = time.monotonic() + 180
+    idle_reads = 0
+    while time.monotonic() < deadline:
+        status, tasks = scheduled_tasks(token)
+        task = scan_task(tasks) if status == 200 else None
+        if task and task.get("State") == "Idle":
+            idle_reads += 1
+            if idle_reads >= 2:
+                return
+        else:
+            idle_reads = 0
+        time.sleep(2)
+    fail("scan worker did not become ready within 180s", token)
+
+
 def add_library(token: str) -> None:
-    status, _ = request(
-        "POST",
-        "/Library/VirtualFolders",
-        token=token,
-        query={"name": "Movies", "collectionType": "movies", "paths": "/media", "refreshLibrary": "true"},
-    )
-    if status in (200, 204):
-        return
-    status, _ = request(
-        "POST",
-        "/Library/VirtualFolders",
-        body={"LibraryOptions": {"PathInfos": [{"Path": "/media"}]}},
-        token=token,
-        query={"name": "Movies", "collectionType": "movies", "refreshLibrary": "true"},
-    )
-    if status not in (200, 204):
-        print(f"bootstrap: add library HTTP {status}", file=sys.stderr)
-        raise SystemExit(1)
+    def movies() -> dict | None:
+        status, folders = virtual_folders(token)
+        if status != 200:
+            fail(f"GET /Library/VirtualFolders HTTP {status}", token)
+        return next((folder for folder in folders if folder.get("Name") == "Movies"), None)
+
+    folder = movies()
+    # Both creation forms exist in 10.10, 10.11 and 12. Verify persisted paths
+    # after each attempt, even on 2xx or an error after a partial creation.
+    for body, paths in [(None, {"paths": "/media"}),
+                        ({"LibraryOptions": {"PathInfos": [{"Path": "/media"}]}}, {})]:
+        if folder is not None:
+            break
+        status, _ = request(
+            "POST", "/Library/VirtualFolders", body=body, token=token,
+            query={"name": "Movies", "collectionType": "movies", "refreshLibrary": "false", **paths},
+        )
+        report(f"POST /Library/VirtualFolders HTTP {status}", token)
+        folder = movies()
+    if folder is not None and "/media" not in (folder.get("Locations") or []):
+        status, _ = request(
+            "POST", "/Library/VirtualFolders/Paths", token=token,
+            body={"Name": "Movies", "Path": "/media", "PathInfo": {"Path": "/media"}},
+            query={"refreshLibrary": "false"},
+        )
+        report(f"POST /Library/VirtualFolders/Paths HTTP {status}", token)
+        folder = movies()
+    if folder is None or "/media" not in (folder.get("Locations") or []):
+        fail("Movies library does not contain /media", token)
+    report("verified Movies library path /media", token)
+
+
+def refresh_library(token: str) -> bool:
+    for attempt in range(6):
+        status, _ = request("POST", "/Library/Refresh", token=token)
+        report(f"POST /Library/Refresh HTTP {status} (attempt {attempt + 1})", token)
+        if status in (200, 204):
+            return True
+        if status != 0 and not 500 <= status < 600:
+            break
+        if attempt < 5:
+            time.sleep(2 ** attempt)
+    return False
 
 
 def wait_for_movie(token: str) -> None:
-    deadline = time.time() + 120
-    request("POST", "/Library/Refresh", token=token)
-    while time.time() < deadline:
+    refresh_library(token)
+    deadline = time.monotonic() + 240
+    next_scan = time.monotonic() + 15
+    status = 0
+    while time.monotonic() < deadline:
         status, raw = request(
             "GET",
             "/Items",
@@ -122,18 +224,23 @@ def wait_for_movie(token: str) -> None:
             query={"Recursive": "true", "IncludeItemTypes": "Movie", "Limit": "5"},
         )
         if status == 200:
-            count = json.loads(raw).get("TotalRecordCount") or 0
+            items = decoded(raw)
+            count = (items.get("TotalRecordCount") or 0) if isinstance(items, dict) else 0
             if count >= 1:
                 print("bootstrap: movie is in the library")
                 return
+        if time.monotonic() >= next_scan:
+            task_status, tasks = scheduled_tasks(token)
+            task = scan_task(tasks) if task_status == 200 else None
+            # 12.2's refresh controller logs exceptions but still returns 204.
+            # Start an idle worker directly if refresh did not discover the movie.
+            if task and task.get("State") == "Idle":
+                task_id = urllib.parse.quote(str(task["Id"]), safe="")
+                started, _ = request("POST", f"/ScheduledTasks/Running/{task_id}", token=token)
+                report(f"start RefreshLibrary task HTTP {started}", token)
+            next_scan = time.monotonic() + 30
         time.sleep(3)
-    print("bootstrap: library scan found no movie", file=sys.stderr)
-    raise SystemExit(1)
-
-
-def detail(raw: bytes) -> str:
-    text = raw.decode("utf-8", "replace")
-    return text.replace(PASSWORD, "[redacted]")[:500]
+    fail(f"library scan found no movie within 240s; GET /Items HTTP {status}", token)
 
 
 def publish_username(name: str) -> None:
@@ -155,11 +262,9 @@ def startup_user() -> str:
     """
     deadline = time.time() + 60
     placeholder = ""
-    last = b""
     status = 0
     while time.time() < deadline and not placeholder:
         status, raw = request("GET", "/Startup/User")
-        last = raw
         if status == 200:
             try:
                 placeholder = str(json.loads(raw).get("Name") or "")
@@ -174,15 +279,15 @@ def startup_user() -> str:
     if placeholder and placeholder not in names:
         names.append(placeholder)
     if not names:
-        print(f"bootstrap: startup user HTTP {status} {detail(last)}", file=sys.stderr)
+        report(f"startup user HTTP {status}")
         raise SystemExit(1)
     while time.time() < deadline:
         for name in names:
-            status, last = request("POST", "/Startup/User", {"Name": name, "Password": PASSWORD})
+            status, _ = request("POST", "/Startup/User", {"Name": name, "Password": PASSWORD})
             if status in (200, 204):
                 return name
         time.sleep(2)
-    print(f"bootstrap: startup user HTTP {status} {detail(last)}", file=sys.stderr)
+    report(f"startup user HTTP {status}")
     raise SystemExit(1)
 
 
@@ -191,12 +296,13 @@ def main() -> None:
     username = USER
     if not info.get("StartupWizardCompleted"):
         username = startup_user()
-        completed, body = request("POST", "/Startup/Complete")
+        completed, _ = request("POST", "/Startup/Complete")
         if completed not in (200, 204):
-            print(f"bootstrap: startup complete HTTP {completed} {detail(body)}", file=sys.stderr)
+            report(f"startup complete HTTP {completed}")
             raise SystemExit(1)
     publish_username(username)
     token = authenticate(username)
+    wait_for_scan_ready(token)
     add_library(token)
     wait_for_movie(token)
 

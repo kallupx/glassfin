@@ -218,10 +218,24 @@
                 let contentType = http.value(forHTTPHeaderField: "Content-Type")
                 var body = BoundedMediaBody(contentType: contentType, url: request.url, range: request.range)
                 if request.method != "HEAD", (200..<300).contains(http.statusCode) {
+                    let chunkBytes = 64 * 1_024
+                    var chunk = Data()
+                    chunk.reserveCapacity(chunkBytes)
+                    // Read at most one byte beyond the current limit so an oversized
+                    // response fails immediately, including a very short range probe.
+                    var nextChunkBytes = min(chunkBytes, body.remainingByteCount + 1)
+                    try Task.checkCancellation()
                     for try await byte in bytes {
-                        try Task.checkCancellation()
-                        try body.append(byte)
+                        chunk.append(byte)
+                        if chunk.count == nextChunkBytes {
+                            try Task.checkCancellation()
+                            try body.append(contentsOf: chunk)
+                            chunk.removeAll(keepingCapacity: true)
+                            nextChunkBytes = min(chunkBytes, body.remainingByteCount + 1)
+                        }
                     }
+                    try Task.checkCancellation()
+                    try body.append(contentsOf: chunk)
                 }
                 let data = body.data
                 let total =
