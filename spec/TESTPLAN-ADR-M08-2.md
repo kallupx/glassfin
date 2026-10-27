@@ -78,7 +78,7 @@
 |---|---|---|---|---|
 | T08-2-38 | A resource loader request ends in a timeout or 503 | `loadingRequest` finishes with an error, playback does not get stuck and the state becomes `failed`. The token is kept | 02 §3, S2.2 | X |
 | T08-2-39 | 🔒 A resource loader media request returns 401, and the check `GET /Users/Me` returns 200 | Playback is stopped, and the mock verifies exactly one `/Users/Me` call. The user **stays signed in**, the token stays in the Keychain and a playback error is shown | 03 T1.3.3/Q8-2-09, S2.2 | X |
-| T08-2-49 | 🔒 A resource loader media request returns 401, and the check `GET /Users/Me` returns 401 | Playback is stopped. The user is signed out per S2.2: the token is removed, and the sign-in view is shown with the message "Session expired" (fi: "Istunto päättyi") only once | 03 T1.3.3/Q8-2-09, S2.2, 02 §3 | X |
+| T08-2-49 | 🔒 A resource loader media request returns 401, and the check `GET /Users/Me` returns 401 | Playback is stopped. The user is signed out per S2.2: the token is removed, and the sign-in view is shown with the message "Session expired, please sign in again" (fi: "Istunto päättyi, kirjaudu uudelleen") only once | 03 T1.3.3/Q8-2-09, S2.2, 02 §3 | X |
 | T08-2-40 | Playback is left with Menu in the native `AVPlayerViewController` (no custom UI) | The resource loader's URLSession tasks are cancelled, and no requests are made after leaving. No focus trap appears, and Menu returns to the test view | 02 §1, 08 Playback view | X, U |
 | T08-2-41 | Poor network (3G profile) and a 10 s network outage on the (b) path | The observation is recorded in the ADR: buffering and recovery. The acceptance limit is M08a's PB12, not an ADR metric | 02 §3 Poor network, 08 PB12 | X, M |
 
