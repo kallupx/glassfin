@@ -40,7 +40,7 @@ struct MediaRow: View {
                 .padding(.vertical, SpacingToken.m)
             }
         }
-        .focusSection()
+        .designFocusSection()
         .defaultFocus($focus, preferred, priority: .userInitiated)
         .onChange(of: focus) { _, newValue in
             if let newValue {
