@@ -1,9 +1,9 @@
 import XCTest
 
-@MainActor
 final class T07LibraryUITests: XCTestCase {
     /// T07-43/T07-48/T07-49: Q7-25 keeps the single-season picker visible and reachable.
-    func testT07_43_singleSeasonPickerStaysVisible() {
+    @MainActor
+    func testT07_43_singleSeasonPickerStaysVisible() async {
         let app = launch("series-single-season")
         let picker = element(app, "series.seasons")
         let season = element(app, "series.season.000000000000000000000000000007d1")
@@ -26,7 +26,8 @@ final class T07LibraryUITests: XCTestCase {
 
     #if os(tvOS)
         /// T07-44/T07-50: only the selected season's row is visible, including a one-episode season.
-        func testT07_44_twoSeasonPickerReplacesEpisodesAndKeepsFocus() {
+        @MainActor
+        func testT07_44_twoSeasonPickerReplacesEpisodesAndKeepsFocus() async {
             let app = launch("series-two-seasons")
             focused(element(app, "detail.play"))
             let seasonOne = element(app, "series.season.000000000000000000000000000007d1")
@@ -55,7 +56,8 @@ final class T07LibraryUITests: XCTestCase {
         }
 
         /// T07-48/T07-49/T07-51: returning from detail keeps the short episode and its season reachable.
-        func testT07_51_shortSecondSeasonEpisodeDetailReturnsToSameEpisode() {
+        @MainActor
+        func testT07_51_shortSecondSeasonEpisodeDetailReturnsToSameEpisode() async {
             let app = launch("series-two-seasons")
             focused(element(app, "detail.play"))
             XCUIRemote.shared.press(.down)
@@ -84,7 +86,8 @@ final class T07LibraryUITests: XCTestCase {
         }
 
         /// T07-19: canonical spec/TESTPLAN-M07.md.
-        func testT07_19_detailBackRestoresTheSameGridCardAndScrollPosition() {
+        @MainActor
+        func testT07_19_detailBackRestoresTheSameGridCardAndScrollPosition() async {
             let app = launch("grid")
             let first = element(app, "library.item.00000000000000000000000000000064")
             require(first)
@@ -110,7 +113,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-46: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_46_playIsDefaultAndInProgressEpisodeIsVisible() {
+        @MainActor
+        func testT07_46_playIsDefaultAndInProgressEpisodeIsVisible() async {
             let app = launch("series")
             let play = element(app, "detail.play")
             focused(play)
@@ -124,7 +128,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-50: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_50_focusOnSeasonChangesRowWithoutSelectingOrLeavingPicker() {
+        @MainActor
+        func testT07_50_focusOnSeasonChangesRowWithoutSelectingOrLeavingPicker() async {
             let app = launch("series")
             focused(element(app, "detail.play"))
             XCUIRemote.shared.press(.down)
@@ -139,7 +144,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-48: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_48_downFromSeasonTargetsThatSeasonsFirstUnplayedEpisode() {
+        @MainActor
+        func testT07_48_downFromSeasonTargetsThatSeasonsFirstUnplayedEpisode() async {
             let app = launch("series")
             enterEpisodes(app)
             focused(element(app, "series.episode.000000000000000000000000000075fd"))
@@ -148,7 +154,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-49: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_49_upFromEpisodeReturnsToSelectedSeason() {
+        @MainActor
+        func testT07_49_upFromEpisodeReturnsToSelectedSeason() async {
             let app = launch("series")
             enterEpisodes(app)
             XCUIRemote.shared.press(.right)
@@ -159,7 +166,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-51: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_51_playbackReturnHookRestoresSameEpisode() {
+        @MainActor
+        func testT07_51_playbackReturnHookRestoresSameEpisode() async {
             let app = launch("series-return")
             enterEpisodes(app)
             XCUIRemote.shared.press(.right)
@@ -173,7 +181,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-51: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_51_finishedPlaybackReturnHookMovesToNextEpisode() {
+        @MainActor
+        func testT07_51_finishedPlaybackReturnHookMovesToNextEpisode() async {
             let app = launch("series-finished")
             enterEpisodes(app)
             XCUIRemote.shared.press(.playPause)
@@ -184,7 +193,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-52: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_52_episodeOverviewNeverReceivesFocus() {
+        @MainActor
+        func testT07_52_episodeOverviewNeverReceivesFocus() async {
             let app = launch("series")
             enterEpisodes(app)
             let overview = element(app, "series.overview")
@@ -199,7 +209,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-53: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_53_episodeCardNavigatesToEpisodeDetail() {
+        @MainActor
+        func testT07_53_episodeCardNavigatesToEpisodeDetail() async {
             let app = launch("series")
             enterEpisodes(app)
             XCUIRemote.shared.press(.select)
@@ -211,7 +222,8 @@ final class T07LibraryUITests: XCTestCase {
 
         /// T07-63: canonical spec/TESTPLAN-M07.md.
 
-        func testT07_63_serverDownMidBrowseKeepsCardsAndShowsBanner() {
+        @MainActor
+        func testT07_63_serverDownMidBrowseKeepsCardsAndShowsBanner() async {
             let app = launch("down")
             require(element(app, "library.item.00000000000000000000000000000064"))
             for _ in 0..<8 { XCUIRemote.shared.press(.down) }
@@ -221,6 +233,7 @@ final class T07LibraryUITests: XCTestCase {
             save(app, name: "T07-63-retained-content")
         }
 
+        @MainActor
         private func enterEpisodes(_ app: XCUIApplication) {
             focused(element(app, "detail.play"))
             XCUIRemote.shared.press(.down)
@@ -228,6 +241,7 @@ final class T07LibraryUITests: XCTestCase {
             XCUIRemote.shared.press(.down)
         }
 
+        @MainActor
         private func focused(_ element: XCUIElement) {
             require(element)
             let expectation = XCTNSPredicateExpectation(
@@ -236,14 +250,18 @@ final class T07LibraryUITests: XCTestCase {
         }
     #endif
 
+    @MainActor
     private func launch(_ scenario: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-library", scenario, "-AppleLanguages", "(en)"]
         app.launch()
         return app
     }
+    @MainActor
     private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
+    @MainActor
     private func require(_ element: XCUIElement) { XCTAssertTrue(element.waitForExistence(timeout: 20)) }
+    @MainActor
     private func save(_ app: XCUIApplication, name: String) {
         let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)

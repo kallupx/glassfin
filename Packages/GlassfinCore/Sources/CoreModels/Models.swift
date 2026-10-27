@@ -37,7 +37,7 @@ public struct UserSession: Sendable, Hashable, Codable, CustomStringConvertible 
     public init(server: ServerInfo, userID: String, userName: String, isAdministrator: Bool) {
         self.server = server
         self.userID = userID
-        self.userName = userName
+        self.userName = MetadataSanitizer.displayText(userName, limit: MetadataPolicy.nameMax)
         self.isAdministrator = isAdministrator
     }
 
@@ -125,7 +125,7 @@ public struct ChapterMark: Sendable, Hashable, Codable {
     public var start: Duration
 
     public init(name: String?, start: Duration) {
-        self.name = name
+        self.name = name.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         self.start = start
     }
 }
@@ -188,7 +188,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
     ) {
         self.id = id
         self.kind = kind
-        self.name = name
+        self.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
         self.overview = overview
         self.seriesID = seriesID
         self.seasonID = seasonID
@@ -213,7 +213,7 @@ public struct Library: Sendable, Identifiable, Hashable, Codable {
 
     public init(id: String, name: String, collectionType: String? = nil) {
         self.id = id
-        self.name = name
+        self.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
         self.collectionType = collectionType
     }
 }
@@ -318,9 +318,9 @@ public struct Track: Sendable, Identifiable, Hashable, Codable {
 
     public init(id: Int, displayTitle: String? = nil, language: String? = nil, codec: String? = nil) {
         self.id = id
-        self.displayTitle = displayTitle
-        self.language = language
-        self.codec = codec
+        self.displayTitle = displayTitle.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.language = language.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.codec = codec.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
     }
 }
 

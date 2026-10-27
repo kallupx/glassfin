@@ -58,7 +58,7 @@ public final class LibrarySession {
         do {
             let values = try await service.userViews().filter { ItemID($0.id) != nil }.map {
                 Library(
-                    id: $0.id, name: MetadataPolicy.clean($0.name, limit: MetadataPolicy.nameMax),
+                    id: $0.id, name: MetadataSanitizer.displayText($0.name, limit: MetadataPolicy.nameMax),
                     collectionType: $0.collectionType)
             }
             guard !Task.isCancelled, generation == app.requestGeneration else { return }

@@ -46,7 +46,7 @@ struct LibraryArtwork: View {
 extension PosterContent {
     init(item: MediaItem) {
         id = item.id
-        title = MetadataPolicy.clean(item.name, limit: MetadataPolicy.nameMax)
+        title = MetadataSanitizer.displayText(item.name, limit: MetadataPolicy.nameMax)
         progress = PlaybackProgress.measure(position: item.userData.playbackPosition, runtime: item.runtime)
         isWatched = item.userData.played
         unplayedCount = item.userData.unplayedCount

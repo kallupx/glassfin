@@ -3,6 +3,92 @@ import Foundation
 import XCTest
 
 final class T07MetadataTests: XCTestCase {
+    func testT07_77_displayTextCapsFiveHundredGraphemesWithoutSplittingCharacters() {
+        let raw = String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)
+        XCTAssertEqual(raw.count, 500)
+        let shown = MetadataSanitizer.displayText(raw, limit: MetadataPolicy.nameMax)
+        XCTAssertEqual(shown.count, 200)
+        XCTAssertEqual(shown, String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 100))
+        XCTAssertEqual(MetadataSanitizer.displayText(raw, limit: 0), "")
+    }
+
+    func testT07_77_displayTextPreservesLiteralMarkupAndRemovesEveryControlAndBidiScalar() {
+        let literal = "<b>x</b> &amp; <script>literal</script> **text**"
+        let bidi: [UInt32] = [0x061C, 0x200E, 0x200F] + Array(0x202A...0x202E) + Array(0x2066...0x2069)
+        let controls = Array(UInt32(0)...0x1F) + Array(UInt32(0x7F)...0x9F)
+        for value in controls + bidi {
+            let scalar = String(Unicode.Scalar(value)!)
+            XCTAssertEqual(
+                MetadataSanitizer.displayText(scalar + literal + scalar, limit: MetadataPolicy.nameMax), literal)
+        }
+        XCTAssertEqual(
+            MetadataSanitizer.displayText("\u{202E}\u{0000}<b>x</b> &amp;", limit: 3), "<b>")
+    }
+
+    func testT07_77_mappedNamesAndTitlesUseTheTwoHundredGraphemeLimit() throws {
+        let raw = "<b>x</b> &amp;\u{061C}\u{0000}" + String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)
+        let expected = String(("<b>x</b> &amp;" + String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)).prefix(200))
+        let streams: [[String: Any]] = ["Audio", "Subtitle"].enumerated().map { index, kind in
+            [
+                "Index": index, "Type": kind, "DisplayTitle": raw, "Language": raw, "Codec": raw, "Profile": raw,
+                "VideoRangeType": raw,
+            ]
+        }
+        let source: [String: Any] = ["Id": "source", "MediaStreams": streams, "TranscodeReasons": [raw]]
+        for kind in ["Movie", "Series", "Season", "Episode"] {
+            let object: [String: Any] = [
+                "Id": "item", "Type": kind, "Name": raw, "OfficialRating": raw,
+                "Chapters": [["Name": raw, "StartPositionTicks": 0]],
+                "People": [["Name": raw, "Role": raw]], "Studios": [["Name": raw]],
+                "MediaStreams": streams,
+            ]
+            let dto = try JSONDecoder().decode(
+                BaseItemDTO.self, from: JSONSerialization.data(withJSONObject: object))
+            let item = try XCTUnwrap(DTOMapper.mediaItem(dto, log: SilentLog()))
+            let metadata = try XCTUnwrap(item.detail)
+            let stream = try XCTUnwrap(metadata.streams.first)
+            let names = [
+                item.name, try XCTUnwrap(item.officialRating), try XCTUnwrap(item.chapters.first?.name),
+                try XCTUnwrap(metadata.people.first?.name), try XCTUnwrap(metadata.people.first?.role),
+                try XCTUnwrap(metadata.studios.first), try XCTUnwrap(stream.title), try XCTUnwrap(stream.language),
+                try XCTUnwrap(stream.codec), try XCTUnwrap(stream.profile), try XCTUnwrap(stream.videoRange),
+                try XCTUnwrap(DTOMapper.library(dto)?.name),
+            ]
+            XCTAssertEqual(names, Array(repeating: expected, count: names.count))
+            XCTAssertTrue(names.allSatisfy { $0.count == MetadataPolicy.nameMax })
+        }
+        let playbackDTO = try JSONDecoder().decode(
+            PlaybackInfoResponseDTO.self,
+            from: JSONSerialization.data(withJSONObject: ["MediaSources": [source]]))
+        let url = try XCTUnwrap(URL(string: "https://media.example"))
+        let playback = try XCTUnwrap(DTOMapper.playbackSource(playbackDTO, server: url))
+        for track in playback.audioTracks + playback.subtitleTracks {
+            XCTAssertEqual(track.displayTitle, expected)
+            XCTAssertEqual(track.language, expected)
+            XCTAssertEqual(track.codec, expected)
+        }
+        XCTAssertEqual(playback.transcodeReasons, [expected])
+        let server = ServerInfo(id: "server", name: "Server", url: url, version: SemVer(major: 12, minor: 0, patch: 0))
+        let userObject = ["Id": "user", "Name": raw]
+        let user = try JSONDecoder().decode(UserDTO.self, from: JSONSerialization.data(withJSONObject: userObject))
+        XCTAssertEqual(DTOMapper.userSession(user, server: server)?.userName, expected)
+        let auth = try JSONDecoder().decode(
+            AuthenticationResultDTO.self,
+            from: JSONSerialization.data(withJSONObject: ["AccessToken": "sample", "User": userObject]))
+        XCTAssertEqual(
+            DTOMapper.session(auth: auth, serverURL: url, fallbackServerName: "Server")?.session.userName, expected)
+    }
+
+    func testT07_77_searchHintNamesUseTheDisplayTextPolicy() throws {
+        let raw = "<b>x</b> &amp;\u{202E}\u{0007}" + String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)
+        let expected = String(("<b>x</b> &amp;" + String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)).prefix(200))
+        let data = try JSONSerialization.data(withJSONObject: ["SearchHints": [["ItemId": "item", "Name": raw]]])
+        let hints = try ResilientItemDecoder.searchHints(from: data, log: SilentLog())
+        XCTAssertEqual(hints.count, 1)
+        XCTAssertEqual(hints.first?.name, expected)
+        XCTAssertEqual(hints.first?.name.count, MetadataPolicy.nameMax)
+    }
+
     /// T07-77: clean before truncating at limit-1, limit and limit+1, in grapheme clusters.
     func testT07_77_metadataBoundariesAndDisplayNamesUseTheSharedConstants() throws {
         let url = try XCTUnwrap(URL(string: "https://media.example"))

@@ -132,7 +132,7 @@ public final class LibraryViewModel {
             let fetched = try await library.filters(in: libraryID)
             guard expected == generation, !Task.isCancelled else { return }
             filters = ItemFilterSet(
-                genres: fetched.genres.map { MetadataPolicy.clean($0, limit: MetadataPolicy.genreMax) },
+                genres: fetched.genres.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.genreMax) },
                 years: fetched.years)
             filterError = nil
         } catch {

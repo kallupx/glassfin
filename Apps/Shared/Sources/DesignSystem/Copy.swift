@@ -58,6 +58,8 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case libraryDescending = "library.sort.descending"
     case libraryUnplayed = "library.filter.unplayed"
     case libraryFavorites = "library.filter.favorites"
+    case libraryFilterOn = "library.filter.on"
+    case libraryFilterOff = "library.filter.off"
     case libraryGenre = "library.filter.genre"
     case libraryYear = "library.filter.year"
     case libraryAll = "library.filter.all"
@@ -95,6 +97,8 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .libraryDescending: LocalizedStringResource("library.sort.descending", bundle: .main)
         case .libraryUnplayed: LocalizedStringResource("library.filter.unplayed", bundle: .main)
         case .libraryFavorites: LocalizedStringResource("library.filter.favorites", bundle: .main)
+        case .libraryFilterOn: LocalizedStringResource("library.filter.on", bundle: .main)
+        case .libraryFilterOff: LocalizedStringResource("library.filter.off", bundle: .main)
         case .libraryGenre: LocalizedStringResource("library.filter.genre", bundle: .main)
         case .libraryYear: LocalizedStringResource("library.filter.year", bundle: .main)
         case .libraryAll: LocalizedStringResource("library.filter.all", bundle: .main)

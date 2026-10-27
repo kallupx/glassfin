@@ -5,8 +5,8 @@ public struct ItemPerson: Sendable, Hashable, Codable {
     public var role: String?
 
     public init(name: String, role: String? = nil) {
-        self.name = MetadataPolicy.clean(name, limit: MetadataPolicy.nameMax)
-        self.role = role.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        self.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
+        self.role = role.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
     }
 }
 
@@ -30,15 +30,15 @@ public struct ItemStream: Sendable, Hashable, Codable, Identifiable {
         dolbyVisionProfile: Int? = nil
     ) {
         self.id = id
-        self.kind = MetadataPolicy.clean(kind, limit: MetadataPolicy.nameMax)
-        self.title = title.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
-        self.language = language.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
-        self.codec = codec.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
-        self.profile = profile.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        self.kind = MetadataSanitizer.displayText(kind, limit: MetadataPolicy.nameMax)
+        self.title = title.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.language = language.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.codec = codec.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.profile = profile.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         self.channels = channels
         self.width = width
         self.height = height
-        self.videoRange = videoRange.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        self.videoRange = videoRange.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         self.dolbyVisionProfile = dolbyVisionProfile
     }
 
@@ -50,9 +50,9 @@ public struct ItemStream: Sendable, Hashable, Codable, Identifiable {
         if let dolbyVisionProfile { parts.append("DV P\(dolbyVisionProfile)") }
         if let codec {
             if let profile, profile.uppercased().hasPrefix(codec.uppercased()) {
-                parts.append(MetadataPolicy.clean(profile.uppercased(), limit: MetadataPolicy.nameMax))
+                parts.append(MetadataSanitizer.displayText(profile.uppercased(), limit: MetadataPolicy.nameMax))
             } else {
-                parts.append(MetadataPolicy.clean(codec.uppercased(), limit: MetadataPolicy.nameMax))
+                parts.append(MetadataSanitizer.displayText(codec.uppercased(), limit: MetadataPolicy.nameMax))
                 if let profile { parts.append(profile) }
             }
         }
@@ -76,13 +76,13 @@ public struct ItemMetadata: Sendable, Hashable, Codable {
         streams: [ItemStream] = []
     ) {
         self.taglines = taglines.prefix(MetadataPolicy.taglinesMax).map {
-            MetadataPolicy.clean($0, limit: MetadataPolicy.taglineMax)
+            MetadataSanitizer.displayText($0, limit: MetadataPolicy.taglineMax)
         }
         self.genres = genres.prefix(MetadataPolicy.genresMax).map {
-            MetadataPolicy.clean($0, limit: MetadataPolicy.genreMax)
+            MetadataSanitizer.displayText($0, limit: MetadataPolicy.genreMax)
         }
         self.people = people.map { ItemPerson(name: $0.name, role: $0.role) }
-        self.studios = studios.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        self.studios = studios.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         self.streams = streams.map {
             ItemStream(
                 id: $0.id, kind: $0.kind, title: $0.title, language: $0.language, codec: $0.codec, profile: $0.profile,
@@ -96,11 +96,12 @@ extension MediaItem {
     /// Also sanitize protocol mocks and decoded snapshots at the presentation boundary.
     public func cleanedForDisplay() -> MediaItem {
         var result = self
-        result.name = MetadataPolicy.clean(name, limit: MetadataPolicy.nameMax)
-        result.overview = overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) }
-        result.officialRating = officialRating.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        result.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
+        result.overview = overview.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.overviewMax) }
+        result.officialRating = officialRating.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         result.chapters = chapters.map {
-            ChapterMark(name: $0.name.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }, start: $0.start)
+            ChapterMark(
+                name: $0.name.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }, start: $0.start)
         }
         if let detail {
             result.detail = ItemMetadata(

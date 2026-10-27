@@ -6,9 +6,9 @@ import Foundation
 import GlassfinServices
 import XCTest
 
-@MainActor
 final class T07SecurityStateTests: XCTestCase {
     /// T07-67: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_67_401CancelsAllRequestsEndsSessionOnceAndNeverRetries() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -39,6 +39,7 @@ final class T07SecurityStateTests: XCTestCase {
     }
 
     /// T07-06: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_06_disappearCancelsTheActivePageAndIgnoresItsResult() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -56,6 +57,7 @@ final class T07SecurityStateTests: XCTestCase {
     }
 
     /// T07-68: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_68_non401ErrorsKeepSessionAndCancellationIsNotPresented() async throws {
         for error in [
             APIError.forbidden, .notFound, .server(status: 500), .timeout, .network, .tls, .cancelled, .decoding,
@@ -76,6 +78,7 @@ final class T07SecurityStateTests: XCTestCase {
     }
 
     /// T07-78: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_78_imageLoaderAndDiskRejectOversizeAndUseTheExactHashFilename() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }

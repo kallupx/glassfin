@@ -29,9 +29,10 @@ public actor UserDataStore {
     }
 
     /// Inserts server state only when the id is unknown, then returns items using the visible state.
+    /// Sanitizes display metadata from live services, mocks, and decoded response caches.
     public func project(_ items: [MediaItem]) -> [MediaItem] {
         items.map { item in
-            var copy = item
+            var copy = item.cleanedForDisplay()
             if slots[item.id] == nil {
                 slots[item.id] = Slot(base: item.userData, overlay: nil, pending: false)
             }

@@ -1055,6 +1055,40 @@
       },
       "extractionState" : "manual"
     },
+    "library.filter.off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pois käytöstä"
+          }
+        }
+      }
+    },
+    "library.filter.on" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Käytössä"
+          }
+        }
+      }
+    },
     "library.filter.unplayed" : {
       "localizations" : {
         "en" : {

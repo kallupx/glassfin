@@ -238,13 +238,23 @@ struct LibraryFilterBar: View {
                     Copy.text(key(model.choices.sort))
                 }
                 .buttonStyle(.glass).accessibilityIdentifier("library.sort")
-                Toggle(isOn: binding(\.unplayed)) { Copy.text(.libraryUnplayed) }.toggleStyle(.button).buttonStyle(
-                    .glass
-                )
+                Button {
+                    binding(\.unplayed).wrappedValue.toggle()
+                } label: {
+                    Copy.text(.libraryUnplayed)
+                }
+                .buttonStyle(.glass)
+                .accessibilityValue(Copy.text(model.choices.unplayed ? .libraryFilterOn : .libraryFilterOff))
+                .accessibilityAddTraits(model.choices.unplayed ? .isSelected : [])
                 .accessibilityIdentifier("library.unplayed")
-                Toggle(isOn: binding(\.favorites)) { Copy.text(.libraryFavorites) }.toggleStyle(.button).buttonStyle(
-                    .glass
-                )
+                Button {
+                    binding(\.favorites).wrappedValue.toggle()
+                } label: {
+                    Copy.text(.libraryFavorites)
+                }
+                .buttonStyle(.glass)
+                .accessibilityValue(Copy.text(model.choices.favorites ? .libraryFilterOn : .libraryFilterOff))
+                .accessibilityAddTraits(model.choices.favorites ? .isSelected : [])
                 .accessibilityIdentifier("library.favorites")
                 Menu {
                     Button {
@@ -256,7 +266,7 @@ struct LibraryFilterBar: View {
                         Button {
                             change { $0.genre = genre }
                         } label: {
-                            Text(verbatim: MetadataPolicy.clean(genre, limit: MetadataPolicy.genreMax))
+                            Text(verbatim: MetadataSanitizer.displayText(genre, limit: MetadataPolicy.genreMax))
                         }
                     }
                 } label: {

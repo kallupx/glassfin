@@ -6,9 +6,9 @@ import XCTest
 
 @testable import Glassfin
 
-@MainActor
 final class T07ArtworkTests: XCTestCase {
     /// T07-80: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_80_artworkIsDownsampledToDisplayedPixels() async throws {
         let context = try XCTUnwrap(
             CGContext(

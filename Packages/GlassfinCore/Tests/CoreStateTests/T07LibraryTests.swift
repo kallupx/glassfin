@@ -6,9 +6,9 @@ import Foundation
 import GlassfinServices
 import XCTest
 
-@MainActor
 final class T07LibraryTests: XCTestCase {
     /// T07-11: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_11_browseRequestIncludesPagingSortFiltersAndUserData() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -49,7 +49,8 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-13: canonical spec/TESTPLAN-M07.md.
-    func testT07_13_choicesPersistPerServerUserAndLibraryAndAllSortsMap() {
+    @MainActor
+    func testT07_13_choicesPersistPerServerUserAndLibraryAndAllSortsMap() async {
         let settings = InMemorySettingsStore()
         let store = LibraryChoicesStore(settings: settings, serverID: "s", userID: "u")
         for sort in LibrarySort.allCases {
@@ -70,6 +71,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-05: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_05_pagesTwoThousandItemsAtTenRemainingWithoutDuplicateRequests() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -92,6 +94,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-07: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_07_cacheIncludesTheQueryAndUserAndStopsAtShortPage() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -123,6 +126,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-71: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_71_malformedRecordsAdvanceServerOffsetAndDuplicatesAreRemoved() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -156,6 +160,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_63_downMidBrowseKeepsContentBannerAndTenSecondRecovery() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -179,6 +184,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_63_filterFailureKeepsPreviousQueryContent() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -202,6 +208,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_63_automaticTenSecondPingRecoversAndKeepsContent() async throws {
         let rig = Harness.make(automaticPing: true, suspendingClock: true)
         defer { rig.cleanup() }
@@ -221,6 +228,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-64: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_64_downWithoutContentUsesTheExistingServerDownKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -235,6 +243,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-25: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_25_viewModelsSanitizeProtocolValuesAndDetailCanResumeAndStartOver() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -265,6 +274,7 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-01: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_01_directTabsAndOverflowAndSanitizedLibraryNames() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -282,6 +292,7 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(session.playbackIntent?.start, .zero)
     }
 
+    @MainActor
     private func make(_ rig: Harness, service: any LibraryService, preferences: LibraryChoicesStore? = nil)
         -> LibraryViewModel
     {

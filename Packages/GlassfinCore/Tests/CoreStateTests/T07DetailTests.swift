@@ -6,9 +6,9 @@ import Foundation
 import GlassfinServices
 import XCTest
 
-@MainActor
 final class T07DetailTests: XCTestCase {
     /// T07-68: forbidden actions roll back optimistic state and keep the signed-in session.
+    @MainActor
     func testT07_68_forbiddenActionRollsBackAndUsesTheCatalogKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -28,6 +28,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-63: movie detail retains its content and the shared server-unreachable banner.
+    @MainActor
     func testT07_63_movieDetailRetainsContentWhenTheServerBecomesUnreachable() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -46,6 +47,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-64: no detail content means the same key is used by the blocking error component.
+    @MainActor
     func testT07_64_emptyDetailUsesTheSharedServerDownKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -58,6 +60,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-43: Q7-25 also requires a picker for a single-season series.
+    @MainActor
     func testT07_43_singleSeasonKeepsPickerVisibleAndItsEpisodesSelected() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -77,6 +80,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-43: an empty series has no season to select and no empty glass picker.
+    @MainActor
     func testT07_43_noSeasonsHidesPicker() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -88,6 +92,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-44/T07-48/T07-49/T07-50: replace the row, retain picker focus, then navigate the short season.
+    @MainActor
     func testT07_44_twoSeasonsReplaceEpisodesAndKeepFocusInTheSelectedSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -124,6 +129,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-51: the last short episode remains a valid return target when no later season exists.
+    @MainActor
     func testT07_51_shortFinalSeasonReturnsToItsOnlyEpisode() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -145,6 +151,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-42/T07-43: five seasons; only the selected season's episodes are requested and displayed.
+    @MainActor
     func testT07_43_fiveSeasonsFetchAndShowOnlyTheSelectedSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -175,6 +182,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-44: switching cancels an in-flight request; completed rows are cached for this view.
+    @MainActor
     func testT07_44_switchingSeasonCancelsPreviousRequestAndReusesCachedRows() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -199,6 +207,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-45: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_45_seriesOpensAtInProgressSeasonTwoEpisodeFiveAndSpecialsLast() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -214,6 +223,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-50: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_50_seasonFocusDebouncesAndLatestSelectionWinsWithoutMovingToEpisodes() async throws {
         let rig = Harness.make(suspendingClock: true)
         defer { rig.cleanup() }
@@ -234,6 +244,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-48: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_48_downTargetsFirstUnplayedAndUpReturnsToSelectedSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -250,6 +261,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-51: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_51_playbackReturnKeepsEpisodeOrAdvancesToNextUnplayed() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -265,6 +277,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-51: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_51_finishedLastEpisodeCanAdvanceToTheNextSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -278,6 +291,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-52: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_52_selectedOverviewFollowsFocusedEpisodeAsLiteralText() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -289,6 +303,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_63_episodeFailureKeepsPreviousSeasonAndContent() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -311,6 +326,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-27: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_27_playedIsOptimisticAndFailureRollsBackAndShowsAKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -335,6 +351,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-28: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_28_favoriteAndPlayedTogglesUsePOSTAndDELETE() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -358,6 +375,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-21: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_21_movieSeriesSeasonAndEpisodeDetailRequests() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -375,6 +393,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-09: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_09_staleQueryResponseCannotReplaceNewQuery() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -394,6 +413,7 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-29: canonical spec/TESTPLAN-M07.md.
+    @MainActor
     func testT07_29_storeRefreshAndReloadPreserveEpisodeFocusAndSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -412,6 +432,7 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
     }
 
+    @MainActor
     private func series(
         _ rig: Harness, clock: any GlassfinClock = SystemGlassfinClock(), scenario: String = "grid"
     ) -> SeriesViewModel {

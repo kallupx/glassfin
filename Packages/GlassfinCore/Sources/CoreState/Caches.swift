@@ -36,8 +36,13 @@ public struct HomeSnapshotStore: Sendable {
     }
 
     public func load() -> HomeSnapshot? {
-        guard let data = try? Data(contentsOf: file) else { return nil }
-        return try? JSONDecoder().decode(HomeSnapshot.self, from: data)
+        guard let data = try? Data(contentsOf: file),
+            let snapshot = try? JSONDecoder().decode(HomeSnapshot.self, from: data)
+        else { return nil }
+        return HomeSnapshot(
+            resume: snapshot.resume.map { $0.cleanedForDisplay() },
+            nextUp: snapshot.nextUp.map { $0.cleanedForDisplay() },
+            latest: snapshot.latest.map { $0.cleanedForDisplay() })
     }
 
     @discardableResult
