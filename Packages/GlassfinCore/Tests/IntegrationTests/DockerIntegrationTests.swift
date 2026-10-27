@@ -190,7 +190,7 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
-    /// Test ID TBD: the exported plans do not assign an ID to the legacy header check.
+    /// T08-2-51. Jellyfin 12 rejects the legacy token header; Authorization works on every version.
     func testLegacyEmbyTokenHeaderIsRejectedOnJellyfin12() async throws {
         let target = try liveTarget()
         let session = try await signIn(target)

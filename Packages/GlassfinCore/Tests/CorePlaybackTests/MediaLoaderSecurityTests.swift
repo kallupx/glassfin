@@ -23,6 +23,26 @@ final class MediaLoaderSecurityTests: XCTestCase {
         XCTAssertNil(try plan("https://example.invalid/video", allowed: URL(string: "http://example.invalid")!))
     }
 
+    /// T08-2-50. An absolute cross-origin key rejects the playlist and cannot produce a loader request.
+    func testCrossOriginKeyIsRejected() async throws {
+        try await assertPlaylistRejects(
+            #"#EXT-X-KEY:METHOD=AES-128,URI="https://evil.example/key""#,
+            uri: "https://evil.example/key")
+    }
+
+    /// T08-2-50. An absolute cross-origin audio rendition cannot produce a loader request.
+    func testCrossOriginMediaIsRejected() async throws {
+        try await assertPlaylistRejects(
+            #"#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="x",URI="https://evil.example/a.m3u8""#,
+            uri: "https://evil.example/a.m3u8")
+    }
+
+    /// T08-2-50. A same-host absolute URI with a different port is still cross-origin.
+    func testPlaylistPortChangeIsRejected() async throws {
+        try await assertPlaylistRejects(
+            "https://example.invalid:444/variant.m3u8", uri: "https://example.invalid:444/variant.m3u8")
+    }
+
     func testMedia401IsDistinctFromOtherHTTPFailures() {
         XCTAssertEqual(
             ResourceLoaderOutcome.classify(OriginMediaResponse(status: 401), requestURL: url),
@@ -294,6 +314,35 @@ final class MediaLoaderSecurityTests: XCTestCase {
         OriginMediaRequest(method: "GET", url: url, authorizationHeader: "fake-token", trust: .publiclyTrusted)!
     }
 
+    private func assertPlaylistRejects(
+        _ line: String, uri: String, file: StaticString = #filePath, lineNumber: UInt = #line
+    ) async throws {
+        let base = URL(string: "https://example.invalid/master.m3u8")!
+        let playlist = "#EXTM3U\n\(line)\n"
+        XCTAssertEqual(
+            HLSPlaylistRewriter.rewrite(playlist: playlist, baseURL: base), .failure(.crossOrigin),
+            file: file, line: lineNumber)
+        XCTAssertNil(try plan(uri, allowed: base), file: file, line: lineNumber)
+        let response = OriginMediaResponse(
+            status: 200, contentType: "application/vnd.apple.mpegurl", body: Data(playlist.utf8))
+        XCTAssertNil(PlayerResponseBuilder.build(origin: response, requestURL: base), file: file, line: lineNumber)
+        var playlistRequest = request()
+        playlistRequest.url = base
+        let client = ChunkOrigin([response])
+        do {
+            try await ChunkedMediaLoader.load(
+                request: playlistRequest, range: nil, client: client, isCancelled: { false },
+                receive: { _ async throws(APIError) in
+                    XCTFail("Delivered a rejected playlist", file: file, line: lineNumber)
+                })
+            XCTFail("Rejected playlist completed", file: file, line: lineNumber)
+        } catch {
+            XCTAssertEqual(error, .decoding, file: file, line: lineNumber)
+        }
+        let requestedURLs = await client.urls
+        XCTAssertEqual(requestedURLs, [base], file: file, line: lineNumber)
+    }
+
     private func plan(_ value: String, allowed: URL) throws -> OriginMediaRequest? {
         // Construct the wrapper directly so non-HTTP schemes also exercise the planner's guard.
         let encoded = try XCTUnwrap(value.addingPercentEncoding(withAllowedCharacters: .alphanumerics))
@@ -308,6 +357,7 @@ private actor ChunkOrigin: MediaOriginClient {
     private var responses: [OriginMediaResponse]
     private let onFetch: @Sendable () -> Void
     private(set) var ranges: [HTTPByteRange?] = []
+    private(set) var urls: [URL] = []
 
     init(_ responses: [OriginMediaResponse], onFetch: @escaping @Sendable () -> Void = {}) {
         self.responses = responses
@@ -316,6 +366,7 @@ private actor ChunkOrigin: MediaOriginClient {
 
     func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
         ranges.append(request.range)
+        urls.append(request.url)
         guard !responses.isEmpty else { throw .network }
         onFetch()
         return responses.removeFirst()
