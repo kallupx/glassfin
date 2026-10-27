@@ -98,7 +98,8 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertFalse(failed.serverCallSucceeded)
         XCTAssertTrue(failed.tokenRemoved)
         XCTAssertTrue(failed.serverSessionMayRemain)
-        XCTAssertEqual(failed.userMessage, SessionEndCopy.serverSessionMayRemain)
+        XCTAssertEqual(failed.userMessageKey, SessionEndCopy.serverSessionMayRemainKey)
+        XCTAssertNotNil(failed.userMessage)
         XCTAssertNil(try vault.loadToken(serverID: serverID, userID: userID))
 
         let ok = RecordingAPIClient(error: nil)
@@ -107,6 +108,7 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertTrue(succeeded.serverCallSucceeded)
         XCTAssertTrue(succeeded.tokenRemoved)
         XCTAssertNil(succeeded.userMessage)
+        XCTAssertNil(succeeded.userMessageKey)
         XCTAssertEqual(try vault.loadToken(serverID: otherServer, userID: userID), "kept-token")
 
         try ServerDataRemoval.remove(serverID: serverID, vault: vault, pins: pins)
@@ -319,8 +321,8 @@ final class SecurityTransportTests: XCTestCase {
             XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
             XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
             XCTAssertEqual(
-                ServerTransportPolicy.message(for: .publicHTTPRejected),
-                "Julkiset osoitteet vaativat HTTPS:n"
+                ServerTransportPolicy.messageKey(for: .publicHTTPRejected),
+                ServerTransportPolicy.publicAddressRequiresHTTPSKey
             )
             let transport = RecordingRequestTransport()
             let client = HTTPJellyfinClient(
@@ -510,14 +512,14 @@ final class SecurityTransportTests: XCTestCase {
         let publicHTTP = try XCTUnwrap(URL(string: "http://jellyfin.example.com"))
         XCTAssertEqual(ServerTransportPolicy.evaluate(publicHTTP), .publicHTTPRejected)
         XCTAssertEqual(
-            ServerTransportPolicy.message(for: .publicHTTPRejected),
-            "Julkiset osoitteet vaativat HTTPS:n"
+            ServerTransportPolicy.messageKey(for: .publicHTTPRejected),
+            ServerTransportPolicy.publicAddressRequiresHTTPSKey
         )
         XCTAssertFalse(ServerTransportPolicy.showsUnencryptedMark(publicHTTP))
 
         let lan = try XCTUnwrap(URL(string: "http://192.168.0.2:8096"))
         XCTAssertEqual(ServerTransportPolicy.evaluate(lan), .unencryptedLocal)
-        XCTAssertEqual(ServerTransportPolicy.badge(for: lan).message, "Yhteys ei ole salattu")
+        XCTAssertEqual(ServerTransportPolicy.badge(for: lan).messageKey, ServerTransportPolicy.unencryptedWarningKey)
         XCTAssertTrue(ServerTransportPolicy.badge(for: lan).showsUnencryptedMark)
         XCTAssertEqual(
             ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://jellyfin.local"))), .unencryptedLocal)
@@ -542,6 +544,23 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertFalse(canonical.absoluteString.contains("secret"))
         XCTAssertTrue(canonical.query?.contains("x=1") == true)
         XCTAssertThrowsError(try ServerAddress.canonical(XCTUnwrap(URL(string: "ftp://media.example/jellyfin"))))
+    }
+
+    func testTransportMessageKeysCoverEveryVerdict() throws {
+        let cases: [(String, ServerTransportPolicy.Verdict, String?)] = [
+            ("https://jellyfin.example.com", .secure, nil),
+            ("http://192.168.0.2:8096", .unencryptedLocal, ServerTransportPolicy.unencryptedWarningKey),
+            ("http://jellyfin.example.com", .publicHTTPRejected, ServerTransportPolicy.publicAddressRequiresHTTPSKey),
+            ("ftp://jellyfin.example.com", .invalid, nil),
+        ]
+        for (address, verdict, expectedKey) in cases {
+            let url = try XCTUnwrap(URL(string: address))
+            XCTAssertEqual(ServerTransportPolicy.messageKey(for: verdict), expectedKey, address)
+            XCTAssertEqual(ServerTransportPolicy.message(for: verdict) == nil, expectedKey == nil, address)
+            let badge = ServerTransportPolicy.badge(for: url)
+            XCTAssertEqual(badge.messageKey, expectedKey, address)
+            XCTAssertEqual(badge.message == nil, expectedKey == nil, address)
+        }
     }
 
     private func entitlements(under root: URL) -> [String] {
@@ -760,9 +779,9 @@ final class SecurityDiscoveryTests: XCTestCase {
 }
 
 final class SecurityHeaderAndLogTests: XCTestCase {
-    /// T03-26. Quotes, comma, equals, plus, space, emoji, and ääkköset round-trip. One Authorization header leaves.
+    /// T03-26. Quotes, comma, equals, plus, space, emoji, and non-ASCII letters round-trip. One Authorization header leaves.
     func testT03_26_headerEncodingRejectionAndSingleAuthorization() throws {
-        let device = "Olohuone + \"TV\", ää=kköset 📺"
+        let device = "Room + \"TV\", ää=ö 📺"
         let header = try AuthorizationHeader.value(
             client: "Glassfin", device: device, deviceID: "device-1", version: "1.0.0", token: "tok+en")
         let parts = AuthorizationHeaderParts.parse(header)

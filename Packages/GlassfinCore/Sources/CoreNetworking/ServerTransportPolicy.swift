@@ -10,8 +10,16 @@ public enum ServerTransportPolicy {
         case invalid
     }
 
-    public static let unencryptedWarning = "Yhteys ei ole salattu"
-    public static let publicAddressRequiresHTTPS = "Julkiset osoitteet vaativat HTTPS:n"
+    public static let unencryptedWarningKey = "This connection is not encrypted"
+    public static let publicAddressRequiresHTTPSKey = "Public addresses require HTTPS"
+
+    public static var unencryptedWarning: String {
+        String(localized: "This connection is not encrypted", bundle: .module)
+    }
+
+    public static var publicAddressRequiresHTTPS: String {
+        String(localized: "Public addresses require HTTPS", bundle: .module)
+    }
 
     public static func evaluate(_ url: URL) -> Verdict {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
@@ -27,6 +35,18 @@ public enum ServerTransportPolicy {
         evaluate(url) == .unencryptedLocal
     }
 
+    /// Catalog key for the verdict's message, or nil when no message should be shown.
+    public static func messageKey(for verdict: Verdict) -> String? {
+        switch verdict {
+        case .unencryptedLocal:
+            return unencryptedWarningKey
+        case .publicHTTPRejected:
+            return publicAddressRequiresHTTPSKey
+        case .secure, .invalid:
+            return nil
+        }
+    }
+
     public static func message(for verdict: Verdict) -> String? {
         switch verdict {
         case .unencryptedLocal:
@@ -40,7 +60,11 @@ public enum ServerTransportPolicy {
 
     public static func badge(for url: URL) -> ServerSecurityBadge {
         let verdict = evaluate(url)
-        return ServerSecurityBadge(showsUnencryptedMark: verdict == .unencryptedLocal, message: message(for: verdict))
+        return ServerSecurityBadge(
+            showsUnencryptedMark: verdict == .unencryptedLocal,
+            message: message(for: verdict),
+            messageKey: messageKey(for: verdict)
+        )
     }
 
     enum HostClass: Sendable, Equatable {
@@ -230,10 +254,13 @@ public enum ServerTransportPolicy {
 public struct ServerSecurityBadge: Sendable, Equatable {
     public var showsUnencryptedMark: Bool
     public var message: String?
+    /// Catalog key for `message`, or nil when no catalog message is associated with the badge.
+    public var messageKey: String?
 
-    public init(showsUnencryptedMark: Bool, message: String?) {
+    public init(showsUnencryptedMark: Bool, message: String?, messageKey: String? = nil) {
         self.showsUnencryptedMark = showsUnencryptedMark
         self.message = message
+        self.messageKey = messageKey
     }
 }
 

@@ -1,6 +1,10 @@
 name: Glassfin
 options:
   bundleIdPrefix: org.glassfin
+  developmentLanguage: en
+  knownRegions:
+    - en
+    - fi
   deploymentTarget:
     iOS: "26.0"
     tvOS: "26.0"
@@ -13,6 +17,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    DEVELOPMENT_LANGUAGE: en
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Manual
@@ -34,6 +40,8 @@ targets:
     sources:
       - path: Apps/Shared/Sources
       - path: Apps/tvOS/Sources
+      - path: Apps/Shared/Resources
+        buildPhase: resources
     dependencies:
       - package: GlassfinCore
         product: GlassfinCore
@@ -52,6 +60,8 @@ targets:
     sources:
       - path: Apps/Shared/Sources
       - path: Apps/iOS/Sources
+      - path: Apps/Shared/Resources
+        buildPhase: resources
     dependencies:
       - package: GlassfinCore
         product: GlassfinCore
