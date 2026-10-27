@@ -1,10 +1,10 @@
 import CoreModels
 import CoreNetworking
-import CorePlayback
 import Foundation
 import XCTest
 
 @testable import CoreNetworking
+@testable import CorePlayback
 
 #if canImport(FoundationNetworking)
     import FoundationNetworking
@@ -27,14 +27,20 @@ func playbackFixture(
     return try JSONSerialization.data(withJSONObject: ["PlaySessionId": "play-session", "MediaSources": [source]])
 }
 
+func playbackItemFixture(from info: Data) throws -> Data {
+    var item = try JSONSerialization.jsonObject(with: info) as? [String: Any] ?? [:]
+    item["UserData"] = ["PlaybackPositionTicks": 125_000_000]
+    return try JSONSerialization.data(withJSONObject: item)
+}
+
 func jsonBody(_ data: Data?) throws -> [String: Any] {
     let bytes = try XCTUnwrap(data)
     return try XCTUnwrap(try JSONSerialization.jsonObject(with: bytes) as? [String: Any])
 }
 
 final class PlaybackPoCDecisionTests: XCTestCase {
-    /// T08a-PoC-02: client and server must agree, including a video-copy-only fallback.
-    func testT08a_PoC_02_profileDecisionMatrix() throws {
+    /// T08P-06/T08P-07/T08P-08/T08P-10/T08P-12/T08P-14/T08P-16: client and server must agree, including a video-copy-only fallback.
+    func testT08P_06_07_08_10_12_14_16_profileDecisionMatrix() throws {
         let cases: [(String, String, String, Bool, String?, PlaybackDecision)] = [
             ("mp4", "h264", "aac", true, nil, .directPlay),
             ("mov", "hevc", "eac3", true, nil, .directPlay),
@@ -42,9 +48,10 @@ final class PlaybackPoCDecisionTests: XCTestCase {
             ("hls", "h264", "aac", true, nil, .directPlay),
             ("mkv", "h264", "aac", false, "/master.m3u8", .directStream(.remux)),
             ("mkv", "h264", "dts", false, "/master.m3u8", .directStream(.audioTranscode)),
+            ("mkv", "hevc", "ac3", false, "/master.m3u8", .directStream(.remux)),
             ("mp4", "hevc", "truehd", true, "/master.m3u8", .directStream(.audioTranscode)),
-            ("mp4", "h264", "aac", false, nil, .unsupported(.unsupportedVideo)),
-            ("mkv", "h264", "aac", false, "", .unsupported(.unsupportedVideo)),
+            ("mp4", "h264", "aac", false, nil, .unsupported(.couldNotPlay)),
+            ("mkv", "h264", "aac", false, "", .unsupported(.couldNotPlay)),
         ]
         for (container, video, audio, direct, url, expected) in cases {
             let data = try playbackFixture(
@@ -53,7 +60,7 @@ final class PlaybackPoCDecisionTests: XCTestCase {
             let source = try XCTUnwrap(dto.MediaSources?.first)
             XCTAssertEqual(PlaybackDecision.decide(mediaSource: source), expected)
         }
-        for codec in ["vp9", "mpeg2video", "vc1", "av1", "mpeg4", ""] {
+        for codec in ["mpeg2video", "vc1", "av1", "mpeg4", ""] {
             let data = try playbackFixture(video: codec, transcodingURL: "/master.m3u8")
             let dto = try JSONDecoder().decode(PlaybackInfoResponseDTO.self, from: data)
             XCTAssertEqual(
@@ -61,20 +68,11 @@ final class PlaybackPoCDecisionTests: XCTestCase {
                 .unsupported(.unsupportedVideo)
             )
         }
-        for reason in ["VideoBitrateNotSupported", "SubtitleCodecNotSupported"] {
-            let dto = try JSONDecoder().decode(
-                MediaSourceDTO.self,
-                from: Data(
-                    """
-                    {"Container":"mkv","TranscodingUrl":"/master.m3u8","TranscodeReasons":["\(reason)"],
-                    "MediaStreams":[{"Type":"Video","Codec":"h264"}]}
-                    """.utf8))
-            XCTAssertEqual(PlaybackDecision.decide(mediaSource: dto), .unsupported(.unsupportedVideo))
-        }
+
     }
 
-    /// T08a-PoC-03: only supported codecs; HLS uses fMP4, never a subtitle Encode profile.
-    func testT08a_PoC_03_deviceProfileShapeAndVideoCopyURL() throws {
+    /// T08P-01/T08P-70: only supported codecs; HLS uses fMP4, never a subtitle Encode profile.
+    func testT08P_01_70_deviceProfileShapeAndVideoCopyURL() throws {
         let profile = try jsonBody(JSONEncoder().encode(PlaybackDeviceProfile()))
         let direct = try XCTUnwrap((profile["DirectPlayProfiles"] as? [[String: Any]])?.first)
         XCTAssertEqual(direct["Container"] as? String, "mp4,mov,m4v,hls")
@@ -83,6 +81,8 @@ final class PlaybackPoCDecisionTests: XCTestCase {
         let transcode = try XCTUnwrap((profile["TranscodingProfiles"] as? [[String: Any]])?.first)
         XCTAssertEqual(transcode["Protocol"] as? String, "hls")
         XCTAssertEqual(transcode["Container"] as? String, "mp4")
+        XCTAssertEqual(transcode["BreakOnNonKeyFrames"] as? Bool, true)
+        XCTAssertEqual(transcode["AudioCodec"] as? String, "aac,eac3")
         XCTAssertEqual(transcode["VideoCodec"] as? String, "h264,hevc")
         XCTAssertEqual(transcode["EnableSubtitlesInManifest"] as? Bool, false)
         XCTAssertEqual((profile["SubtitleProfiles"] as? [String])?.count, 0)
@@ -113,8 +113,8 @@ final class PlaybackPoCDecisionTests: XCTestCase {
         }
     }
 
-    /// T08a-PoC-05: ticks are exact and saturate safely beyond Int64's tick range.
-    func testT08a_PoC_05_resumeTicksAndSaturation() {
+    /// T08P-36: ticks are exact and saturate safely beyond Int64's tick range.
+    func testT08P_36_resumeTicksAndSaturation() {
         for ticks: Int64 in [0, 1, 10_000_000, 937_000_001_234, Int64.max] {
             XCTAssertEqual(Ticks.ticks(from: Ticks.positionDuration(from: ticks, log: SilentLog())), ticks)
         }
@@ -125,8 +125,8 @@ final class PlaybackPoCDecisionTests: XCTestCase {
         XCTAssertEqual(Ticks.ticks(from: justAboveLimit), Int64.max)
     }
 
-    /// T08a-PoC-09: the PoC handoff is a header resource loader in both Debug and Release.
-    func testT08a_PoC_09_directURLHasNoCredentialOrFallback() throws {
+    /// T08P-69/T08P-71: the PoC handoff is a header resource loader in both Debug and Release.
+    func testT08P_69_71_directURLHasNoCredentialOrFallback() throws {
         let server = try XCTUnwrap(URL(string: "https://server.example/jellyfin"))
         let identity = ClientIdentity(deviceName: "TV", deviceID: "device", version: "1", token: "secret")
         let request = try MediaURLBuilder.directPlay(
@@ -150,14 +150,34 @@ final class PlaybackPoCDecisionTests: XCTestCase {
         XCTAssertFalse(HeaderFieldsKeyPolicy.isAllowed(buildIsDebug: false))
     }
 
-    /// T08a-PoC-10: compare catalog keys and translation presence, never literal UI copy.
-    func testT08a_PoC_10_catalogKeysHaveBothTranslations() throws {
+    /// T08P-62: compare catalog keys and translation presence, never literal UI copy.
+    func testT08P_62_catalogKeysHaveBothTranslations() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
         let url = root.appendingPathComponent("Sources/CoreNetworking/Localizable.xcstrings")
         let catalog = try jsonBody(Data(contentsOf: url))
         let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
-        for reason in [PlaybackFailure.unsupportedVideo, .couldNotPlay, .insecureRedirect] {
+        let exactTranslations = [
+            PlaybackCopy.unsupportedVideoKey: [
+                "en": "This video format isn't supported yet", "fi": "Tätä videomuotoa ei vielä tueta",
+            ],
+            PlaybackCopy.pinnedHLSKey: [
+                "en": "This video can't be played yet from a server with a self-signed certificate.",
+                "fi": "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne.",
+            ],
+        ]
+        for (key, expected) in exactTranslations {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any])
+            let languages = try XCTUnwrap(entry["localizations"] as? [String: Any])
+            for (language, value) in expected {
+                let localization = try XCTUnwrap(languages[language] as? [String: Any])
+                let unit = try XCTUnwrap(localization["stringUnit"] as? [String: String])
+                XCTAssertEqual(unit["value"], value)
+            }
+        }
+        for reason in [
+            PlaybackFailure.unsupportedVideo, .couldNotPlay, .insecureRedirect, .hlsSegmentsBypassPinnedTrust,
+        ] {
             let entry = try XCTUnwrap(strings[reason.localizedKey] as? [String: Any])
             let languages = try XCTUnwrap(entry["localizations"] as? [String: Any])
             for language in ["en", "fi"] {
@@ -172,8 +192,59 @@ final class PlaybackPoCDecisionTests: XCTestCase {
         }
     }
 
-    /// T08a-PoC-01: request and response pass through the real HTTPClient and its auth writer.
-    func testT08a_PoC_01_playbackInfoRequestAndParsing() async throws {
+    /// TPOC-65: all catalog entries, including the OK action, have both languages.
+    func testTPOC_65_catalogCompleteness() throws {
+        let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let repository = package.deletingLastPathComponent().deletingLastPathComponent()
+        for url in [
+            package.appendingPathComponent("Sources/CoreNetworking/Localizable.xcstrings"),
+            repository.appendingPathComponent("Apps/Shared/Resources/Localizable.xcstrings"),
+        ] {
+            let strings = try XCTUnwrap(jsonBody(Data(contentsOf: url))["strings"] as? [String: Any])
+            for (key, value) in strings {
+                let entry = try XCTUnwrap(value as? [String: Any])
+                let languages = try XCTUnwrap(entry["localizations"] as? [String: Any])
+                for language in ["en", "fi"] {
+                    let localization = try XCTUnwrap(languages[language] as? [String: Any], key)
+                    let unit = try XCTUnwrap(localization["stringUnit"] as? [String: String], key)
+                    XCTAssertFalse(try XCTUnwrap(unit["value"], key).isEmpty)
+                }
+            }
+        }
+    }
+
+    /// T08P-32/73: real CoreNetworking auth and error mapping for all three report endpoints.
+    func testT08P_32_73_reportHTTPFailuresRedactAndKeepHeaderOnlyAuth() async throws {
+        let token = "report-token-secret"
+        let transport = PoCTransport(data: Data("Authorization: \(token) ApiKey=\(token)".utf8), status: 500)
+        let server = try XCTUnwrap(URL(string: "https://server.example/jellyfin"))
+        let identity = ClientIdentity(deviceName: "TV", deviceID: "device", version: "1", token: token)
+        let client = HTTPJellyfinClient(server: server, identity: identity, transport: transport)
+        let sink = ReportLogCapture()
+        let reporter = PlaybackReporter(client: client, log: sink)
+        let context = PlaybackReportContext(
+            itemID: pocItemID, mediaSourceID: pocSourceID,
+            playSessionID: "session", method: .directStream)
+        for event in ["", "/Progress", "/Stopped"] {
+            let error = await reporter.send(
+                event, context: context, position: .seconds(10), paused: false, canSeek: true)
+            XCTAssertEqual(error, .server(status: 500))
+        }
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 6)
+        for request in requests {
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), try identity.authorizationHeader())
+            XCTAssertFalse(MediaCredentialQuery.contains(try XCTUnwrap(request.url)))
+            XCTAssertFalse(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self).contains(token))
+        }
+        XCTAssertEqual(sink.messages.count, 6)
+        XCTAssertFalse(sink.messages.joined().contains(token))
+    }
+
+    /// T08P-02: request and response pass through the real HTTPClient and its auth writer.
+    func testT08P_02_playbackInfoRequestAndParsing() async throws {
         let transport = PoCTransport(data: try playbackFixture(container: "mov", video: "hevc", audio: "eac3"))
         let server = try XCTUnwrap(URL(string: "https://server.example/jellyfin"))
         let identity = ClientIdentity(deviceName: "TV", deviceID: "device", version: "1", token: "secret")
@@ -197,6 +268,7 @@ final class PlaybackPoCDecisionTests: XCTestCase {
             XCTAssertEqual(body[key] as? Bool, true)
         }
         XCTAssertNotNil(body["DeviceProfile"])
+        XCTAssertNil(body["AudioStreamIndex"])
         XCTAssertEqual(body["SubtitleStreamIndex"] as? Int, -1)
         let source = try XCTUnwrap(info.MediaSources?.first)
         XCTAssertEqual(source.Id, pocSourceID)
@@ -215,11 +287,24 @@ final class PlaybackPoCDecisionTests: XCTestCase {
 private actor PoCTransport: RequestTransport {
     let data: Data
     private(set) var requests: [URLRequest] = []
-    init(data: Data) { self.data = data }
+    let status: Int
+    init(data: Data, status: Int = 200) {
+        self.data = data
+        self.status = status
+    }
     func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
         requests.append(request)
         let url = try XCTUnwrap(request.url)
-        let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+        let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil))
         return (data, response, nil)
     }
+}
+
+private final class ReportLogCapture: GlassfinLog, @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String] = []
+    var messages: [String] { lock.withLock { entries } }
+    func warning(_ message: String) { lock.withLock { entries.append(message) } }
+    func debug(_ message: String) { lock.withLock { entries.append(message) } }
+    func error(_ message: String) { lock.withLock { entries.append(message) } }
 }

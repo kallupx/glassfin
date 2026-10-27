@@ -54,12 +54,16 @@ public enum MediaURLBuilder {
 
     /// Opt-in fallback. The result has a credential query and no Authorization header.
     public static func queryCredentialFallback(strippedURL: URL, token: String) -> URL? {
-        guard !token.isEmpty else { return nil }
-        guard !MediaCredentialQuery.contains(strippedURL) else { return nil }
-        guard var components = URLComponents(url: strippedURL, resolvingAgainstBaseURL: false) else { return nil }
-        var items = components.queryItems ?? []
-        items.append(URLQueryItem(name: "ApiKey", value: token))
-        components.queryItems = items
-        return components.url
+        #if DEBUG
+            guard !token.isEmpty else { return nil }
+            guard !MediaCredentialQuery.contains(strippedURL) else { return nil }
+            guard var components = URLComponents(url: strippedURL, resolvingAgainstBaseURL: false) else { return nil }
+            var items = components.queryItems ?? []
+            items.append(URLQueryItem(name: "ApiKey", value: token))
+            components.queryItems = items
+            return components.url
+        #else
+            return nil
+        #endif
     }
 }

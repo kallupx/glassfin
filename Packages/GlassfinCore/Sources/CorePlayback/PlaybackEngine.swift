@@ -6,12 +6,14 @@ public enum PlaybackFailure: Error, Sendable, Equatable {
     case unsupportedVideo
     case couldNotPlay
     case insecureRedirect
+    case hlsSegmentsBypassPinnedTrust
 
     public var localizedKey: String {
         switch self {
         case .unsupportedVideo: PlaybackCopy.unsupportedVideoKey
         case .couldNotPlay: PlaybackCopy.couldNotPlayKey
-        case .insecureRedirect: PlaybackCopy.insecureRedirectKey
+        case .insecureRedirect: PlaybackCopy.couldNotPlayKey
+        case .hlsSegmentsBypassPinnedTrust: PlaybackCopy.pinnedHLSKey
         }
     }
 }

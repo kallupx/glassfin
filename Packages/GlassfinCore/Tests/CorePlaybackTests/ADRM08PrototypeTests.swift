@@ -101,6 +101,10 @@ final class ADRM08PrototypeTests: XCTestCase {
     /// Segment behavior on tvOS 26 and 27 was not measured. Q8-2-11 stays open.
     func testT08_2_05_headerKeyFallbackUsesTheUndocumentedAssetKey() throws {
         let plan = try directPlan(trust: .publiclyTrusted, headerKey: true, apiKey: false)
+        if !HeaderFieldsKeyPolicy.isAllowedInCurrentBuild {
+            XCTAssertTrue(plan.measuredFallbacks.isEmpty)
+            return
+        }
         guard case .assetHeaderFields(let carrier) = plan.measuredFallbacks.first else {
             return XCTFail("header key fallback missing")
         }
@@ -117,7 +121,13 @@ final class ADRM08PrototypeTests: XCTestCase {
     /// T08-2-06. Query fallback carries ApiKey and refuses an Authorization header on the same URL.
     func testT08_2_06_queryFallbackNeverCombinesHeaderAndCredentialQuery() throws {
         let stripped = mediaURL("https://media.example/Videos/\(itemID)/stream?static=true")
-        let fallback = try XCTUnwrap(MediaURLBuilder.queryCredentialFallback(strippedURL: stripped, token: token))
+        let fallback: URL
+        if HeaderFieldsKeyPolicy.isAllowedInCurrentBuild {
+            fallback = try XCTUnwrap(MediaURLBuilder.queryCredentialFallback(strippedURL: stripped, token: token))
+        } else {
+            XCTAssertNil(MediaURLBuilder.queryCredentialFallback(strippedURL: stripped, token: token))
+            fallback = mediaURL("https://media.example/Videos/\(itemID)/stream?ApiKey=\(token)")
+        }
         XCTAssertTrue(MediaCredentialQuery.contains(fallback))
         XCTAssertNil(
             OriginMediaRequest(
@@ -148,7 +158,9 @@ final class ADRM08PrototypeTests: XCTestCase {
         let fallback = try queryFallback()
         let plan = try directPlan(trust: .publiclyTrusted, headerKey: true, apiKeyURL: fallback)
         XCTAssertEqual(plan.primary.kindName, "resourceLoader")
-        XCTAssertEqual(plan.measuredFallbacks.map(\.kindName), ["assetHeaderFields", "apiKeyQuery"])
+        XCTAssertEqual(
+            plan.measuredFallbacks.map(\.kindName),
+            HeaderFieldsKeyPolicy.isAllowedInCurrentBuild ? ["assetHeaderFields", "apiKeyQuery"] : [])
         let pinned = try directPlan(
             trust: .pinnedSelfSigned(fingerprintSHA256: fingerprint("ab")),
             headerKey: true,
@@ -950,12 +962,8 @@ final class ADRM08PrototypeTests: XCTestCase {
     }
 
     private func queryFallback() throws -> URL {
-        try XCTUnwrap(
-            MediaURLBuilder.queryCredentialFallback(
-                strippedURL: mediaURL("https://media.example/Videos/\(itemID)/stream?static=true"),
-                token: token
-            )
-        )
+        // A server-generated credential URL, used to test carrier policy in either build.
+        mediaURL("https://media.example/Videos/\(itemID)/stream?static=true&ApiKey=\(token)")
     }
 
     private func directPlan(trust: ServerTrustClass, headerKey: Bool, apiKey: Bool) throws -> MediaOpenPlan {

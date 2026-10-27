@@ -8,13 +8,12 @@ public struct PlaybackAPI: Sendable, CurrentUserProbing {
 
     public init(client: any JellyfinAPIClient) { self.client = client }
 
-    public func resumeTicks(itemID: String, userID: String) async throws(APIError) -> Int64 {
+    public func item(itemID: String, userID: String) async throws(APIError) -> BaseItemDTO {
         let item = try ItemID.require(itemID).value
         let user = try ItemID.require(userID).value
-        let dto = try await client.send(
+        return try await client.send(
             APIRequest(method: "GET", path: "/Users/\(user)/Items/\(item)"), as: BaseItemDTO.self
         )
-        return dto.UserData?.PlaybackPositionTicks ?? 0
     }
 
     public func playbackInfo(

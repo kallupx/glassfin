@@ -55,6 +55,40 @@
         }
       }
     },
+    "playback.error.pinnedHLS" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This video can't be played yet from a server with a self-signed certificate."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne."
+          }
+        }
+      }
+    },
+    "playback.ok" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
+    },
     "playback.error.unsupportedVideo" : {
       "extractionState" : "manual",
       "localizations" : {

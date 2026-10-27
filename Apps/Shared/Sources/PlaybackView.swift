@@ -8,23 +8,40 @@
     struct PlaybackView: View {
         let coordinator: PlaybackCoordinator
         let engine: AVPlayerEngine
+        @Environment(\.dismiss) private var dismiss
 
         var body: some View {
             ZStack {
                 NativePlaybackView(player: engine.player, coordinator: coordinator)
-                if case .failed(let key) = coordinator.state {
-                    Text(verbatim: PlaybackCopy.message(for: key))
-                        .padding()
-                        .background(.regularMaterial)
-                }
                 if coordinator.state == .loading || coordinator.state == .buffering {
                     ProgressView()
                 }
             }
             .ignoresSafeArea()
+            .alert(
+                PlaybackCopy.message(for: failureKey ?? PlaybackCopy.couldNotPlayKey),
+                isPresented: Binding(
+                    get: { failureKey != nil },
+                    set: { if !$0 { dismiss() } }
+                )
+            ) {
+                Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .onChange(of: coordinator.state) { _, state in
+                if state == .ended || state == .sessionExpired { dismiss() }
+            }
+            #if os(tvOS)
+                .onExitCommand { dismiss() }
+            #endif
             .onDisappear {
                 Task { await coordinator.stop() }
             }
+        }
+
+        private var failureKey: String? {
+            if case .failed(let key) = coordinator.state { return key }
+            return nil
         }
     }
 

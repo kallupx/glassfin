@@ -361,7 +361,65 @@ final class MediaLoaderSecurityTests: XCTestCase {
         }
     }
 
+    /// T08P-70: both master and variant playlists use the header; server segment credentials stay on-origin.
+    func testT08P_70_masterAndVariantUseLoaderAndSegmentsStayOnOrigin() async throws {
+        let master = URL(string: "https://example.invalid/master.m3u8")!
+        let variant = URL(string: "https://example.invalid/variant.m3u8")!
+        let responses = [
+            OriginMediaResponse(
+                status: 200, contentType: "application/vnd.apple.mpegurl",
+                body: Data("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=160000\nvariant.m3u8?ApiKey=server-secret\n".utf8)),
+            OriginMediaResponse(
+                status: 200, contentType: "application/vnd.apple.mpegurl",
+                body: Data(
+                    "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4?ApiKey=server-secret\"\n#EXTINF:6,\nsegment.m4s?ApiKey=server-secret\n"
+                        .utf8)),
+        ]
+        let client = PlaylistAuthOrigin(responses)
+        let masterSink = ChunkSink()
+        let masterRequest = try XCTUnwrap(
+            ResourceLoadPlanner.originRequest(
+                assetURL: try XCTUnwrap(MediaAssetScheme.wrap(master)),
+                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master))
+        try await ChunkedMediaLoader.load(
+            request: masterRequest, range: nil, client: client,
+            isCancelled: { false }, receive: { reply async throws(APIError) in await masterSink.receive(reply) })
+        let rewrittenMaster = await masterSink.text
+        let variantLine = try XCTUnwrap(rewrittenMaster.split(whereSeparator: \.isNewline).first { !$0.hasPrefix("#") })
+        let variantAsset = try XCTUnwrap(URL(string: String(variantLine)))
+        XCTAssertEqual(variantAsset.scheme, MediaAssetScheme.name)
+        XCTAssertEqual(MediaAssetScheme.unwrap(variantAsset), variant)
+        XCTAssertFalse(rewrittenMaster.contains("server-secret"))
+        let variantRequest = try XCTUnwrap(
+            ResourceLoadPlanner.originRequest(
+                assetURL: variantAsset,
+                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master))
+        let variantSink = ChunkSink()
+        try await ChunkedMediaLoader.load(
+            request: variantRequest, range: nil, client: client,
+            isCancelled: { false }, receive: { reply async throws(APIError) in await variantSink.receive(reply) })
+        let requests = await client.requests
+        XCTAssertEqual(requests.map(\.url), [master, variant])
+        XCTAssertTrue(
+            requests.allSatisfy { $0.authorizationHeader == "header-secret" && !MediaCredentialQuery.contains($0.url) })
+        let text = await variantSink.text
+        XCTAssertTrue(text.contains("https://example.invalid/segment.m4s?ApiKey=server-secret"))
+        XCTAssertTrue(text.contains("https://example.invalid/init.mp4?ApiKey=server-secret"))
+        for target in ["https://other.invalid/segment.m4s", "http://example.invalid/segment.m4s"] {
+            let result = HLSPlaylistRewriter.rewrite(playlist: "#EXTM3U\n#EXTINF:6,\n" + target, baseURL: variant)
+            guard case .failure = result else { return XCTFail("Unsafe segment was accepted") }
+            let initResult = HLSPlaylistRewriter.rewrite(
+                playlist: "#EXTM3U\n#EXT-X-MAP:URI=\"" + target + "\"", baseURL: variant)
+            guard case .failure = initResult else { return XCTFail("Unsafe init segment was accepted") }
+        }
+    }
+
     func testHeaderFieldsKeyPolicyDisablesReleaseFallback() {
+        #if DEBUG
+            XCTAssertTrue(HeaderFieldsKeyPolicy.isAllowedInCurrentBuild)
+        #else
+            XCTAssertFalse(HeaderFieldsKeyPolicy.isAllowedInCurrentBuild)
+        #endif
         XCTAssertFalse(HeaderFieldsKeyPolicy.isAllowed(buildIsDebug: false))
         XCTAssertTrue(HeaderFieldsKeyPolicy.isAllowed(buildIsDebug: true))
         XCTAssertFalse(
@@ -441,5 +499,16 @@ private actor ChunkSink {
     func receive(_ reply: PlayerByteReply) {
         counts.append(reply.data.count)
         if !reply.isByteRangeAccessSupported { text += String(decoding: reply.data, as: UTF8.self) }
+    }
+}
+
+private actor PlaylistAuthOrigin: MediaOriginClient {
+    private var responses: [OriginMediaResponse]
+    private(set) var requests: [OriginMediaRequest] = []
+    init(_ responses: [OriginMediaResponse]) { self.responses = responses }
+    func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
+        requests.append(request)
+        guard !responses.isEmpty else { throw .network }
+        return responses.removeFirst()
     }
 }

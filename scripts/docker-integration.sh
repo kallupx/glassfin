@@ -51,6 +51,8 @@ run_tests() {
     -e GLASSFIN_SERVER_URL \
     -e GLASSFIN_USERNAME \
     -e GLASSFIN_PASSWORD \
+    -e GLASSFIN_TEST_USERNAME \
+    -e GLASSFIN_TEST_PASSWORD \
     -e GLASSFIN_SERVER_VERSION \
     "$swift_image" \
     swift test --filter LiveServerTests
@@ -93,7 +95,10 @@ PY
     "$image" >/dev/null
   username_file="$work/username"
   export GLASSFIN_INTEGRATION=1
-  export GLASSFIN_SEED_ITEM_COUNT=5
+  export GLASSFIN_SEED_ITEM_COUNT=6
+  export GLASSFIN_SEED_EPISODE_COUNT=3
+  export GLASSFIN_TEST_USERNAME="glassfin-viewer"
+  export GLASSFIN_TEST_PASSWORD="$(openssl rand -hex 24)"
   export GLASSFIN_SERVER_URL="http://127.0.0.1:${port}"
   export GLASSFIN_SERVER_VERSION="$version"
   export GLASSFIN_USERNAME="glassfin"
@@ -106,7 +111,7 @@ PY
   set -e
   if [[ "$boot" -ne 0 ]]; then
     echo "docker-integration: bootstrap failed for $version"
-    "${docker_cmd[@]}" logs "$container" 2>&1 | sed "s|${GLASSFIN_PASSWORD}|[redacted]|g" | tail -n 40 || true
+    echo "docker-integration: raw server logs omitted to protect generated credentials" >&2
     results+=("$version bootstrap $boot")
     "${docker_cmd[@]}" rm -f "$container" >/dev/null
     container=""

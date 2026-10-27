@@ -6,7 +6,7 @@ import Observation
 public enum PlaybackStartChoice: Sendable, Equatable {
     /// Fetch UserData.PlaybackPositionTicks with the active user before PlaybackInfo.
     case resume
-    /// A detail view that already has UserData can avoid a second item request.
+    /// Use the caller's saved position while still checking current stream metadata.
     case resumeAt(ticks: Int64)
     case startOver
 }
@@ -54,9 +54,18 @@ public final class PlaybackCoordinator {
         paused = false
         state = .loading
         do {
+            let item = try await api.item(itemID: itemID, userID: session.userID)
+            guard await continueStartup(run) else { return }
+            let metadata = item.MediaSources?.first
+            guard
+                PlaybackDecision.supportsVideo(
+                    streams: metadata?.MediaStreams ?? item.MediaStreams,
+                    defaultIndex: metadata?.DefaultVideoStreamIndex
+                )
+            else { throw PlaybackFailure.unsupportedVideo }
             let ticks: Int64
             switch choice {
-            case .resume: ticks = try await api.resumeTicks(itemID: itemID, userID: session.userID)
+            case .resume: ticks = item.UserData?.PlaybackPositionTicks ?? 0
             case .resumeAt(let value): ticks = value
             case .startOver: ticks = 0
             }
@@ -93,6 +102,9 @@ public final class PlaybackCoordinator {
                 itemID: try ItemID.require(itemID).value, mediaSourceID: try ItemID.require(sourceID).value,
                 playSessionID: playSessionID, method: decision == .directPlay ? .directPlay : .directStream
             )
+            if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
+                throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
+            }
             let header = try session.identity.authorizationHeader()
             let result = try await PlaybackPreparation(client: origin, log: log).prepare(
                 delivery: delivery, initialURL: url, authorizationHeader: header,
@@ -103,6 +115,9 @@ public final class PlaybackCoordinator {
             switch result {
             case .open(let plan):
                 // No fallback chain in M08a-PoC, including in Debug builds.
+                if plan.primary.block == .hlsSegmentsBypassPinnedTrust {
+                    throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
+                }
                 guard case .resourceLoader(let value) = plan.primary else { throw PlaybackFailure.couldNotPlay }
                 carrier = value
             case .rejected(.transport(status: 401)): throw APIError.unauthorized

@@ -145,12 +145,16 @@ public struct MediaOpenOptions: Sendable, Equatable, CustomStringConvertible, Cu
     public var trust: ServerTrustClass
     public private(set) var headerFieldsKeyAvailable: Bool
     /// Opt-in media URL that already contains `ApiKey`. Descriptions never print it.
-    public var apiKeyFallbackURL: URL?
+    public private(set) var apiKeyFallbackURL: URL?
 
     public init(trust: ServerTrustClass, headerFieldsKeyAvailable: Bool, apiKeyFallbackURL: URL? = nil) {
         self.trust = trust
         self.headerFieldsKeyAvailable = headerFieldsKeyAvailable && HeaderFieldsKeyPolicy.isAllowedInCurrentBuild
-        self.apiKeyFallbackURL = apiKeyFallbackURL
+        #if DEBUG
+            self.apiKeyFallbackURL = apiKeyFallbackURL
+        #else
+            self.apiKeyFallbackURL = nil
+        #endif
     }
 
     public var description: String {

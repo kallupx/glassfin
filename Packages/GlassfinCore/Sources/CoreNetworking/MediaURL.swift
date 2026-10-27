@@ -49,11 +49,15 @@ public enum MediaRequestBuilder {
                 usesAPIKeyQuery: false
             )
         case .apiKeyQuery:
-            guard let token = identity.token, !token.isEmpty else { throw APIError.unauthorized }
-            var items = query
-            items.append(URLQueryItem(name: "ApiKey", value: token))
-            let url = try HTTPJellyfinClient.url(server: server, path: path, query: items)
-            return PreparedMediaRequest(url: url, authorizationHeader: nil, usesAPIKeyQuery: true)
+            #if DEBUG
+                guard let token = identity.token, !token.isEmpty else { throw APIError.unauthorized }
+                var items = query
+                items.append(URLQueryItem(name: "ApiKey", value: token))
+                let url = try HTTPJellyfinClient.url(server: server, path: path, query: items)
+                return PreparedMediaRequest(url: url, authorizationHeader: nil, usesAPIKeyQuery: true)
+            #else
+                throw APIError.invalidURL
+            #endif
         }
     }
 }

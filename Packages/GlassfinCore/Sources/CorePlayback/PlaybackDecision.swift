@@ -18,7 +18,7 @@ public struct PlaybackDeviceProfile: Encodable, Sendable {
         public let AudioCodec = "aac,eac3"
         public let Context = "Streaming"
         public let EnableSubtitlesInManifest = false
-        public let BreakOnNonKeyFrames = false
+        public let BreakOnNonKeyFrames = true
     }
 
     public let Name = "Glassfin M08a-PoC"
@@ -40,11 +40,21 @@ public enum PlaybackDecision: Sendable, Equatable {
     case directStream(StreamConversion)
     case unsupported(PlaybackFailure)
 
+    /// Select the default video rather than an attached picture or alternate stream.
+    public static func supportsVideo(streams: [MediaStreamDTO]?, defaultIndex: Int? = nil) -> Bool {
+        let videos = (streams ?? []).filter { $0.Type?.lowercased() == "video" }
+        let video =
+            defaultIndex.flatMap { index in videos.first { $0.Index == index } }
+            ?? videos.first { $0.IsDefault == true } ?? videos.first
+        return ["h264", "hevc"].contains(video?.Codec?.lowercased() ?? "")
+    }
+
     /// Mirrors the static profile and fails closed when codec metadata is missing.
     public static func decide(mediaSource source: MediaSourceDTO) -> PlaybackDecision {
         let streams = source.MediaStreams ?? []
-        let video = streams.first { $0.Type?.lowercased() == "video" }?.Codec?.lowercased()
-        guard let video, ["h264", "hevc"].contains(video) else {
+        guard supportsVideo(streams: streams, defaultIndex: source.DefaultVideoStreamIndex),
+            !VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl)
+        else {
             return .unsupported(.unsupportedVideo)
         }
         let audio = streams.first { $0.Type?.lowercased() == "audio" }
@@ -53,13 +63,7 @@ public enum PlaybackDecision: Sendable, Equatable {
         if nativeContainer && supportedAudio && source.SupportsDirectPlay == true {
             return .directPlay
         }
-        guard let url = source.TranscodingUrl, !url.isEmpty else { return .unsupported(.unsupportedVideo) }
-        // Even a supported codec may require video conversion (level, bitrate, HDR, burn-in).
-        if (source.TranscodeReasons ?? []).contains(where: {
-            $0.lowercased().hasPrefix("video") || $0.lowercased().hasPrefix("subtitle")
-        }) {
-            return .unsupported(.unsupportedVideo)
-        }
+        guard let url = source.TranscodingUrl, !url.isEmpty else { return .unsupported(.couldNotPlay) }
         return .directStream(supportedAudio ? .remux : .audioTranscode)
     }
 }
