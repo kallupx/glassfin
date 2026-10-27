@@ -98,6 +98,8 @@ final class LiveServerTests: XCTestCase {
     /// T09-21. Alternating paired samples after two warm-ups; no query text in output.
     func testT09_21_searchBackendLatencyAndResultCounts() async throws {
         let target = try liveTarget()
+        let version = try XCTUnwrap(
+            ["10.10.7", "10.11.11", "12.2"].first { $0 == target.version }, "Unsupported benchmark server version")
         let auth = try await signIn(target)
         let identity = ClientIdentity(
             deviceName: "Glassfin CI", deviceID: "glassfin-search-benchmark", version: "0.1.0", token: auth.accessToken)
@@ -105,26 +107,26 @@ final class LiveServerTests: XCTestCase {
         let backends: [any SearchBackend] = [ItemsSearchBackend(client: client), SearchHintsBackend(client: client)]
         var measurements: [[SearchBenchmarkSample]] = [[], []]
         for iteration in 0..<14 {
-            for index in iteration.isMultiple(of: 2) ? [0, 1] : [1, 0] {
-                let start = ContinuousClock.now
-                let response = try await backends[index].results(
-                    term: "Glassfin Bench", kind: nil, page: PageRequest(limit: SearchPolicy.pageSize))
-                let duration = start.duration(to: .now).components
-                let milliseconds = Double(duration.seconds) * 1_000 + Double(duration.attoseconds) / 1e15
-                if iteration >= 2 {
-                    measurements[index].append(
-                        SearchBenchmarkSample(
-                            milliseconds: milliseconds,
-                            counts: SearchKind.allCases.map { kind in
-                                response.groups.first { $0.id == kind }?.items.count ?? 0
-                            },
-                            withPrimaryImage: response.groups.flatMap(\.items).filter { $0.images.primaryTag != nil }
-                                .count))
+            for (termIndex, term) in SearchBenchmarkSeed.terms.enumerated() {
+                for index in iteration.isMultiple(of: 2) ? [0, 1] : [1, 0] {
+                    let start = ContinuousClock.now
+                    let response = try await backends[index].results(
+                        term: term, kind: nil, page: PageRequest(limit: SearchPolicy.pageSize))
+                    let duration = start.duration(to: .now).components
+                    let milliseconds = Double(duration.seconds) * 1_000 + Double(duration.attoseconds) / 1e15
+                    if iteration >= 2 {
+                        measurements[index].append(
+                            SearchBenchmarkSample(
+                                termIndex: termIndex, milliseconds: milliseconds,
+                                counts: SearchKind.allCases.map { kind in
+                                    response.groups.first { $0.id == kind }?.items.count ?? 0
+                                }))
+                    }
                 }
             }
         }
         let report = SearchBenchmarkReport(
-            serverVersion: target.version, seededItems: 5_000,
+            serverVersion: version, termCount: SearchBenchmarkSeed.terms.count,
             items: measurements[0], hints: measurements[1])
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -135,9 +137,13 @@ final class LiveServerTests: XCTestCase {
             configured.map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("glassfin-search-benchmark")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: directory.appendingPathComponent("search-\(target.version).json"), options: .atomic)
-        XCTAssertEqual(measurements[0].count, 12)
-        XCTAssertTrue(measurements[0].allSatisfy { $0.counts == Array(repeating: SearchPolicy.pageSize, count: 3) })
+        try data.write(to: directory.appendingPathComponent("search-\(version).json"), options: .atomic)
+        XCTAssertEqual(measurements[0].count, 12 * SearchBenchmarkSeed.terms.count)
+        XCTAssertEqual(measurements[1].count, 12 * SearchBenchmarkSeed.terms.count)
+        XCTAssertTrue(
+            measurements[0].filter { $0.termIndex == 0 }
+                .allSatisfy { $0.counts == Array(repeating: SearchPolicy.pageSize, count: 3) })
+        XCTAssertTrue(measurements.flatMap { $0 }.filter { $0.termIndex == 1 }.allSatisfy { $0.counts == [1, 0, 0] })
         XCTAssertTrue(measurements[1].allSatisfy { $0.counts.reduce(0, +) > 0 })
     }
 
@@ -343,27 +349,32 @@ private final class StopRedirects: NSObject, URLSessionTaskDelegate, @unchecked 
     }
 }
 
+private enum SearchBenchmarkSeed {
+    // Fixed prefixes of item names written by jellyfin_search_seed.py, including the umlaut movie.
+    static let terms = ["Glassfin Bench", "Hämärä"]
+}
+
 private struct SearchBenchmarkSample: Codable {
+    var termIndex: Int
     var milliseconds: Double
     /// Movies, series, episodes, in that order.
     var counts: [Int]
-    var withPrimaryImage: Int
 }
 
 private struct SearchBenchmarkReport: Encodable {
     var serverVersion: String
-    var seededItems: Int
+    var termCount: Int
     var items: [SearchBenchmarkSample]
     var hints: [SearchBenchmarkSample]
 
     private enum CodingKeys: String, CodingKey {
-        case serverVersion, seededItems, items, hints, itemsMedianMs, hintsMedianMs, itemsP95Ms, hintsP95Ms
+        case serverVersion, termCount, items, hints, itemsMedianMs, hintsMedianMs, itemsP95Ms, hintsP95Ms
     }
 
     func encode(to encoder: any Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(serverVersion, forKey: .serverVersion)
-        try values.encode(seededItems, forKey: .seededItems)
+        try values.encode(termCount, forKey: .termCount)
         try values.encode(items, forKey: .items)
         try values.encode(hints, forKey: .hints)
         try values.encode(percentile(items, fraction: 0.5), forKey: .itemsMedianMs)
@@ -376,5 +387,37 @@ private struct SearchBenchmarkReport: Encodable {
         let sorted = samples.map(\.milliseconds).sorted()
         guard !sorted.isEmpty else { return 0 }
         return sorted[max(0, Int((Double(sorted.count) * fraction).rounded(.up)) - 1)]
+    }
+}
+
+final class SearchBenchmarkTests: XCTestCase {
+    func testReportContainsOnlyMeasurements() throws {
+        let samples = [
+            SearchBenchmarkSample(termIndex: 0, milliseconds: 1.5, counts: [24, 24, 24]),
+            SearchBenchmarkSample(termIndex: 1, milliseconds: 2.5, counts: [1, 0, 0]),
+        ]
+        let report = SearchBenchmarkReport(serverVersion: "10.10.7", termCount: 2, items: samples, hints: samples)
+        let data = try JSONEncoder().encode(report)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(
+            Set(json.keys),
+            [
+                "serverVersion", "termCount", "items", "hints", "itemsMedianMs", "hintsMedianMs", "itemsP95Ms",
+                "hintsP95Ms",
+            ])
+        XCTAssertEqual(json["serverVersion"] as? String, "10.10.7")
+        XCTAssertEqual(json["termCount"] as? Int, SearchBenchmarkSeed.terms.count)
+        for name in ["items", "hints"] {
+            let rows = try XCTUnwrap(json[name] as? [[String: Any]])
+            XCTAssertEqual(rows.count, 2)
+            for (index, row) in rows.enumerated() {
+                XCTAssertEqual(Set(row.keys), ["termIndex", "milliseconds", "counts"])
+                XCTAssertEqual(row["termIndex"] as? Int, index)
+                XCTAssertEqual(row["milliseconds"] as? Double, samples[index].milliseconds)
+                XCTAssertEqual(row["counts"] as? [Int], samples[index].counts)
+            }
+            XCTAssertEqual(json["\(name)MedianMs"] as? Double, 1.5)
+            XCTAssertEqual(json["\(name)P95Ms"] as? Double, 2.5)
+        }
     }
 }
