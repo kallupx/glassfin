@@ -146,6 +146,7 @@ public final class AppState {
     public let responses: ResponseCache
     public let snapshots: HomeSnapshotStore
     public let images: ImageStore
+    public let recentSearches: any RecentSearchStoring
     public let scope: RequestScope
     public let signposter: any Signposting
 
@@ -208,8 +209,10 @@ public final class AppState {
         clock: any GlassfinClock = SystemGlassfinClock(),
         automaticPing: Bool = true,
         signposter: any Signposting = Signposters.production(),
-        log: any GlassfinLog = SilentLog()
+        log: any GlassfinLog = SilentLog(),
+        recentSearches: any RecentSearchStoring = RecentSearchStore()
     ) {
+        self.recentSearches = recentSearches
         self.secureStore = secureStore
         self.preferences = PreferencesRepository(store: settings)
         self.path = path
@@ -296,6 +299,7 @@ public final class AppState {
         scope.cancelAll()
         pingTask?.cancel()
         pingArmed = false
+        try? recentSearches.clear(serverID: session.server.id, userID: session.userID)
         deleteAccessToken(serverID: session.server.id, userID: session.userID)
         log.debug("Signed out.")
         sessionNotice = notice
@@ -305,6 +309,7 @@ public final class AppState {
     }
 
     public func removeServer(id: String) {
+        try? recentSearches.removeServer(id: id)
         let loaded = preferences.load()
         let (updated, accounts) = loaded.removing(serverID: id)
         try? preferences.save(updated)
@@ -439,6 +444,7 @@ public final class AppState {
         scope.cancelAll()
         pingTask?.cancel()
         pingArmed = false
+        try? recentSearches.clear(serverID: session.server.id, userID: session.userID)
         deleteAccessToken(serverID: session.server.id, userID: session.userID)
         log.warning("Ended the session after HTTP 401.")
         sessionNotice = AppErrorMessage.sessionExpired

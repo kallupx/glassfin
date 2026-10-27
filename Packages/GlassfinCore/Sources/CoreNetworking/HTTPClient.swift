@@ -181,7 +181,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.cancelled
         } catch {
             if Task.isCancelled { throw APIError.cancelled }
-            log.error("Request failed for \(SensitiveRedactor.redact(urlRequest.url?.absoluteString ?? request.path))")
+            log.error("Request failed.")
             throw APIError.network
         }
     }

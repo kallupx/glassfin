@@ -8,10 +8,15 @@ public enum MetadataSanitizer {
         text = removeElement(text, named: "style")
         text = removeTags(text)
         let decoded = decodeEntities(text)
-        return String(
+        return strippingControlsAndBidi(decoded)
+    }
+
+    /// Shared scalar filter for literal metadata and the existing auth sanitizer.
+    public static func strippingControlsAndBidi(_ raw: String) -> String {
+        String(
             String.UnicodeScalarView(
-                decoded.unicodeScalars.filter { scalar in
-                    scalar.properties.generalCategory != .control && !scalar.properties.isBidiControl
+                raw.unicodeScalars.filter {
+                    $0.properties.generalCategory != .control && !$0.properties.isBidiControl
                 }))
     }
 
@@ -21,7 +26,7 @@ public enum MetadataSanitizer {
         let value =
             plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? plainText(fallbackHost) : plain
-        return String(value.prefix(64))
+        return String(value.prefix(MetadataPolicy.displayNameMaxCharacters))
     }
 
     private static func removeElement(_ text: String, named tag: String) -> String {
