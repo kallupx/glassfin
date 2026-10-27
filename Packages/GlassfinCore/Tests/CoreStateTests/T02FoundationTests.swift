@@ -114,6 +114,34 @@ final class T02FoundationTests: XCTestCase {
         )
     }
 
+    func testAppErrorMessageKeysCoverEveryCase() {
+        let cases: [(AppError, AuthCopy.Key?)] = [
+            (.offline, .noNetworkConnection),
+            (.serverUnreachable, .serverUnreachable),
+            (.tlsUntrusted(.unavailable), .certificateUntrusted),
+            (.unauthorized, .sessionExpired),
+            (.invalidCredentials, .invalidCredentials),
+            (.insecureRedirect, .insecureRedirect),
+            (.forbidden, .forbidden),
+            (.notFound, .itemNotFound),
+            (.serverError(status: 500), .serverError),
+            (.unsupportedServer(version: "10.9.11"), .unsupportedServerDetail),
+            (.publicHTTPRejected, .publicAddressRequiresHTTPS),
+            (.playback(.itemFailed(code: "NoCompatibleStream")), .playbackFailed),
+            (.playback(.itemFailed(code: nil)), .playbackFailed),
+            (.playback(.stalled), .playbackFailed),
+            (.playback(.fallbackExhausted), .playbackFailed),
+            (.decoding, nil),
+            (.cancelled, nil),
+            (.internalInvariant, nil),
+        ]
+        for (error, expectedKey) in cases {
+            let key = AppErrorMessage.key(for: error)
+            XCTAssertEqual(key, expectedKey, "\(error)")
+            XCTAssertEqual(AppErrorMessage.userFacing(error) != nil, key != nil, "\(error)")
+        }
+    }
+
     func testT02_11_oneBrokenItemIsSkippedWithoutLoggingThePayload() throws {
         let log = CapturingLog()
         let payload = """
