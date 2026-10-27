@@ -10,17 +10,20 @@ public struct LiveAuthBackend: AuthBackend {
     public var log: any GlassfinLog
     public var probeClient: any ServerCandidateClient
     public var clock: any GlassfinClock
+    private let clientOverride: (any JellyfinAPIClient)?
 
     public init(
         secureStore: any SecureStore,
         log: any GlassfinLog = SilentLog(),
         probeClient: any ServerCandidateClient = URLSessionPublicInfoClient(),
-        clock: any GlassfinClock = SystemGlassfinClock()
+        clock: any GlassfinClock = SystemGlassfinClock(),
+        client: (any JellyfinAPIClient)? = nil
     ) {
         self.secureStore = secureStore
         self.log = log
         self.probeClient = probeClient
         self.clock = clock
+        self.clientOverride = client
     }
 
     public func probe(_ address: String) async -> ServerProbeOutcome {
@@ -63,12 +66,9 @@ public struct LiveAuthBackend: AuthBackend {
     }
 
     public func postCapabilities(on server: ServerInfo, token: String) async throws(APIError) {
-        if AuthOpenQuestions.includeDeviceProfile {
-            log.debug("DeviceProfile is not sent before playback ships.")
-        }
         try await service(for: server, token: token).postCapabilities(
             playableMediaTypes: ["Video", "Audio"],
-            supportsMediaControl: true
+            supportsMediaControl: false
         )
     }
 
@@ -91,7 +91,8 @@ public struct LiveAuthBackend: AuthBackend {
         }
         let identity = ClientIdentity(
             deviceName: "Apple TV", deviceID: deviceID, version: "0.1.0", token: token)
-        let client = HTTPJellyfinClient(server: server.url, identity: identity, log: log)
+        let client: any JellyfinAPIClient =
+            clientOverride ?? HTTPJellyfinClient(server: server.url, identity: identity, log: log)
         return JellyfinAuthenticationService(
             client: client, server: server.url, serverName: server.name, knownServer: server)
     }

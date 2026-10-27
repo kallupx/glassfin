@@ -1,91 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Glassfin": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glassfin"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glassfin"
-          }
-        }
-      }
-    },
-    "Connect to server": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connect to server"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yhdistä palvelimeen"
-          }
-        }
-      }
-    },
-    "Server address": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Server address"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Palvelimen osoite"
-          }
-        }
-      }
-    },
-    "Continue": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continue"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jatka"
-          }
-        }
-      }
-    },
-    "Cancel": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peruuta"
-          }
-        }
-      }
-    },
     "Accept": {
       "extractionState": "manual",
       "localizations": {
@@ -103,19 +18,18 @@
         }
       }
     },
-    "Try again": {
-      "extractionState": "manual",
+    "Addresses containing a username or password are not allowed": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Try again"
+            "value": "Addresses containing a username or password are not allowed"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Yritä uudelleen"
+            "value": "Käyttäjätunnuksen tai salasanan sisältäviä osoitteita ei sallita"
           }
         }
       }
@@ -137,53 +51,166 @@
         }
       }
     },
-    "Server not found": {
-      "extractionState": "manual",
+    "Buffering is taking longer than usual": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Server not found"
+            "value": "Buffering is taking longer than usual"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palvelinta ei löytynyt"
+            "value": "Puskurointi kestää tavallista pidempään"
           }
         }
       }
     },
-    "Not a Jellyfin server": {
-      "extractionState": "manual",
+    "Can't reach the server": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not a Jellyfin server"
+            "value": "Can't reach the server"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ei Jellyfin-palvelin"
+            "value": "Palvelimeen ei saada yhteyttä"
           }
         }
       }
     },
-    "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy.": {
-      "extractionState": "manual",
+    "Can't reach the server. Check your connection and try again.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy."
+            "value": "Can't reach the server. Check your connection and try again."
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Julkiset osoitteet vaativat HTTPS:n. Käytä IP-osoitetta, .local-nimeä tai HTTPS-käänteisvälityspalvelinta."
+            "value": "Palvelimeen ei saada yhteyttä. Tarkista yhteys ja yritä uudelleen."
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peruuta"
+          }
+        }
+      }
+    },
+    "Connect to a server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to a server"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yhdistä palvelimeen"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jatka"
+          }
+        }
+      }
+    },
+    "Continue unencrypted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue unencrypted"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jatka salaamattomana"
+          }
+        }
+      }
+    },
+    "Get a new code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get a new code"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hae uusi koodi"
+          }
+        }
+      }
+    },
+    "Glassfin": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glassfin"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glassfin"
+          }
+        }
+      }
+    },
+    "Home": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koti"
           }
         }
       }
@@ -205,81 +232,12 @@
         }
       }
     },
-    "The connection is not encrypted": {
-      "extractionState": "manual",
+    "Incorrect username or password": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The connection is not encrypted"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yhteys ei ole salattu"
-          }
-        }
-      }
-    },
-    "Server setup is incomplete. Finish setup in a browser at %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Server setup is incomplete. Finish setup in a browser at %@"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Palvelimen käyttöönotto on kesken. Viimeistele se selaimessa osoitteessa %@"
-          }
-        }
-      }
-    },
-    "That address cannot be used": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "That address cannot be used"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Osoitetta ei voi käyttää"
-          }
-        }
-      }
-    },
-    "This server version is not supported": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This server version is not supported"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tätä palvelinversiota ei tueta"
-          }
-        }
-      }
-    },
-    "Wrong username or password": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wrong username or password"
+            "value": "Incorrect username or password"
           }
         },
         "fi": {
@@ -290,155 +248,84 @@
         }
       }
     },
-    "Quick Connect was rejected": {
-      "extractionState": "manual",
+    "Item not found": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quick Connect was rejected"
+            "value": "Item not found"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quick Connect hylättiin"
+            "value": "Kohdetta ei löydy"
           }
         }
       }
     },
-    "Could not sign in": {
-      "extractionState": "manual",
+    "No network connection": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Could not sign in"
+            "value": "No network connection"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kirjautuminen ei onnistunut"
+            "value": "Ei verkkoyhteyttä"
           }
         }
       }
     },
-    "Session ended": {
+    "Not a Jellyfin server": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Session ended"
+            "value": "Not a Jellyfin server"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Istunto päättyi"
+            "value": "Ei Jellyfin-palvelin"
           }
         }
       }
     },
-    "The server session may remain active until an administrator removes this device.": {
+    "Offline": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The server session may remain active until an administrator removes this device."
+            "value": "Offline"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palvelimen istunto voi jäädä voimaan, kunnes ylläpitäjä poistaa laitteen."
+            "value": "Ei verkkoyhteyttä"
           }
         }
       }
     },
-    "Enter this code on the server under Quick Connect.": {
-      "extractionState": "manual",
+    "Open Jellyfin on a phone or in a browser → User → Quick Connect → enter the code": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter this code on the server under Quick Connect."
+            "value": "Open Jellyfin on a phone or in a browser → User → Quick Connect → enter the code"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avaa Jellyfin puhelimella tai selaimella, avaa käyttäjä ja Quick Connect, ja syötä koodi."
-          }
-        }
-      }
-    },
-    "Use password": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Use password"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Käytä salasanaa"
-          }
-        }
-      }
-    },
-    "Quick Connect": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quick Connect"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quick Connect"
-          }
-        }
-      }
-    },
-    "Sign in": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sign in"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kirjaudu"
-          }
-        }
-      }
-    },
-    "Username": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Username"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Käyttäjätunnus"
+            "value": "Avaa Jellyfin puhelimella tai selaimella → Käyttäjä → Quick Connect → syötä koodi"
           }
         }
       }
@@ -460,19 +347,217 @@
         }
       }
     },
-    "Home": {
-      "extractionState": "manual",
+    "Playback is unavailable because the server cannot be reached": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Home"
+            "value": "Playback is unavailable because the server cannot be reached"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Koti"
+            "value": "Toisto ei ole käytettävissä, koska palvelimeen ei saada yhteyttä"
+          }
+        }
+      }
+    },
+    "Playback is unavailable without a network connection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback is unavailable without a network connection"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toisto ei ole käytettävissä ilman verkkoyhteyttä"
+          }
+        }
+      }
+    },
+    "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Julkiset osoitteet vaativat HTTPS:n. Käytä IP-osoitetta, .local-nimeä tai HTTPS-käänteisvälityspalvelinta."
+          }
+        }
+      }
+    },
+    "Quick Connect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Connect"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Connect"
+          }
+        }
+      }
+    },
+    "Quick Connect sign-in failed. Get a new code and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Connect sign-in failed. Get a new code and try again."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Connect -kirjautuminen epäonnistui. Hae uusi koodi ja yritä uudelleen."
+          }
+        }
+      }
+    },
+    "Remove server": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove server"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poista palvelin"
+          }
+        }
+      }
+    },
+    "Server address": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server address"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelimen osoite"
+          }
+        }
+      }
+    },
+    "Server not found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server not found"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelinta ei löytynyt"
+          }
+        }
+      }
+    },
+    "Server setup is incomplete. Finish setup in a browser at %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server setup is incomplete. Finish setup in a browser at %@"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelimen käyttöönotto on kesken. Viimeistele se selaimessa osoitteessa %@"
+          }
+        }
+      }
+    },
+    "Server version %@ is too old (required ≥ %@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server version %@ is too old (required ≥ %@)"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelimen versio %@ on liian vanha (vaaditaan ≥ %@)"
+          }
+        }
+      }
+    },
+    "Session expired, please sign in again": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session expired, please sign in again"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Istunto päättyi, kirjaudu uudelleen"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asetukset"
+          }
+        }
+      }
+    },
+    "Sign in": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kirjaudu"
           }
         }
       }
@@ -511,19 +596,84 @@
         }
       }
     },
-    "Remove server": {
-      "extractionState": "manual",
+    "Switch server": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Remove server"
+            "value": "Switch server"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Poista palvelin"
+            "value": "Vaihda palvelinta"
+          }
+        }
+      }
+    },
+    "That address cannot be used": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That address cannot be used"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Osoitetta ei voi käyttää"
+          }
+        }
+      }
+    },
+    "The code expired": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code expired"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koodi vanheni"
+          }
+        }
+      }
+    },
+    "The connection is not encrypted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection is not encrypted"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yhteys ei ole salattu"
+          }
+        }
+      }
+    },
+    "The connection was redirected to an insecure address": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection was redirected to an insecure address"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yhteys ohjattiin turvattomaan osoitteeseen"
           }
         }
       }
@@ -545,19 +695,166 @@
         }
       }
     },
-    "Offline": {
-      "extractionState": "manual",
+    "The server certificate is not trusted": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline"
+            "value": "The server certificate is not trusted"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ei verkkoyhteyttä"
+            "value": "Palvelimen sertifikaatti ei ole luotettu"
+          }
+        }
+      }
+    },
+    "The server ran into a problem. Try again later.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server ran into a problem. Try again later."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelimella tapahtui virhe. Yritä myöhemmin uudelleen."
+          }
+        }
+      }
+    },
+    "The server returned an error": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server returned an error"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelin palautti virheen"
+          }
+        }
+      }
+    },
+    "The server session may remain active until an administrator removes this device.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server session may remain active until an administrator removes this device."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelimen istunto voi jäädä voimaan, kunnes ylläpitäjä poistaa laitteen."
+          }
+        }
+      }
+    },
+    "This file could not be played": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file could not be played"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä tiedostoa ei voitu toistaa"
+          }
+        }
+      }
+    },
+    "This server version is not supported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This server version is not supported"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä palvelinversiota ei tueta"
+          }
+        }
+      }
+    },
+    "Try again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yritä uudelleen"
+          }
+        }
+      }
+    },
+    "Use a password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a password"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Käytä salasanaa"
+          }
+        }
+      }
+    },
+    "Username": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Username"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Käyttäjätunnus"
+          }
+        }
+      }
+    },
+    "You do not have permission for this action": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You do not have permission for this action"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ei oikeuksia tähän toimintoon"
           }
         }
       }

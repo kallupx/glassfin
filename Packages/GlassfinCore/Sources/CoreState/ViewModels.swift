@@ -423,11 +423,8 @@ public final class SeriesViewModel {
 @Observable
 public final class PlayerViewModel {
     public private(set) var state: LoadState<PlaybackSource> = .idle
-    public private(set) var stallMessageKey: String?
-
-    public var stallMessage: String? {
-        stallMessageKey != nil ? AppErrorMessage.buffering : nil
-    }
+    public var stallMessageKey: AuthCopy.Key? { stallMessage == nil ? nil : .buffering }
+    public private(set) var stallMessage: String?
     public private(set) var method: PlayMethod?
 
     @ObservationIgnored private let playback: any PlaybackInfoService

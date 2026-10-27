@@ -77,21 +77,16 @@ final class T02FoundationTests: XCTestCase {
 
     func testT02_09_userFacingCopyAndDiagnosticsOmitTokens() {
         let log = CapturingLog()
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .offline), AppErrorMessage.offlineKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .serverUnreachable), AppErrorMessage.serverDownKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .forbidden), AppErrorMessage.forbiddenKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .unauthorized), AppErrorMessage.sessionEndedKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .invalidCredentials), AppErrorMessage.invalidCredentialsKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .insecureRedirect), AppErrorMessage.insecureRedirectKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .notFound), AppErrorMessage.notFoundKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .serverError(status: 500)), AppErrorMessage.serverErrorKey)
-        XCTAssertEqual(
-            AppErrorMessage.messageKey(for: .playback(.itemFailed(code: "NoCompatibleStream"))),
-            AppErrorMessage.playbackFailedKey)
-        XCTAssertEqual(
-            AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")),
-            "Palvelinversio 10.9.11 ei ole tuettu. Vaaditaan vähintään 10.10.0."
-        )
+        XCTAssertEqual(AppErrorMessage.key(for: .offline), .noNetworkConnection)
+        XCTAssertEqual(AppErrorMessage.key(for: .serverUnreachable), .serverUnreachable)
+        XCTAssertEqual(AppErrorMessage.key(for: .forbidden), .forbidden)
+        XCTAssertEqual(AppErrorMessage.key(for: .unauthorized), .sessionExpired)
+        XCTAssertEqual(AppErrorMessage.key(for: .invalidCredentials), .invalidCredentials)
+        XCTAssertEqual(AppErrorMessage.key(for: .insecureRedirect), .insecureRedirect)
+        XCTAssertEqual(AppErrorMessage.key(for: .notFound), .itemNotFound)
+        XCTAssertEqual(AppErrorMessage.key(for: .serverError(status: 500)), .serverError)
+        XCTAssertEqual(AppErrorMessage.key(for: .playback(.itemFailed(code: "NoCompatibleStream"))), .playbackFailed)
+        XCTAssertEqual(AppErrorMessage.key(for: .unsupportedServer(version: "10.9.11")), .unsupportedServerDetail)
         XCTAssertNil(AppErrorMessage.userFacing(.cancelled))
         XCTAssertNil(AppErrorMessage.userFacing(.decoding))
         XCTAssertNil(AppErrorMessage.userFacing(.internalInvariant))
@@ -196,7 +191,7 @@ final class T02FoundationTests: XCTestCase {
         XCTAssertThrowsError(try ResilientItemDecoder.searchHints(from: Data("[]".utf8), log: log))
     }
 
-    func testT02_12_preferencesStayUnderBudgetAndDropUserinfo() throws {
+    func testT02_12_preferencesStayUnderBudgetAndRejectUserinfo() throws {
         var preferences = AppPreferences.empty
         for index in 0..<10 {
             let server = StoredServer(
@@ -251,10 +246,14 @@ final class T02FoundationTests: XCTestCase {
             url: Sample.url("https://alice:secret@media.example/jellyfin"),
             version: "10.11.0"
         )
-        let normalized = try AppPreferences.empty.upserting(server: dirty).servers[0].url
-        XCTAssertEqual(normalized.absoluteString, "https://media.example/jellyfin")
-        XCTAssertFalse(normalized.absoluteString.contains("alice"))
-        XCTAssertFalse(normalized.absoluteString.contains("secret"))
+        XCTAssertThrowsError(try AppPreferences.empty.upserting(server: dirty)) { error in
+            XCTAssertEqual(error as? PreferencesError, .invalidServerURL)
+        }
+        let clean = StoredServer(
+            id: "s", name: "Home", url: Sample.url("https://example.com/jellyfin?x=1#fragment"),
+            version: "10.11.0")
+        let normalized = try AppPreferences.empty.upserting(server: clean).servers[0].url
+        XCTAssertEqual(normalized.absoluteString, "https://example.com/jellyfin")
         XCTAssertThrowsError(
             try AppPreferences.empty.upserting(
                 server: StoredServer(id: "s", name: "n", url: Sample.url("ftp://example.com"), version: "1.0.0"))

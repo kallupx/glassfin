@@ -77,7 +77,7 @@ public enum DiscoveryPolicy {
         return stored
     }
 
-    static func displayName(_ raw: String) -> String {
+    public static func displayName(_ raw: String) -> String {
         let plain = MetadataSanitizer.plainText(raw)
         let cleaned = plain.unicodeScalars.filter { !isControl($0) }
         return String(String(String.UnicodeScalarView(cleaned)).prefix(maximumNameLength))

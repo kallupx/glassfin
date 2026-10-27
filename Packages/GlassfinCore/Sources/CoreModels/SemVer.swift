@@ -27,7 +27,7 @@ public struct SemVer: Sendable, Hashable, Comparable, Codable {
         guard parts.count >= 2 else { return nil }
         let taken = parts.prefix(3)
         guard
-            taken.allSatisfy({ part in
+            parts.allSatisfy({ part in
                 !part.isEmpty && part.allSatisfy { $0.isASCII && $0.isNumber }
             })
         else { return nil }

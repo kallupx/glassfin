@@ -174,6 +174,21 @@ public final class AppState {
     @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored public var onReconnect: (@MainActor () -> Void)?
 
+    public var bannerKey: AuthCopy.Key? {
+        switch connectivity {
+        case .offline: .noNetworkConnection
+        case .serverUnreachable: .serverUnreachable
+        case .online, .degraded: nil
+        }
+    }
+    public var sessionNoticeKey: AuthCopy.Key? { sessionNotice == nil ? nil : .sessionExpired }
+    public var playbackBlockedKey: AuthCopy.Key? {
+        switch connectivity {
+        case .offline: .playbackOffline
+        case .serverUnreachable: .playbackUnreachable
+        case .online, .degraded: nil
+        }
+    }
     public var showsServerDown: Bool { connectivity == .serverUnreachable }
     public var serverDownTitleKey: String { AppErrorMessage.serverDownKey }
     public var serverDownTitle: String { AppErrorMessage.serverDown }
@@ -350,6 +365,19 @@ public final class AppState {
         preferences.load()
     }
 
+    public func setCapabilitiesRetryPending(_ pending: Bool, serverID: String, userID: String) {
+        var prefs = preferences.load()
+        guard let index = prefs.users.firstIndex(where: { $0.serverID == serverID && $0.userID == userID }) else {
+            return
+        }
+        prefs.users[index].capabilitiesRetryPending = pending
+        try? preferences.save(prefs)
+    }
+
+    public func sessionRestored() {
+        recoverFromServerDown()
+    }
+
     public func handle(_ error: AppError) {
         switch error {
         case .unauthorized:
@@ -431,7 +459,7 @@ public final class AppState {
         pingArmed = false
         deleteAccessToken(serverID: session.server.id, userID: session.userID)
         log.warning("Ended the session after HTTP 401.")
-        sessionNoticeKey = AppErrorMessage.sessionEndedKey
+        sessionNotice = AppErrorMessage.sessionExpired
         phase = .needsLogin(session.server)
         activeServer = session.server
         requestGeneration += 1
@@ -450,7 +478,7 @@ public final class AppState {
             return
         }
         connectivity = .serverUnreachable
-        bannerKey = nil
+        banner = AppErrorMessage.serverDown
         pingArmed = true
         armPingLoop()
     }
@@ -460,6 +488,7 @@ public final class AppState {
         bannerKey = nil
         if connectivity == .serverUnreachable || connectivity == .offline {
             connectivity = .online
+            onReconnect?()
         }
     }
 

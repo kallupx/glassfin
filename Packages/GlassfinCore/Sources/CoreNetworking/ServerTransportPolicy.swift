@@ -10,15 +10,15 @@ public enum ServerTransportPolicy {
         case invalid
     }
 
-    public static let unencryptedWarningKey = "This connection is not encrypted"
-    public static let publicAddressRequiresHTTPSKey = "Public addresses require HTTPS"
+    public static var unencryptedWarning: String { AuthCopy.localized(.connectionNotEncrypted) }
+    public static var publicAddressRequiresHTTPS: String { AuthCopy.localized(.publicAddressRequiresHTTPS) }
 
-    public static var unencryptedWarning: String {
-        String(localized: "This connection is not encrypted", bundle: .module)
-    }
-
-    public static var publicAddressRequiresHTTPS: String {
-        String(localized: "Public addresses require HTTPS", bundle: .module)
+    public static func messageKey(for verdict: Verdict) -> AuthCopy.Key? {
+        switch verdict {
+        case .unencryptedLocal: .connectionNotEncrypted
+        case .publicHTTPRejected: .publicAddressRequiresHTTPS
+        case .secure, .invalid: nil
+        }
     }
 
     public static func evaluate(_ url: URL) -> Verdict {
@@ -264,7 +264,7 @@ public struct ServerSecurityBadge: Sendable, Equatable {
     }
 }
 
-/// S4.5. http(s) only, userinfo removed, dot segments collapsed, credential queries dropped.
+/// S4.5. http(s) only, userinfo rejected, dot segments collapsed, query and fragment removed.
 public enum ServerAddress {
     public static func canonical(_ raw: URL) throws -> URL {
         let normalized = try ServerURLNormalizer.normalize(raw)
@@ -272,10 +272,7 @@ public enum ServerAddress {
             throw APIError.invalidURL
         }
         components.fragment = nil
-        if let items = components.queryItems {
-            let kept = items.filter { !RedirectPolicy.isCredentialQueryName($0.name) }
-            components.queryItems = kept.isEmpty ? nil : kept
-        }
+        components.query = nil
         components.path = normalizePath(components.path)
         guard let url = components.url, url.host != nil else { throw APIError.invalidURL }
         return url

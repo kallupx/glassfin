@@ -12,16 +12,35 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(AuthFocusPolicy.cleartextAndCertificate, .cancel)
     }
 
-    func testT04_16_serverNameDropsMarkupAndConsultsTheCap() {
+    func testT04_16_serverNameDropsMarkupAndCapsAt64() {
         let raw = "<b>Home</b>\u{0007}" + String(repeating: "n", count: 500)
         let shown = AuthServerName.display(raw)
         XCTAssertFalse(shown.contains("<"))
         XCTAssertFalse(shown.contains("\u{0007}"))
-        if let limit = AuthOpenQuestions.addressServerNameLimit {
-            XCTAssertLessThanOrEqual(shown.count, limit)
-        } else {
-            XCTAssertGreaterThan(shown.count, DiscoveryPolicy.maximumNameLength)
-        }
+        XCTAssertEqual(shown.count, 64)
+        XCTAssertEqual(shown, "Home" + String(repeating: "n", count: 60))
+    }
+
+    func testT04_16_serverNameIsCappedOnAddressAndSavedUserPicker() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        let repo = PreferencesRepository(store: rig.harness.settings)
+        try repo.save(
+            repo.load().upserting(
+                user: StoredUser(
+                    serverID: Sample.serverID, userID: Sample.otherUserID, userName: "Bea", isAdministrator: false)))
+        var server = rig.server()
+        server.name = "<b>" + String(repeating: "n", count: 100) + "</b>"
+        rig.backend.probeOutcome = .needsCleartext(server)
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertEqual(rig.flow.displayedName.count, 64)
+        XCTAssertFalse(rig.flow.displayedName.contains("<"))
+        await rig.flow.acceptCleartext()
+        XCTAssertEqual(rig.flow.screen, .userPicker)
+        XCTAssertEqual(rig.flow.displayedName.count, 64)
+        XCTAssertEqual(rig.flow.publicUsers.count, 2)
     }
 
     func testT04_26_rejectingCleartextDoesNotSaveTheServer() async {
@@ -45,6 +64,12 @@ final class T04AuthFlowTests: XCTestCase {
         rig.flow.submitAddress()
         await rig.wait()
         XCTAssertEqual(rig.flow.focus, AuthFocusPolicy.cleartextAndCertificate)
+        rig.flow.rejectCleartext()
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url("https://example.com"))
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .certificate)
+        XCTAssertEqual(rig.flow.focus, .cancel)
     }
 
     func testT04_31_pinMismatchKeepsTheToken() async throws {
@@ -67,33 +92,30 @@ final class T04AuthFlowTests: XCTestCase {
         }
     }
 
-    func testT04_34_disabledQuickConnectConsultsTheConstant() async {
+    func testT04_34_disabledQuickConnectSkipsA3AndBackReturnsToA2() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.quickConnect = false
+        rig.flow.addressText = "https://example.com"
         rig.backend.probeOutcome = .ready(rig.server())
         rig.flow.submitAddress()
         await rig.wait()
-        switch AuthOpenQuestions.quickConnectDisabledPresentation {
-        case .passwordOnly:
-            XCTAssertEqual(rig.flow.screen, .credentials)
-        case .methodScreen:
-            XCTAssertEqual(rig.flow.screen, .loginMethod)
-            XCTAssertEqual(rig.flow.focus, .usePassword)
-        }
+        XCTAssertEqual(rig.flow.screen, .credentials)
+        XCTAssertEqual(rig.flow.focus, .username)
+        rig.flow.goBack()
+        XCTAssertEqual(rig.flow.screen, .address)
+        XCTAssertEqual(rig.flow.focus, .continueButton)
     }
 
-    func testT04_35_initiateIsPostAndFollowsTheConstant() async {
+    func testT04_35_initiateIsPostOnlyAfterA4Opens() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server())
         rig.flow.submitAddress()
         await rig.wait()
-        if AuthOpenQuestions.initiateQuickConnectOnMethodEntry {
-            XCTAssertEqual(rig.backend.initiates, 1)
-        } else {
-            XCTAssertEqual(rig.backend.initiates, 0)
-        }
+        XCTAssertEqual(rig.backend.initiates, 0)
+        XCTAssertEqual(rig.backend.enabledCalls, 1)
+        XCTAssertEqual(rig.backend.publicUserCalls, 0)
         await rig.flow.chooseQuickConnect()
         XCTAssertEqual(rig.backend.initiates, 1)
         XCTAssertEqual(rig.backend.initiateMethods, ["POST"])
@@ -118,7 +140,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(String(reflecting: QuickConnectSecret("super-secret-value")).contains("super-secret-value"))
     }
 
-    func testT04_40_expiryConsultsTheRenewConstant() async {
+    func testT04_40_expiryRenewsAtMostThreeTimes() async {
         let clock = AdvancingClock()
         let rig = Rig(clock: clock)
         defer { rig.cleanup() }
@@ -128,12 +150,18 @@ final class T04AuthFlowTests: XCTestCase {
         await rig.wait()
         await rig.flow.chooseQuickConnect()
         await rig.wait()
-        if AuthOpenQuestions.renewQuickConnectCodeAtTimeout {
-            XCTAssertGreaterThan(rig.backend.initiates, 1)
-        } else {
-            XCTAssertEqual(rig.backend.initiates, 1)
-            XCTAssertFalse(rig.flow.isPolling)
-        }
+        XCTAssertEqual(rig.backend.initiates, 4)
+        XCTAssertEqual(rig.flow.quickConnectRenewals, 3)
+        XCTAssertTrue(rig.flow.quickConnectExpired)
+        XCTAssertFalse(rig.flow.isPolling)
+        XCTAssertEqual(rig.flow.inlineError, .quickConnectExpired)
+        XCTAssertEqual(rig.flow.focus, .newCode)
+        rig.backend.pollAuthenticated = true
+        await rig.flow.getNewQuickConnectCode()
+        await rig.wait()
+        XCTAssertEqual(rig.backend.initiates, 5)
+        XCTAssertFalse(rig.flow.quickConnectExpired)
+        XCTAssertEqual(rig.flow.screen, .home)
     }
 
     func testT04_41_transientPollFailureDoesNotSignOut() async {
@@ -150,7 +178,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNotEqual(rig.harness.app.phase, .needsLogin(rig.server()))
     }
 
-    func testT04_42_backgroundConsultsTheConstant() async {
+    func testT04_42_backgroundCancelsPolling() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server())
@@ -160,12 +188,12 @@ final class T04AuthFlowTests: XCTestCase {
         await rig.flow.chooseQuickConnect()
         XCTAssertTrue(rig.flow.isPolling)
         rig.flow.sceneBecameBackground()
-        if AuthOpenQuestions.continueQuickConnectInBackground {
-            XCTAssertTrue(rig.flow.isPolling)
-        } else {
-            XCTAssertFalse(rig.flow.isPolling)
-        }
+        XCTAssertFalse(rig.flow.isPolling)
+        let calls = rig.backend.polls
         rig.backend.resumePoll(true)
+        await Task.yield()
+        XCTAssertEqual(rig.backend.polls, calls)
+        XCTAssertEqual(rig.flow.screen, .quickConnect)
     }
 
     func testT04_43_quickConnectUnauthorizedKeepsTheSession() async throws {
@@ -178,7 +206,7 @@ final class T04AuthFlowTests: XCTestCase {
         await rig.wait()
         await rig.flow.chooseQuickConnect()
         await rig.wait()
-        XCTAssertEqual(rig.flow.inlineError, AuthOpenQuestions.quickConnectUnauthorizedKey)
+        XCTAssertEqual(rig.flow.inlineError, .quickConnectUnauthorized)
         XCTAssertNotEqual(rig.flow.inlineError, .invalidCredentials)
         XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
         guard case .launching = rig.harness.app.phase else {
@@ -207,7 +235,6 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertTrue(body.contains("Video"))
         XCTAssertTrue(body.contains("Audio"))
         XCTAssertTrue(body.contains("SupportsMediaControl"))
-        XCTAssertFalse(AuthOpenQuestions.includeDeviceProfile)
         XCTAssertFalse(body.contains("DeviceProfile"))
     }
 
@@ -246,7 +273,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(rig.backend.seenPasswords.isEmpty)
     }
 
-    func testT04_50_transportFailureIsNotInvalidCredentials() async {
+    func testT04_50_serverFailureIsNotInvalidCredentials() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server())
@@ -256,11 +283,11 @@ final class T04AuthFlowTests: XCTestCase {
         await rig.wait()
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "secret")
-        XCTAssertEqual(rig.flow.inlineError, AuthOpenQuestions.loginTransportFailureKey)
+        XCTAssertEqual(rig.flow.inlineError, .loginServerFailure)
         XCTAssertNotEqual(rig.flow.inlineError, .invalidCredentials)
     }
 
-    func testT04_52_capabilitiesFailureConsultsTheConstant() async {
+    func testT04_52_capabilitiesFailureKeepsSignedInAndRetriesOnceOnForeground() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server(id: AuthIDs.server))
@@ -270,12 +297,16 @@ final class T04AuthFlowTests: XCTestCase {
         await rig.wait()
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "correct")
-        if AuthOpenQuestions.capabilitiesFailureBlocksSignIn {
-            guard case .signedIn = rig.harness.app.phase else { return }
-            XCTFail("constant says capabilities failure blocks sign-in")
-        } else {
-            guard case .signedIn = rig.harness.app.phase else { return XCTFail("sign-in should proceed") }
-        }
+        guard case .signedIn = rig.harness.app.phase else { return XCTFail("sign-in should proceed") }
+        XCTAssertEqual(rig.flow.screen, .home)
+        XCTAssertEqual(rig.backend.capabilityBodies.count, 1)
+        XCTAssertEqual(rig.harness.app.preferencesSnapshot().activeUser()?.capabilitiesRetryPending, true)
+        XCTAssertFalse(rig.harness.log.contains("access-token"))
+        await rig.flow.sceneBecameActive()
+        XCTAssertEqual(rig.backend.capabilityBodies.count, 2)
+        await rig.flow.sceneBecameActive()
+        XCTAssertEqual(rig.backend.capabilityBodies.count, 2)
+        XCTAssertEqual(rig.harness.app.preferencesSnapshot().activeUser()?.capabilitiesRetryPending, false)
     }
 
     func testT04_54_tokenIsNotInTheSessionOrSettings() async throws {
@@ -319,7 +350,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.currentUserError = .unauthorized
         await rig.flow.restoreSession()
         XCTAssertEqual(rig.backend.currentUserCalls, 1)
-        XCTAssertEqual(rig.flow.noticeKey, AuthOpenQuestions.sessionEndedNoticeKey)
+        XCTAssertEqual(rig.flow.noticeKey, .sessionExpired)
         XCTAssertNil(try rig.harness.secure.data(for: Sample.account()))
         guard case .needsLogin = rig.harness.app.phase else { return XCTFail("expected login") }
         await rig.flow.restoreSession()
@@ -340,7 +371,10 @@ final class T04AuthFlowTests: XCTestCase {
     }
 
     func testT04_61_usersMeFailuresKeepTheToken() async throws {
-        for error in [APIError.forbidden, .server(status: 500), .server(status: 502), .tls, .timeout] {
+        for error in [
+            APIError.forbidden, .server(status: 500), .server(status: 502), .server(status: 503), .server(status: 504),
+            .tls, .timeout,
+        ] {
             let rig = Rig()
             try seed(rig.harness, version: "10.11.0", token: Sample.token)
             rig.backend.currentUserError = error
@@ -351,7 +385,11 @@ final class T04AuthFlowTests: XCTestCase {
                 rig.cleanup()
                 continue
             }
-            XCTAssertEqual(rig.flow.inlineError, AuthOpenQuestions.sessionRestoreFailureKey, "\(error)")
+            XCTAssertNil(rig.flow.inlineError)
+            XCTAssertEqual(rig.flow.screen, .home)
+            XCTAssertEqual(rig.flow.connectivity, .serverUnreachable)
+            XCTAssertEqual(rig.flow.bannerKey, .serverUnreachable)
+            XCTAssertEqual(rig.flow.homeErrorKey, .serverUnreachable)
             rig.cleanup()
         }
     }
@@ -385,20 +423,13 @@ final class T04AuthFlowTests: XCTestCase {
         rig.harness.app.bootstrap()
         rig.backend.logoutError = .server(status: 500)
         rig.flow.requestLogout()
-        XCTAssertEqual(rig.flow.confirmFocus, AuthOpenQuestions.logoutConfirmDefaultFocus)
+        XCTAssertEqual(rig.flow.confirmFocus, .cancel)
         await rig.flow.confirmLogout()
         XCTAssertNil(try rig.harness.secure.data(for: Sample.account()))
         XCTAssertEqual(rig.flow.noticeKey, .serverSessionMayRemain)
-        switch AuthOpenQuestions.postLogoutScreen {
-        case .welcome:
-            XCTAssertEqual(rig.flow.screen, .welcome)
-        case .address:
-            XCTAssertEqual(rig.flow.screen, .address)
-        case .login:
-            XCTAssertEqual(rig.flow.screen, .loginMethod)
-        case nil:
-            XCTAssertEqual(rig.flow.screen, .signedOut)
-        }
+        XCTAssertEqual(rig.flow.screen, .loginMethod)
+        XCTAssertEqual(rig.flow.focus, .quickConnect)
+        XCTAssertEqual(rig.harness.app.preferencesSnapshot().servers.count, 1)
     }
 
     func testT04_70_removingAServerKeepsTheOtherAccount() async throws {
@@ -438,7 +469,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNil(try rig.pins.fingerprint(for: Sample.serverID))
     }
 
-    func testProbeFailureShowsTheSkippedHTTPFlag() async {
+    func testT04_93_probeFailureShowsTheSkippedHTTPFlag() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .notFound(ProbeFailureDetail(httpSkippedByPolicy: true))
@@ -455,7 +486,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(rig.flow.httpSkippedByPolicy)
     }
 
-    func testSetupIncompleteDoesNotSave() async {
+    func testT04_92_setupRetryProbesAgainWithoutSaving() async {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .setupIncomplete(address: Sample.url("https://media.example"))
@@ -464,9 +495,267 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .setupIncomplete)
         XCTAssertEqual(rig.flow.focus, .tryAgain)
         XCTAssertTrue(rig.harness.app.preferencesSnapshot().servers.isEmpty)
+        let calls = rig.backend.probes
         rig.flow.retrySetup()
-        XCTAssertEqual(rig.flow.screen, .address)
+        await rig.wait()
+        XCTAssertEqual(rig.backend.probes, calls + 1)
+        XCTAssertEqual(rig.flow.screen, .setupIncomplete)
+        XCTAssertEqual(rig.backend.enabledCalls, 0)
     }
+    func testT04_38_pollingChecksImmediatelyThenEveryFiveSeconds() async {
+        let clock = SuspendingClock()
+        let rig = Rig(clock: clock)
+        defer { rig.cleanup() }
+        rig.backend.probeOutcome = .ready(rig.server())
+        rig.backend.pollAuthenticated = false
+        rig.flow.submitAddress()
+        await rig.wait()
+        await rig.flow.chooseQuickConnect()
+        await clock.waitForSleeps(1)
+        XCTAssertEqual(rig.backend.polls, 1)
+        XCTAssertEqual(clock.sleeps(), [.seconds(5)])
+        clock.advance(by: .seconds(5))
+        clock.resumeAll()
+        await clock.waitForSleeps(2)
+        XCTAssertEqual(rig.backend.polls, 2)
+        XCTAssertEqual(clock.sleeps(), [.seconds(5), .seconds(5)])
+    }
+
+    func testT04_39_leavingA4CancelsAllFurtherRequests() async {
+        let clock = SuspendingClock()
+        let rig = Rig(clock: clock)
+        defer { rig.cleanup() }
+        rig.backend.probeOutcome = .ready(rig.server())
+        rig.backend.pollAuthenticated = false
+        rig.flow.submitAddress()
+        await rig.wait()
+        await rig.flow.chooseQuickConnect()
+        await clock.waitForSleeps(1)
+        rig.flow.goBack()
+        let calls = rig.backend.polls
+        clock.advance(by: .seconds(60))
+        clock.resumeAll()
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(rig.backend.polls, calls)
+        XCTAssertEqual(rig.backend.initiates, 1)
+        XCTAssertFalse(rig.flow.isPolling)
+        XCTAssertNil(rig.flow.quickConnectCode)
+        XCTAssertEqual(rig.flow.screen, .loginMethod)
+    }
+
+    func testT04_42_foregroundChecksYoungCodeImmediatelyAndKeepsOriginalExpiry() async {
+        let clock = SuspendingClock()
+        let rig = Rig(clock: clock)
+        defer { rig.cleanup() }
+        rig.backend.probeOutcome = .ready(rig.server())
+        rig.backend.pollAuthenticated = false
+        rig.flow.submitAddress()
+        await rig.wait()
+        await rig.flow.chooseQuickConnect()
+        await clock.waitForSleeps(1)
+        rig.flow.sceneBecameBackground()
+        clock.advance(by: .seconds(299))
+        let calls = rig.backend.polls
+        await rig.flow.sceneBecameActive()
+        await clock.waitForSleeps(2)
+        XCTAssertEqual(rig.backend.polls, calls + 1)
+        XCTAssertEqual(rig.backend.initiates, 1)
+        XCTAssertEqual(clock.sleeps().last, .seconds(1))
+        rig.flow.sceneBecameBackground()
+        clock.advance(by: .seconds(1))
+        await rig.flow.sceneBecameActive()
+        await clock.waitForSleeps(3)
+        XCTAssertEqual(rig.backend.initiates, 2)
+        XCTAssertEqual(rig.flow.quickConnectRenewals, 1)
+    }
+
+    func testT04_42_oldForegroundCodesConsumeTheThreeRenewals() async {
+        let clock = SuspendingClock()
+        let rig = Rig(clock: clock)
+        defer { rig.cleanup() }
+        rig.backend.probeOutcome = .ready(rig.server())
+        rig.backend.pollAuthenticated = false
+        rig.flow.submitAddress()
+        await rig.wait()
+        await rig.flow.chooseQuickConnect()
+        await clock.waitForSleeps(1)
+        for renewal in 1...3 {
+            rig.flow.sceneBecameBackground()
+            clock.advance(by: .seconds(300))
+            await rig.flow.sceneBecameActive()
+            await clock.waitForSleeps(renewal + 1)
+            XCTAssertEqual(rig.flow.quickConnectRenewals, renewal)
+        }
+        rig.flow.sceneBecameBackground()
+        clock.advance(by: .seconds(300))
+        await rig.flow.sceneBecameActive()
+        XCTAssertEqual(rig.backend.initiates, 4)
+        XCTAssertTrue(rig.flow.quickConnectExpired)
+        XCTAssertEqual(rig.flow.focus, .newCode)
+    }
+
+    func testT04_50_passwordAndQuickConnectUseDistinctNetworkAndServerErrorKeys() async {
+        for error in [APIError.network, .timeout, .server(status: 500), .server(status: 502), .server(status: 503)] {
+            let rig = Rig()
+            defer { rig.cleanup() }
+            rig.backend.probeOutcome = .ready(rig.server())
+            rig.flow.submitAddress()
+            await rig.wait()
+            rig.backend.signInError = error
+            rig.flow.choosePassword()
+            await rig.flow.signIn(password: "sample")
+            let expected: AuthCopy.Key = {
+                if case .server = error { return .loginServerFailure }
+                return .loginTransportFailure
+            }()
+            XCTAssertEqual(rig.flow.inlineError, expected)
+            rig.flow.goBack()
+            rig.backend.finishError = error
+            await rig.flow.chooseQuickConnect()
+            await rig.wait()
+            XCTAssertEqual(rig.flow.inlineError, expected)
+            XCTAssertEqual(rig.flow.screen, .quickConnect)
+        }
+    }
+
+    func testT04_52_pendingCapabilitiesRetrySurvivesRelaunchAndIsConsumedOnce() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        rig.backend.probeOutcome = .ready(rig.server(id: AuthIDs.server))
+        rig.backend.capabilitiesError = .server(status: 503)
+        rig.flow.submitAddress()
+        await rig.wait()
+        await rig.flow.signIn(password: "sample")
+        XCTAssertEqual(rig.harness.app.preferencesSnapshot().activeUser()?.capabilitiesRetryPending, true)
+        let restarted = AuthFlow(
+            app: rig.harness.app, backend: rig.backend, pins: rig.pins,
+            vault: CredentialVault(secureStore: rig.harness.secure, settings: rig.harness.settings, accessGroup: ""),
+            clock: rig.harness.clock, log: rig.harness.log)
+        await restarted.restoreSession()
+        XCTAssertEqual(rig.backend.capabilityBodies.count, 2)
+        await restarted.sceneBecameActive()
+        XCTAssertEqual(rig.backend.capabilityBodies.count, 2)
+        XCTAssertEqual(restarted.screen, .home)
+        XCTAssertFalse(rig.harness.log.contains("access-token"))
+    }
+
+    func testT04_59_launchFailureLoadsCachedHomeAndKeepsToken() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        let snapshot = HomeSnapshot(resume: [], nextUp: [], latest: [])
+        XCTAssertTrue(rig.harness.app.snapshots.save(snapshot))
+        rig.backend.currentUserError = .network
+        await rig.flow.restoreSession()
+        XCTAssertEqual(rig.flow.screen, .home)
+        XCTAssertEqual(rig.flow.cachedHome, snapshot)
+        XCTAssertNil(rig.flow.homeErrorKey)
+        XCTAssertEqual(rig.flow.connectivity, .serverUnreachable)
+        XCTAssertEqual(rig.flow.bannerKey, .serverUnreachable)
+        XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
+    }
+
+    func testT04_60_sixSecondRequestTimesOutAtFiveSecondsWithoutRetry() async throws {
+        let clock = SuspendingClock()
+        let rig = Rig(clock: clock)
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.backend.currentUserDelay = true
+        let launch = Task { await rig.flow.restoreSession() }
+        await clock.waitForSleeps(1)
+        await waitUntil { rig.backend.currentUserCalls == 1 }
+        XCTAssertEqual(clock.sleeps(), [.seconds(5)])
+        clock.advance(by: .seconds(5))
+        clock.resumeAll()
+        await launch.value
+        XCTAssertEqual(rig.backend.currentUserCalls, 1)
+        XCTAssertEqual(rig.flow.screen, .home)
+        XCTAssertEqual(rig.flow.connectivity, .serverUnreachable)
+        XCTAssertEqual(rig.flow.homeErrorKey, .serverUnreachable)
+        XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
+    }
+
+    func testT04_63_noCacheShowsHomeErrorAndRetryAndStillAllowsLogout() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.backend.currentUserError = .forbidden
+        await rig.flow.restoreSession()
+        XCTAssertEqual(rig.flow.screen, .home)
+        XCTAssertNil(rig.flow.cachedHome)
+        XCTAssertEqual(rig.flow.homeErrorKey, .serverUnreachable)
+        XCTAssertEqual(rig.flow.focus, .tryAgain)
+        rig.backend.currentUserError = nil
+        await rig.flow.retryHome()
+        XCTAssertEqual(rig.backend.currentUserCalls, 2)
+        XCTAssertNil(rig.flow.homeErrorKey)
+        XCTAssertNil(rig.flow.bannerKey)
+        rig.flow.requestLogout()
+        XCTAssertEqual(rig.flow.screen, .logoutConfirm)
+        XCTAssertEqual(rig.flow.confirmFocus, .cancel)
+    }
+
+    func testT04_68_logoutChoosesSavedUsersOnTheSameServerAndKeepsServer() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        let repo = PreferencesRepository(store: rig.harness.settings)
+        let prefs = repo.load().upserting(
+            user: StoredUser(
+                serverID: Sample.serverID, userID: Sample.otherUserID, userName: "Bea", isAdministrator: false)
+        )
+        .upserting(
+            user: StoredUser(
+                serverID: Sample.otherServerID, userID: "elsewhere", userName: "Cal", isAdministrator: false))
+        try repo.save(prefs)
+        await rig.flow.restoreSession()
+        rig.flow.requestLogout()
+        XCTAssertEqual(rig.flow.confirmFocus, .cancel)
+        await rig.flow.confirmLogout()
+        XCTAssertEqual(rig.flow.screen, .userPicker)
+        XCTAssertEqual(rig.flow.publicUsers.map(\.id), [Sample.otherUserID])
+        XCTAssertEqual(repo.load().servers.count, 1)
+        XCTAssertNil(try rig.harness.secure.data(for: Sample.account()))
+    }
+
+    func testT04_68_logoutWithoutOtherUsersSkipsA3WhenQuickConnectDisabledOnRelaunch() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.backend.quickConnect = false
+        await rig.flow.restoreSession()
+        await rig.flow.confirmLogout()
+        XCTAssertEqual(rig.flow.screen, .credentials)
+        await rig.flow.restoreSession()
+        XCTAssertEqual(rig.backend.currentUserCalls, 1)
+        XCTAssertEqual(rig.flow.screen, .credentials)
+        XCTAssertEqual(rig.harness.app.preferencesSnapshot().servers.count, 1)
+    }
+
+    func testT04_87_launchFailurePingsEveryTenSecondsRecoversAndLater401SignsOut() async throws {
+        let rig = Rig(automaticPing: true)
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.backend.currentUserError = .server(status: 503)
+        await rig.flow.restoreSession()
+        await rig.harness.suspending?.waitForSleeps(2)
+        // The first sleep is the launch timeout; the second is the recovery ping.
+        XCTAssertEqual(rig.harness.suspending?.sleeps().last, .seconds(10))
+        rig.harness.pinger.outcome = .ok
+        rig.harness.suspending?.resumeAll()
+        await waitUntil { rig.flow.connectivity == .online }
+        XCTAssertNil(rig.flow.bannerKey)
+        XCTAssertEqual(rig.flow.screen, .home)
+        XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
+        rig.harness.app.handle(.serverUnreachable)
+        rig.harness.pinger.outcome = .failed(.unauthorized)
+        await rig.harness.app.retryNow()
+        await rig.flow.synchronizeSession()
+        XCTAssertEqual(rig.flow.noticeKey, .sessionExpired)
+        XCTAssertNil(try rig.harness.secure.data(for: Sample.account()))
+        XCTAssertEqual(rig.flow.screen, .loginMethod)
+    }
+
 }
 
 private enum AuthIDs {
@@ -482,8 +771,8 @@ private struct Rig {
     var pins: MemoryPins
     var flow: AuthFlow
 
-    init(clock: (any GlassfinClock)? = nil) {
-        harness = Harness.make(suspendingClock: true)
+    init(clock: (any GlassfinClock)? = nil, automaticPing: Bool = false) {
+        harness = Harness.make(automaticPing: automaticPing, suspendingClock: true)
         backend = ScriptAuth()
         pins = MemoryPins()
         let vault = CredentialVault(secureStore: harness.secure, settings: harness.settings, accessGroup: "")
@@ -497,7 +786,11 @@ private struct Rig {
         )
     }
 
-    func cleanup() { harness.cleanup() }
+    func cleanup() {
+        flow.sceneBecameBackground()
+        harness.app.signOutLocally(notice: nil)
+        harness.cleanup()
+    }
 
     func server(id: String = Sample.serverID, user: String = Sample.userID) -> ServerInfo {
         _ = user
@@ -536,6 +829,11 @@ private func sampleLeaf() -> CertificatePresentation {
 private final class ScriptAuth: AuthBackend, @unchecked Sendable {
     var probeOutcome: ServerProbeOutcome = .invalidAddress
     var quickConnect = true
+    var enabledCalls = 0
+    var publicUserCalls = 0
+    var probes = 0
+    var users: [PublicUser] = []
+    var currentUserDelay = false
     var initiates = 0
     var initiateMethods: [String] = []
     var secret = "super-secret-value"
@@ -558,11 +856,13 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
 
     func probe(_ address: String) async -> ServerProbeOutcome {
         _ = address
+        lock.withLock { probes += 1 }
         return probeOutcome
     }
 
     func quickConnectEnabled(on server: ServerInfo) async throws(APIError) -> Bool {
         _ = server
+        lock.withLock { enabledCalls += 1 }
         return quickConnect
     }
 
@@ -614,20 +914,24 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
     func currentUser(on server: ServerInfo, token: String) async throws(APIError) -> UserSession {
         _ = token
         recordCurrentUser()
+        if currentUserDelay {
+            do { try await Task.sleep(for: .seconds(60)) } catch { throw APIError.cancelled }
+        }
         if let currentUserError { throw currentUserError }
         return UserSession(server: server, userID: Sample.userID, userName: "Ada", isAdministrator: false)
     }
 
     func publicUsers(on server: ServerInfo) async throws(APIError) -> [PublicUser] {
         _ = server
-        return []
+        lock.withLock { publicUserCalls += 1 }
+        return users
     }
 
     func postCapabilities(on server: ServerInfo, token: String) async throws(APIError) {
         _ = server
         _ = token
         let body = Data(
-            #"{"PlayableMediaTypes":["Video","Audio"],"SupportsMediaControl":true,"SupportedCommands":[]}"#.utf8)
+            #"{"PlayableMediaTypes":["Video","Audio"],"SupportsMediaControl":false,"SupportedCommands":[]}"#.utf8)
         recordCapabilities(body)
         if let capabilitiesError { throw capabilitiesError }
     }
