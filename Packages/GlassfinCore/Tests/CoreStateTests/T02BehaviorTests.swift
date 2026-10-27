@@ -52,6 +52,9 @@ final class T02BehaviorTests: XCTestCase {
         let message = try XCTUnwrap(AppErrorMessage.userFacing(error))
         XCTAssertTrue(message.contains("10.9.11"))
         XCTAssertTrue(message.contains(ServerVersionGate.dotted(.minimumJellyfin)))
+        let serverVersionRange = try XCTUnwrap(message.range(of: "10.9.11"))
+        let minimumVersionRange = try XCTUnwrap(message.range(of: ServerVersionGate.dotted(.minimumJellyfin)))
+        XCTAssertLessThan(serverVersionRange.lowerBound, minimumVersionRange.lowerBound)
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         harness.app.removeServer(id: Sample.serverID)
@@ -138,7 +141,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertTrue(harness.app.showsServerDown)
         XCTAssertEqual(harness.app.serverDownTitleKey, AppErrorMessage.serverDownKey)
         XCTAssertEqual(harness.app.retryTitleKey, AppErrorMessage.retryKey)
-        XCTAssertEqual(harness.app.switchServerTitleKey, AppErrorMessage.switchServerKey)
+        XCTAssertEqual(harness.app.changeServerTitleKey, AppErrorMessage.changeServerKey)
         await waitUntil { harness.suspending?.sleeps() == [.seconds(10)] }
         harness.pinger.outcome = .ok
         harness.suspending?.resumeAll()
@@ -166,7 +169,7 @@ final class T02BehaviorTests: XCTestCase {
         await home.reload(libraryIDs: [])
         guard case .needsLogin(let info) = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertEqual(info.id, Sample.serverID)
-        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionEndedKey)
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
         XCTAssertEqual(harness.secure.removed(), [Sample.account()])
         XCTAssertNil(try harness.secure.data(for: Sample.account()))
         XCTAssertFalse(harness.log.contains(Sample.token))
@@ -192,10 +195,10 @@ final class T02BehaviorTests: XCTestCase {
         }
         XCTAssertEqual(harness.secure.removed().count, 1)
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
-        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionEndedKey)
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
     }
 
-    func testT02_08_network403And5xxDoNotLogOut() async throws {
+    func testT02_08b_network403And5xxDoNotLogOut() async throws {
         let errors: [APIError] = [
             .network, .timeout, .forbidden, .server(status: 500), .server(status: 502), .tls,
             .redirectRejected(.notFollowed),
@@ -217,7 +220,7 @@ final class T02BehaviorTests: XCTestCase {
         }
     }
 
-    func testT02_09_forbiddenKeepsTheSession() async throws {
+    func testT02_09b_forbiddenKeepsTheSession() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()
@@ -447,7 +450,7 @@ final class T02BehaviorTests: XCTestCase {
         search.onDisappear()
     }
 
-    func testT02_19_libraryPagesAndCacheTTL() async throws {
+    func testT02_19b_libraryPagesAndCacheTTL() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()

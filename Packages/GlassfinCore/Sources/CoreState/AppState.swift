@@ -137,11 +137,11 @@ public final class AppState {
     public private(set) var sessionNoticeKey: String?
 
     public var banner: String? {
-        bannerKey != nil ? AppErrorMessage.offline : nil
+        bannerKey.map(AppErrorMessage.localized)
     }
 
     public var sessionNotice: String? {
-        sessionNoticeKey != nil ? AppErrorMessage.sessionEnded : nil
+        sessionNoticeKey.map(AppErrorMessage.localized)
     }
     /// Set when the saved server is below the minimum. The phase enum has no blocked case.
     public private(set) var blockingError: AppError?
@@ -179,8 +179,8 @@ public final class AppState {
     public var serverDownTitle: String { AppErrorMessage.serverDown }
     public var retryTitleKey: String { AppErrorMessage.retryKey }
     public var retryTitle: String { AppErrorMessage.retry }
-    public var switchServerTitleKey: String { AppErrorMessage.switchServerKey }
-    public var switchServerTitle: String { AppErrorMessage.switchServer }
+    public var changeServerTitleKey: String { AppErrorMessage.changeServerKey }
+    public var changeServerTitle: String { AppErrorMessage.changeServer }
     public var scheduledPingDelay: Duration { NetworkThresholds.serverPingInterval }
     public var playbackBlocked: Bool { connectivity == .offline || connectivity == .serverUnreachable }
 
@@ -436,7 +436,7 @@ public final class AppState {
         try? secureStore.remove(
             account: SessionCredential.account(serverID: session.server.id, userID: session.userID))
         log.warning("Ended the session after HTTP 401.")
-        sessionNoticeKey = AppErrorMessage.sessionEndedKey
+        sessionNoticeKey = AppErrorMessage.sessionExpiredKey
         phase = .needsLogin(session.server)
         activeServer = session.server
         requestGeneration += 1

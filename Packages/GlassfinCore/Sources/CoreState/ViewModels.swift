@@ -426,7 +426,7 @@ public final class PlayerViewModel {
     public private(set) var stallMessageKey: String?
 
     public var stallMessage: String? {
-        stallMessageKey != nil ? AppErrorMessage.buffering : nil
+        stallMessageKey.map(AppErrorMessage.localized)
     }
     public private(set) var method: PlayMethod?
 

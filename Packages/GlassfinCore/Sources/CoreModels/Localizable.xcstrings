@@ -37,6 +37,24 @@
         }
       }
     },
+    "Change server" : {
+      "comment" : "Button to choose a different server.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change server"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vaihda palvelinta"
+          }
+        }
+      }
+    },
     "Incorrect username or password" : {
       "comment" : "Shown when a login request rejects the username or password.",
       "extractionState" : "manual",
@@ -145,20 +163,20 @@
         }
       }
     },
-    "Switch server" : {
-      "comment" : "Button to choose a different server.",
+    "Session expired, please sign in again" : {
+      "comment" : "Notice shown when an authenticated request ends the session.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Switch server"
+            "value" : "Session expired, please sign in again"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vaihda palvelinta"
+            "value" : "Istunto päättyi, kirjaudu uudelleen"
           }
         }
       }
@@ -267,24 +285,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ei oikeuksia tähän toimintoon"
-          }
-        }
-      }
-    },
-    "Your session ended. Sign in again." : {
-      "comment" : "Notice shown when an authenticated request ends the session.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your session ended. Sign in again."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Istunto päättyi, kirjaudu uudelleen"
           }
         }
       }

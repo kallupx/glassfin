@@ -80,7 +80,7 @@ final class T02FoundationTests: XCTestCase {
         XCTAssertEqual(AppErrorMessage.messageKey(for: .offline), AppErrorMessage.offlineKey)
         XCTAssertEqual(AppErrorMessage.messageKey(for: .serverUnreachable), AppErrorMessage.serverDownKey)
         XCTAssertEqual(AppErrorMessage.messageKey(for: .forbidden), AppErrorMessage.forbiddenKey)
-        XCTAssertEqual(AppErrorMessage.messageKey(for: .unauthorized), AppErrorMessage.sessionEndedKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .unauthorized), AppErrorMessage.sessionExpiredKey)
         XCTAssertEqual(AppErrorMessage.messageKey(for: .invalidCredentials), AppErrorMessage.invalidCredentialsKey)
         XCTAssertEqual(AppErrorMessage.messageKey(for: .insecureRedirect), AppErrorMessage.insecureRedirectKey)
         XCTAssertEqual(AppErrorMessage.messageKey(for: .notFound), AppErrorMessage.notFoundKey)
@@ -123,7 +123,7 @@ final class T02FoundationTests: XCTestCase {
             (.offline, AppErrorMessage.offlineKey),
             (.serverUnreachable, AppErrorMessage.serverDownKey),
             (.tlsUntrusted(.unavailable), AppErrorMessage.tlsUntrustedKey),
-            (.unauthorized, AppErrorMessage.sessionEndedKey),
+            (.unauthorized, AppErrorMessage.sessionExpiredKey),
             (.invalidCredentials, AppErrorMessage.invalidCredentialsKey),
             (.insecureRedirect, AppErrorMessage.insecureRedirectKey),
             (.forbidden, AppErrorMessage.forbiddenKey),
@@ -644,7 +644,7 @@ final class T02FoundationTests: XCTestCase {
     import os
 
     final class T02_18_AppleSignpostMetricTests: XCTestCase {
-        func testT02_18_xctMetricRecordsPlaybackFirstFrame() {
+        func testT02_18b_xctMetricRecordsPlaybackFirstFrame() {
             let poster = OSSignposter(subsystem: Signposters.subsystem, category: Signposters.category)
             let metric = XCTOSSignpostMetric(
                 subsystem: Signposters.subsystem, category: Signposters.category, name: "playback.firstFrame")
