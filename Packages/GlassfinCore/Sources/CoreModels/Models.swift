@@ -165,6 +165,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
     public var userData: UserItemState
     public var trickplay: [Int: TrickplayInfo]?
     public var chapters: [ChapterMark]
+    public var detail: ItemMetadata?
 
     public init(
         id: String,
@@ -182,7 +183,8 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
         images: ImageSet = ImageSet(),
         userData: UserItemState = UserItemState(),
         trickplay: [Int: TrickplayInfo]? = nil,
-        chapters: [ChapterMark] = []
+        chapters: [ChapterMark] = [],
+        detail: ItemMetadata? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -200,6 +202,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
         self.userData = userData
         self.trickplay = trickplay
         self.chapters = chapters
+        self.detail = detail
     }
 }
 
@@ -228,10 +231,12 @@ public struct PageRequest: Sendable, Hashable, Codable {
 public struct Page<Item: Sendable>: Sendable {
     public var items: [Item]
     public var totalCount: Int?
+    public var consumedCount: Int?
 
-    public init(items: [Item], totalCount: Int?) {
+    public init(items: [Item], totalCount: Int?, consumedCount: Int? = nil) {
         self.items = items
         self.totalCount = totalCount
+        self.consumedCount = consumedCount
     }
 }
 

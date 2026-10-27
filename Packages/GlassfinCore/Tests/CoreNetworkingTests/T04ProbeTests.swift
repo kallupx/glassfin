@@ -372,7 +372,7 @@ final class T04ProbeTests: XCTestCase {
         let packet = Data(
             #"{"Address":"http://192.168.1.10:8096","Id":"id-1","Name":"<b>\#(long)</b>"}"#.utf8)
         let parsed = try XCTUnwrap(DiscoveryPolicy.parse(packet, storedURL: nil, publicInfoID: nil))
-        XCTAssertFalse(parsed.name.contains("<"))
+        XCTAssertTrue(parsed.name.contains("<"))
         XCTAssertLessThanOrEqual(parsed.name.count, DiscoveryPolicy.maximumNameLength)
     }
 

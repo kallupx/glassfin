@@ -10,12 +10,14 @@ public struct APIRequest: Sendable, Equatable {
     public var path: String
     public var query: [URLQueryItem]
     public var body: Data?
+    public var maximumResponseBytes: Int?
 
-    public init(method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil) {
+    public init(method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil, maximumResponseBytes: Int? = nil) {
         self.method = method
         self.path = path
         self.query = query
         self.body = body
+        self.maximumResponseBytes = maximumResponseBytes
     }
 }
 
@@ -159,7 +161,17 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.invalidURL
         }
         do {
-            let (data, response, taskIdentifier) = try await transport.data(for: urlRequest)
+            let result: (Data, URLResponse, Int?)
+            if let limit = request.maximumResponseBytes,
+                let production = transport as? URLSessionRequestTransport
+            {
+                result = try await BoundedResponseDownload(
+                    limit: limit, redirects: redirectDelegate, certificatePin: production.certificatePin
+                ).run(urlRequest)
+            } else {
+                result = try await transport.data(for: urlRequest)
+            }
+            let (data, response, taskIdentifier) = result
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
             if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
                 if case .redirectRejected = failure {
@@ -172,6 +184,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
                 }
                 throw failure
             }
+            if let limit = request.maximumResponseBytes, data.count > limit { throw APIError.decoding }
             return data
         } catch let error as APIError {
             throw error
@@ -181,7 +194,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.cancelled
         } catch {
             if Task.isCancelled { throw APIError.cancelled }
-            log.error("Request failed for \(SensitiveRedactor.redact(urlRequest.url?.absoluteString ?? request.path))")
+            log.error("Request transport failed.")
             throw APIError.network
         }
     }

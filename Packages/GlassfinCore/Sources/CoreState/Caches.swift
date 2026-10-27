@@ -10,13 +10,9 @@ public enum CacheBudget {
 
 enum CacheKey {
     static func filename(for key: String) -> String {
-        let redacted = SensitiveRedactor.redact(key)
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in redacted.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 1_099_511_628_211
-        }
-        return String(hash, radix: 16)
+        // Image descriptors already supply the canonical SHA-256 tuple digest.
+        if key.count == 64, key.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) { return key }
+        return CertificateFingerprint.sha256Hex(Data(SensitiveRedactor.redact(key).utf8))
     }
 }
 
@@ -112,7 +108,7 @@ public actor DiskImageCache {
     @discardableResult
     public func store(key: String, data: Data) -> Bool {
         loadIfNeeded()
-        guard data.count <= byteLimit, byteLimit > 0 else { return false }
+        guard data.count <= byteLimit, data.count <= MetadataPolicy.imageMaxBytes, byteLimit > 0 else { return false }
         let name = CacheKey.filename(for: key)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

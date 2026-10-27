@@ -58,8 +58,8 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: MetadataSanitizer.plainText(dto.Name ?? ""),
-            overview: dto.Overview.map(MetadataSanitizer.plainText),
+            name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            overview: dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) },
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,
@@ -71,13 +71,23 @@ public enum DTOMapper {
             images: images,
             userData: userData,
             trickplay: trickplay(dto.Trickplay),
-            chapters: chapters(dto.Chapters, log: log)
+            chapters: chapters(dto.Chapters, log: log),
+            detail: ItemMetadata(
+                taglines: dto.Taglines ?? [], genres: dto.Genres ?? [],
+                people: (dto.People ?? []).map { ItemPerson(name: $0.Name ?? "", role: $0.Role) },
+                studios: (dto.Studios ?? []).compactMap(\.Name),
+                streams: (dto.MediaStreams ?? dto.MediaSources?.first?.MediaStreams ?? []).map {
+                    ItemStream(id: $0.Index ?? 0, kind: $0.Type ?? "", title: $0.DisplayTitle,
+                        language: $0.Language, codec: $0.Codec, channels: $0.Channels,
+                        width: $0.Width, height: $0.Height, videoRange: $0.VideoRangeType,
+                        dolbyVisionProfile: $0.DvProfile)
+                })
         )
     }
 
     public static func library(_ dto: BaseItemDTO) -> Library? {
         guard let id = dto.Id else { return nil }
-        return Library(id: id, name: MetadataSanitizer.plainText(dto.Name ?? ""), collectionType: dto.CollectionType)
+        return Library(id: id, name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax), collectionType: dto.CollectionType)
     }
 
     public static func page(_ dto: QueryResultDTO, log: any GlassfinLog) -> Page<MediaItem> {
