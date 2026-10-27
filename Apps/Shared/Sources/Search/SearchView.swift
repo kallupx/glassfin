@@ -195,7 +195,7 @@ private struct SearchResultRow: View {
                 .onAppear {
                     if let rememberedID {
                         proxy.scrollTo(rememberedID, anchor: .center)
-                        focus = rememberedID
+                        if feature.model.focusedKind == group.id { focus = rememberedID }
                     }
                 }
             }
@@ -203,7 +203,10 @@ private struct SearchResultRow: View {
         .focusSection()
         .defaultFocus($focus, rememberedID ?? group.items.first?.id, priority: .userInitiated)
         .onChange(of: focus) { _, value in
-            if let value { rememberedID = value }
+            if let value {
+                rememberedID = value
+                feature.model.focusedKind = group.id
+            }
         }
         .accessibilityIdentifier("search.row.\(group.id.rawValue)")
     }
@@ -254,7 +257,7 @@ private struct SearchResultCard: View {
     }
 }
 
-/// M07 can replace this destination via the selected MediaItem without moving search state.
+/// TODO(Q9-02): Route to M07 when its destination lands; keep the search model owned by this tab.
 private struct SearchItemDetail: View {
     let feature: SearchFeature
     let initial: MediaItem

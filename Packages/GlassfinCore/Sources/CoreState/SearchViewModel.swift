@@ -13,6 +13,7 @@ public final class SearchViewModel {
     public private(set) var recentQueries: [String] = []
     public private(set) var historyFailed = false
     public var rememberedIDs: [SearchKind: String] = [:]
+    public var focusedKind: SearchKind?
     public var selectedItem: MediaItem?
     public private(set) var paging: Set<SearchKind> = []
 
@@ -25,7 +26,9 @@ public final class SearchViewModel {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var pageTasks: [SearchKind: Task<Void, Never>] = [:]
     @ObservationIgnored private var ticket = 0
+    @ObservationIgnored private var visible = true
     @ObservationIgnored private var needsResume = false
+    @ObservationIgnored private var resultsTerm: String?
 
     public init(
         backend: any SearchBackend, app: AppState,
@@ -66,6 +69,7 @@ public final class SearchViewModel {
         cancelWork()
         ticket += 1
         rememberedIDs = [:]
+        focusedKind = nil
         guard SearchPolicy.accepts(newTerm) else {
             groups = []
             state = .idle
@@ -83,18 +87,24 @@ public final class SearchViewModel {
     }
 
     public func retryAfterRecovery() {
-        if let error = state.presentedError, AppErrorMapping.isConnectivity(error) { retry() }
+        guard let error = state.presentedError, AppErrorMapping.isConnectivity(error) else { return }
+        if visible { retry() } else { needsResume = true }
     }
 
     public func onAppear() {
+        visible = true
         loadRecents()
-        if needsResume, SearchPolicy.accepts(term) { start(debounce: false) }
+        let recovered =
+            app.connectivity == .online
+            && state.presentedError.map(AppErrorMapping.isConnectivity) == true
+        if needsResume || recovered, SearchPolicy.accepts(term) { start(debounce: false) }
         needsResume = false
     }
 
     /// Navigation owns this instance, so cancelling work never resets text/results/focus.
     public func onDisappear() {
-        needsResume = state.isLoading
+        visible = false
+        needsResume = needsResume || state.isLoading
         cancelWork()
         ticket += 1
         if state.isLoading { state = state.value.map { .loaded($0) } ?? .idle }
@@ -110,7 +120,8 @@ public final class SearchViewModel {
     }
 
     public func loadNextPage(kind: SearchKind, visibleID: String) {
-        guard !paging.contains(kind), let group = groups.first(where: { $0.id == kind }),
+        guard !state.isLoading, resultsTerm == normalizedTerm, !paging.contains(kind),
+            let group = groups.first(where: { $0.id == kind }),
             group.items.suffix(5).contains(where: { $0.id == visibleID }), let next = group.nextIndex
         else { return }
         paging.insert(kind)
@@ -174,9 +185,11 @@ public final class SearchViewModel {
                 }
                 guard isCurrent(current, query, generation) else { return }
                 groups = projected
+                resultsTerm = query
                 publish()
                 if let session, app.phase == .signedIn(session) {
                     do {
+                        // TODO(Q9-03): Record completed queries, including zero results; deduplicate exact text.
                         try app.recentSearches.record(query, serverID: session.server.id, userID: session.userID)
                         loadRecents()
                     } catch { historyFailed = true }

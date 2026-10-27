@@ -326,6 +326,10 @@ public final class AppState {
             try? vault.deleteTokens(serverID: id)
         }
         if case .signedIn(let session) = phase, session.server.id == id {
+            scope.cancelAll()
+            pingTask?.cancel()
+            pingArmed = false
+            requestGeneration += 1
             logoutStarted = true
             phase = .needsServer
             activeServer = nil

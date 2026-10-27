@@ -65,7 +65,8 @@ public enum ResilientItemDecoder {
                     id: id,
                     kind: MediaKind.from(serverType: hint.`Type` ?? ""),
                     name: literalMetadata
-                        ? MetadataPolicy.clean(hint.Name ?? "") : MetadataSanitizer.plainText(hint.Name ?? ""),
+                        ? MetadataPolicy.clean(hint.Name ?? "", limit: MetadataPolicy.nameMax)
+                        : MetadataSanitizer.plainText(hint.Name ?? ""),
                     images: ImageSet(primaryTag: hint.PrimaryImageTag, thumbTag: hint.ThumbImageTag)
                 )
             )

@@ -1,0 +1,7 @@
+{
+  "regularMovies": 1998,
+  "series": 1000,
+  "episodesPerSeries": 2,
+  "extraMovies": ["Test Movie (2024)", "Sääasema (2024)"],
+  "expectedSearchableItems": 5000
+}

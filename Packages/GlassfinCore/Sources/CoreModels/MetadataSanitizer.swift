@@ -13,11 +13,7 @@ public enum MetadataSanitizer {
 
     /// Shared scalar filter for literal metadata and the existing auth sanitizer.
     public static func strippingControlsAndBidi(_ raw: String) -> String {
-        String(
-            String.UnicodeScalarView(
-                raw.unicodeScalars.filter {
-                    $0.properties.generalCategory != .control && !$0.properties.isBidiControl
-                }))
+        MetadataPolicy.clean(raw, limit: raw.count)
     }
 
     /// S4.7/Q4-16: literal display text, at most 64 extended grapheme clusters.
@@ -26,7 +22,7 @@ public enum MetadataSanitizer {
         let value =
             plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? plainText(fallbackHost) : plain
-        return String(value.prefix(MetadataPolicy.displayNameMaxCharacters))
+        return String(value.prefix(MetadataPolicy.displayNameMax))
     }
 
     private static func removeElement(_ text: String, named tag: String) -> String {

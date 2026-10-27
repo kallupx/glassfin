@@ -51,11 +51,15 @@ extension MediaItem {
     /// Apply again at the view-model boundary, including mock and cached input.
     public var searchDisplayItem: MediaItem {
         var result = self
-        result.name = MetadataPolicy.clean(name)
-        result.overview = overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMaxCharacters) }
-        result.officialRating = officialRating.map { MetadataPolicy.clean($0) }
-        result.chapters = chapters.map { ChapterMark(name: $0.name.map { MetadataPolicy.clean($0) }, start: $0.start) }
-        if case .other(let type) = kind { result.kind = .other(MetadataPolicy.clean(type)) }
+        result.name = MetadataPolicy.clean(name, limit: MetadataPolicy.nameMax)
+        result.overview = overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) }
+        result.officialRating = officialRating.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        result.chapters = chapters.map {
+            ChapterMark(name: $0.name.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }, start: $0.start)
+        }
+        if case .other(let type) = kind {
+            result.kind = .other(MetadataPolicy.clean(type, limit: MetadataPolicy.nameMax))
+        }
         return result
     }
 }

@@ -1,3 +1,4 @@
+import CoreAPI
 import CoreModels
 import CoreNetworking
 import Foundation
@@ -14,7 +15,7 @@ public final class SearchFeature {
 
     public init(app: AppState, session: UserSession, client: any JellyfinAPIClient, backend: (any SearchBackend)? = nil)
     {
-        let scoped = SessionAPIClient(inner: client, app: app)
+        let scoped = SessionAPIClient(inner: SearchQueryClient(inner: client), app: app)
         self.client = scoped
         self.app = app
         serverID = session.server.id

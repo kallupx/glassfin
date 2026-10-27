@@ -59,9 +59,11 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: literalMetadata ? MetadataPolicy.clean(dto.Name ?? "") : MetadataSanitizer.plainText(dto.Name ?? ""),
+            name: literalMetadata
+                ? MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax)
+                : MetadataSanitizer.plainText(dto.Name ?? ""),
             overview: literalMetadata
-                ? dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMaxCharacters) }
+                ? dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) }
                 : dto.Overview.map(MetadataSanitizer.plainText),
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
@@ -74,7 +76,7 @@ public enum DTOMapper {
             images: images,
             userData: userData,
             trickplay: trickplay(dto.Trickplay),
-            chapters: chapters(dto.Chapters, log: log)
+            chapters: chapters(dto.Chapters, log: log, literalMetadata: literalMetadata)
         )
     }
 
@@ -152,10 +154,15 @@ public enum DTOMapper {
         }
     }
 
-    private static func chapters(_ chapters: [ChapterDTO]?, log: any GlassfinLog) -> [ChapterMark] {
+    private static func chapters(_ chapters: [ChapterDTO]?, log: any GlassfinLog, literalMetadata: Bool)
+        -> [ChapterMark]
+    {
         (chapters ?? []).map { chapter in
             ChapterMark(
-                name: chapter.Name.map(MetadataSanitizer.plainText),
+                name: chapter.Name.map {
+                    literalMetadata
+                        ? MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) : MetadataSanitizer.plainText($0)
+                },
                 start: Ticks.positionDuration(from: chapter.StartPositionTicks ?? 0, log: log)
             )
         }

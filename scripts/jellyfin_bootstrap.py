@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Finish the Jellyfin startup wizard and wait for one scanned movie.
+"""Finish the Jellyfin startup wizard and wait for the seeded search library.
 
 Credentials come from the environment. This script never prints them or the access token.
 """
@@ -91,43 +91,45 @@ def authenticate(username: str) -> str:
 
 
 def add_library(token: str) -> None:
-    status, _ = request(
-        "POST",
-        "/Library/VirtualFolders",
-        token=token,
-        query={"name": "Movies", "collectionType": "movies", "paths": "/media", "refreshLibrary": "true"},
-    )
-    if status in (200, 204):
-        return
-    status, _ = request(
-        "POST",
-        "/Library/VirtualFolders",
-        body={"LibraryOptions": {"PathInfos": [{"Path": "/media"}]}},
-        token=token,
-        query={"name": "Movies", "collectionType": "movies", "refreshLibrary": "true"},
-    )
-    if status not in (200, 204):
-        print(f"bootstrap: add library HTTP {status}", file=sys.stderr)
-        raise SystemExit(1)
+    for name, collection, path in [("Movies", "movies", "/media/movies"), ("Series", "tvshows", "/media/series")]:
+        options = {
+            "PathInfos": [{"Path": path}],
+            "EnableRealtimeMonitor": False,
+            "EnableChapterImageExtraction": False,
+            "EnableInternetProviders": False,
+            "TypeOptions": [
+                {"Type": kind, "MetadataFetchers": [], "ImageFetchers": []}
+                for kind in ["Movie", "Series", "Season", "Episode"]
+            ],
+        }
+        status, _ = request(
+            "POST", "/Library/VirtualFolders", body={"LibraryOptions": options}, token=token,
+            query={"name": name, "collectionType": collection, "refreshLibrary": "true"},
+        )
+        if status not in (200, 204):
+            print(f"bootstrap: add library HTTP {status}", file=sys.stderr)
+            raise SystemExit(1)
 
 
 def wait_for_movie(token: str) -> None:
-    deadline = time.time() + 120
+    manifest = os.path.join(os.path.dirname(__file__), "..", "Tests", "Fixtures", "search-seed.json")
+    with open(manifest, encoding="utf-8") as handle:
+        expected = json.load(handle)["expectedSearchableItems"]
+    deadline = time.time() + 600
     request("POST", "/Library/Refresh", token=token)
+    count = 0
     while time.time() < deadline:
         status, raw = request(
-            "GET",
-            "/Items",
-            token=token,
-            query={"Recursive": "true", "IncludeItemTypes": "Movie", "Limit": "5"},
+            "GET", "/Items", token=token,
+            query={"Recursive": "true", "IncludeItemTypes": "Movie,Series,Episode", "Limit": "1", "EnableTotalRecordCount": "true"},
         )
         if status == 200:
             count = json.loads(raw).get("TotalRecordCount") or 0
-            if count >= 1:
-                print("bootstrap: movie is in the library")
+            if count >= expected:
+                print(f"bootstrap: search library ready ({count} items)")
                 return
         time.sleep(3)
-    print("bootstrap: library scan found no movie", file=sys.stderr)
+    print(f"bootstrap: search library scan incomplete ({count}/{expected})", file=sys.stderr)
     raise SystemExit(1)
 
 

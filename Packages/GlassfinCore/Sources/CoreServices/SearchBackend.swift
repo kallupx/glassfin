@@ -8,6 +8,7 @@ public protocol SearchBackend: Sendable {
 }
 
 /// ADR-M09-1: the default is three concurrent /Items requests, one limit per row.
+/// TODO(Q9-04): Keep this default until all three versions have accepted benchmark evidence.
 public struct ItemsSearchBackend: SearchBackend {
     private let client: any JellyfinAPIClient
 

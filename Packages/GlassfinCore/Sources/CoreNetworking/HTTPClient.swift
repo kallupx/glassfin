@@ -228,6 +228,8 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             var items = components.queryItems ?? []
             items.append(contentsOf: query)
             components.queryItems = items
+            // Query parsers treat a literal plus as a space; keep search/image tag text literal.
+            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         }
         guard let url = components.url else { throw APIError.invalidURL }
         return url

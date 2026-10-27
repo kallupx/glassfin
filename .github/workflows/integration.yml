@@ -22,3 +22,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: T01-20 and T01-30
         run: bash scripts/docker-integration.sh
+      - name: Redact search benchmark artifacts
+        id: search_redaction
+        if: always()
+        run: python3 scripts/redact_artifacts.py artifacts/integration/search
+      # M09 needs retained measurements from every version, not only the console output.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && steps.search_redaction.outcome == 'success'
+        with:
+          name: search-backend-benchmarks
+          path: artifacts/integration/search/*.json
+          if-no-files-found: warn
+          retention-days: 7
