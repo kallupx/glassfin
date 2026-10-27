@@ -72,13 +72,14 @@
 | T08-2-36 | 🔒 The (b) path's own URLSession request is redirected to a cross-origin address | `Authorization` is removed from the new request or the redirect is rejected | S4.6 | X |
 | T08-2-50 | 🔒 The resource loader's playlist has a relative URI, an absolute URI pointing to another origin (variant, segment or `#EXT-X-KEY`) and an `http://` URI in an HTTPS playlist | The relative one is resolved against the playlist's origin and works. Cross-origin and HTTPS → HTTP URIs are rejected, and no request is made to them | 03 T1.3.3/Q8-2-06, S4.6 | X |
 | T08-2-37 | 🔒 `HEAD /Videos/{id}/stream` on Docker servers 10.10.7, 10.11.11 and 12.2 | Each answers 2xx/3xx. If one returns 405, the expected result is open (Q8-2-05) | S4.6 ("HEAD is in OpenAPI 12.2.0"), SPEC §2 | I |
+| T08-2-51 | 🔒 Legacy `X-Emby-Token` header and the supported `Authorization` header on Jellyfin 10.10, 10.11 and 12 | Jellyfin 12 rejects the legacy header with 401; on 10.10/10.11 its status is recorded. The Authorization header is accepted with 200 on every version | S1.5, SPEC §2 | I |
 
 ## Network, errors and cancellation
 | ID | Scenario | Expected result | Reference | Run |
 |---|---|---|---|---|
 | T08-2-38 | A resource loader request ends in a timeout or 503 | `loadingRequest` finishes with an error, playback does not get stuck and the state becomes `failed`. The token is kept | 02 §3, S2.2 | X |
 | T08-2-39 | 🔒 A resource loader media request returns 401, and the check `GET /Users/Me` returns 200 | Playback is stopped, and the mock verifies exactly one `/Users/Me` call. The user **stays signed in**, the token stays in the Keychain and a playback error is shown | 03 T1.3.3/Q8-2-09, S2.2 | X |
-| T08-2-49 | 🔒 A resource loader media request returns 401, and the check `GET /Users/Me` returns 401 | Playback is stopped. The user is signed out per S2.2: the token is removed, and the sign-in view is shown with the message "Session expired" (fi: "Istunto päättyi") only once | 03 T1.3.3/Q8-2-09, S2.2, 02 §3 | X |
+| T08-2-49 | 🔒 A resource loader media request returns 401, and the check `GET /Users/Me` returns 401 | Playback is stopped. The user is signed out per S2.2: the token is removed, and the sign-in view is shown with the message "Session expired, please sign in again" (fi: "Istunto päättyi, kirjaudu uudelleen") only once | 03 T1.3.3/Q8-2-09, S2.2, 02 §3 | X |
 | T08-2-40 | Playback is left with Menu in the native `AVPlayerViewController` (no custom UI) | The resource loader's URLSession tasks are cancelled, and no requests are made after leaving. No focus trap appears, and Menu returns to the test view | 02 §1, 08 Playback view | X, U |
 | T08-2-41 | Poor network (3G profile) and a 10 s network outage on the (b) path | The observation is recorded in the ADR: buffering and recovery. The acceptance limit is M08a's PB12, not an ADR metric | 02 §3 Poor network, 08 PB12 | X, M |
 

@@ -6,10 +6,14 @@ import Foundation
 /// AVPlayer follows redirects on its own and does not use Glassfin's `URLSession` delegate,
 /// so S4.6 cannot protect a player request. Always pass the server's already-resolved media
 /// URL. Prefer the Authorization header via `AVURLAssetHTTPHeaderFieldsKey` (the constant
-/// below). `ApiKey` in the query is only a fallback, and any URL that contains it must be
-/// redacted before logging. M08 will confirm the header path with a prototype (ADR M08-2).
+/// below). A credential query is only a fallback, and any URL that contains one must be
+/// redacted before logging. ADR M08-2 tries the resource loader first, then this key.
 public struct ResolvedMediaURL: Sendable, Equatable, CustomStringConvertible {
-    public static let httpHeaderFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
+    #if DEBUG
+        public static let httpHeaderFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
+    #else
+        public static let httpHeaderFieldsKey = ""
+    #endif
 
     public var url: URL
     public var headerFields: [String: String]
