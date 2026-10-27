@@ -81,6 +81,12 @@ struct LibraryGridView: View {
                 await model.refreshFromStore()
             }
         }
+        .onChange(of: session.app.userDataGeneration) { _, _ in
+            Task {
+                await model.refreshFromStore()
+                await session.actions.refreshFromStore()
+            }
+        }
         .onDisappear { model.onDisappear() }
         .onChange(of: session.app.connectivity) { previous, current in
             if current == .online, previous == .serverUnreachable || previous == .offline {
@@ -127,6 +133,17 @@ struct LibraryGridView: View {
                         .accessibilityLabel(item.name)
                         .contextMenu {
                             Button {
+                                if session.app.playbackBlocked {
+                                    playbackError = session.app.playbackBlockedKey
+                                } else {
+                                    session.requestPlayback(
+                                        LibraryPlaybackIntent(itemID: id, start: item.userData.playbackPosition))
+                                    playbackNotice = true
+                                }
+                            } label: {
+                                Copy.text(.actionPlay)
+                            }
+                            Button {
                                 Task { await session.actions.togglePlayed(item) }
                             } label: {
                                 Copy.text(
@@ -141,7 +158,10 @@ struct LibraryGridView: View {
                                         ? .actionRemoveFavorite : .actionAddFavorite)
                             }
                         }
-                        .task { await model.loadNextPageIfNeeded(visibleIndex: index) }
+                        .onAppear {
+                            // The model owns cancellation so a recycled cell cannot abort a shared page.
+                            Task { await model.loadNextPageIfNeeded(visibleIndex: index) }
+                        }
                     }
                 }
             }

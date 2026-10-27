@@ -109,6 +109,13 @@ final class T07LibraryTests: XCTestCase {
         await model.reload(libraryID: Sample.library, query: LibraryChoices().query(collectionType: "movies"))
         let cachedCalls = await client.calls
         XCTAssertEqual(cachedCalls.count, calls.count)
+        rig.app.signOutLocally(notice: nil)
+        try rig.app.didSignIn(
+            UserSession(server: Sample.server(), userID: Sample.otherUserID, userName: "Other", isAdministrator: false),
+            token: "other-token")
+        await model.reload(libraryID: Sample.library, query: LibraryChoices().query(collectionType: "movies"))
+        let otherUserCalls = await client.calls
+        XCTAssertEqual(otherUserCalls.count, calls.count + 1)
     }
 
     func testT07_05_malformedRecordsAdvanceServerOffsetAndDuplicatesAreRemoved() async throws {
@@ -163,6 +170,46 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertNil(rig.app.bannerKey)
         await model.retry()
         XCTAssertEqual(model.state.value?.count, 100)
+    }
+
+    func testT07_18_filterFailureKeepsPreviousQueryContent() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let client = MockAPIClient { _ in
+            Data(
+                #"{"Items":[{"Id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","Name":"Film","Type":"Movie"}],"TotalRecordCount":1}"#
+                    .utf8)
+        }
+        let model = make(rig, service: JellyfinLibraryService(client: client))
+        await model.reload(libraryID: Sample.library)
+        let previous = model.state.value
+        await client.setHandler { _ async throws(APIError) -> Data in throw APIError.network }
+        var choices = LibraryChoices()
+        choices.sort = .rating
+        choices.unplayed = true
+        await model.choose(choices)
+        XCTAssertEqual(model.state.value, previous)
+        XCTAssertEqual(model.errorKey, .serverUnreachable)
+        XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
+    }
+
+    func testT07_18_automaticTenSecondPingRecoversAndKeepsContent() async throws {
+        let rig = Harness.make(automaticPing: true, suspendingClock: true)
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let model = make(rig, service: JellyfinLibraryService(client: LibraryFixtureClient(scenario: "down")))
+        await model.reload(libraryID: LibraryFixtureClient.movieLibrary)
+        await model.loadNextPageIfNeeded(visibleIndex: 49)
+        let clock = try XCTUnwrap(rig.suspending)
+        await clock.waitForSleeps(1)
+        XCTAssertEqual(clock.sleeps().last, NetworkThresholds.serverPingInterval)
+        XCTAssertEqual(model.state.value?.count, ListPaging.pageSize)
+        clock.resumeAll()
+        for _ in 0..<100 where rig.app.connectivity != .online { await Task.yield() }
+        XCTAssertEqual(rig.app.connectivity, .online)
+        XCTAssertNil(rig.app.bannerKey)
+        XCTAssertEqual(model.state.value?.count, ListPaging.pageSize)
     }
 
     func testT07_19_downWithoutContentUsesTheExistingServerDownKey() async throws {

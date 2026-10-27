@@ -75,6 +75,7 @@ final class T07LibraryUITests: XCTestCase {
             let episode = element(app, "series.episode.000000000000000000000000000075fe")
             focused(episode)
             XCUIRemote.shared.press(.playPause)
+            require(element(app, "library.playback.returned"))
             focused(episode)
             save(app, name: "T07-09-return-same-episode")
         }
@@ -83,6 +84,7 @@ final class T07LibraryUITests: XCTestCase {
             let app = launch("series-finished")
             enterEpisodes(app)
             XCUIRemote.shared.press(.playPause)
+            require(element(app, "library.playback.returned"))
             focused(element(app, "series.episode.000000000000000000000000000075fe"))
             save(app, name: "T07-09-return-next-episode")
         }

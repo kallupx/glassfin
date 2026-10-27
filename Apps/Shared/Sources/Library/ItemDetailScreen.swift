@@ -62,11 +62,19 @@ struct ItemDetailScreen: View {
         .task {
             if model.state.value == nil { await load() } else { await series.refreshFromStore() }
         }
+        .onChange(of: session.app.userDataGeneration) { _, _ in
+            Task {
+                await model.refreshFromStore()
+                await series.refreshFromStore()
+                await session.actions.refreshFromStore()
+            }
+        }
         .onChange(of: session.playbackReturn) { _, result in
             if let result, isSeries {
                 Task { await series.returnedFromPlayback(itemID: result.itemID, finished: result.finished) }
             }
         }
+        .sheet(isPresented: $model.overviewExpanded) { LibraryOverviewSheet(overview: item?.overview ?? "") }
         .onDisappear {
             model.onDisappear()
             series.onDisappear()
@@ -308,5 +316,31 @@ struct LibraryDetailActions: View {
             Copy.text(.detailTracks)
         }
         .buttonStyle(.glass).accessibilityIdentifier("detail.tracks")
+    }
+}
+
+struct LibraryOverviewSheet: View {
+    let overview: String
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var closeFocused: Bool
+
+    var body: some View {
+        VStack(spacing: SpacingToken.l) {
+            ScrollView {
+                Text(verbatim: overview).font(.body).focusable(false)
+            }
+            .focusable()
+            .accessibilityIdentifier("detail.overview.full")
+            ContainedGlass {
+                Button {
+                    dismiss()
+                } label: {
+                    Text(verbatim: AuthCopy.localized(.back))
+                }
+                .buttonStyle(.glassProminent).focused($closeFocused)
+            }
+        }
+        .padding(SpacingToken.xl)
+        .defaultFocus($closeFocused, true)
     }
 }

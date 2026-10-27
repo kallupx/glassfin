@@ -148,7 +148,12 @@ public final class LibraryViewModel {
         pageInFlight = true
         let expected = generation
         let sessionGeneration = app.requestGeneration
-        defer { if generation == expected { pageInFlight = false } }
+        defer {
+            if generation == expected {
+                pageInFlight = false
+                pageTask = nil
+            }
+        }
         let start = reset ? 0 : nextIndex
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
@@ -162,7 +167,7 @@ public final class LibraryViewModel {
         let key = "library.\(namespace).\(libraryID).\(fingerprint).\(start)"
         do {
             let payload: LibraryCachedPage
-            if !force, choices.sort != .random,
+            if !force, !query.sortBy.contains(LibrarySort.random.rawValue),
                 let data = await responses.data(for: key, now: clock.now()),
                 let cached = try? JSONDecoder().decode(LibraryCachedPage.self, from: data)
             {

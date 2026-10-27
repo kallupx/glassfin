@@ -3,6 +3,7 @@ import CoreNetworking
 import CoreState
 import CoreTestSupport
 import Foundation
+import GlassfinServices
 import XCTest
 
 @MainActor
@@ -34,6 +35,22 @@ final class T07SecurityStateTests: XCTestCase {
         let unauthorizedCalls = await inner.unauthorizedCalls
         XCTAssertEqual(unauthorizedCalls, 1)
         XCTAssertEqual(rig.secure.removed().filter { $0 == Sample.account() }.count, 1)
+    }
+
+    func testT07_35_disappearCancelsTheActivePageAndIgnoresItsResult() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let inner = T07CancellationClient()
+        let model = LibraryViewModel(
+            library: JellyfinLibraryService(client: inner), userData: rig.app.userData,
+            responses: rig.app.responses, app: rig.app, clock: rig.clock)
+        let load = Task { await model.reload(libraryID: Sample.library) }
+        await inner.waitUntilStarted()
+        model.onDisappear()
+        await load.value
+        XCTAssertNil(model.state.value)
+        XCTAssertNil(model.state.presentedError)
     }
 
     func testT07_29_non401ErrorsKeepSessionAndCancellationIsNotPresented() async throws {
@@ -98,7 +115,7 @@ private actor T07CancellationClient: JellyfinAPIClient {
             throw .unauthorized
         }
         started = true
-        observers.forEach { $0.resume() }
+        for observer in observers { observer.resume() }
         observers.removeAll()
         do { try await Task.sleep(for: .seconds(60)) } catch { throw .cancelled }
         return Data()

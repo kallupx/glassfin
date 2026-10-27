@@ -37,6 +37,11 @@
                     }
                 }
             }
+            .overlay(alignment: .bottom) {
+                if session.playbackReturn != nil {
+                    Copy.text(.detailPlaybackPending).accessibilityIdentifier("library.playback.returned")
+                }
+            }
             .task { await session.load() }
         }
 

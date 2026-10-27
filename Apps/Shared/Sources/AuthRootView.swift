@@ -299,9 +299,13 @@ struct AuthRootView: View {
                         Text(verbatim: library.name)
                     }
                 }
-                if !librarySession.overflowLibraries.isEmpty {
+                if !librarySession.overflowLibraries.isEmpty || librarySession.directLibraries.isEmpty {
                     Tab(Copy.string(.tabLibraries), systemImage: "books.vertical") {
-                        LibraryOverflowView(session: librarySession)
+                        if librarySession.directLibraries.isEmpty {
+                            LibraryIndexStateView(session: librarySession)
+                        } else {
+                            LibraryOverflowView(session: librarySession)
+                        }
                     }
                 }
             }

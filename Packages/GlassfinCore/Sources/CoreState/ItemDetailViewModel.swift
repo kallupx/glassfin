@@ -40,6 +40,16 @@ public final class LibraryUserActions {
         return result
     }
 
+    public func refreshFromStore() async {
+        for id in Array(visibleStates.keys) {
+            guard !pending.contains(id), let state = await app.userData.state(for: id), !pending.contains(id) else {
+                continue
+            }
+            visibleStates[id] = state
+        }
+        revision += 1
+    }
+
     public func togglePlayed(_ item: MediaItem) async { await edit(item, favorite: false) }
     public func toggleFavorite(_ item: MediaItem) async { await edit(item, favorite: true) }
 
@@ -132,6 +142,17 @@ public final class ItemDetailViewModel {
             similar = .failed(mapped, previous: similar.value)
             app.handle(mapped)
         }
+    }
+
+    public func refreshFromStore() async {
+        if let item = state.value, let projected = await app.userData.project([item]).first {
+            if case .failed(let error, _) = state {
+                state = .failed(error, previous: projected)
+            } else {
+                state = .loaded(projected)
+            }
+        }
+        if let items = similar.value { similar = .loaded(await app.userData.project(items)) }
     }
 
     public func playbackIntent(for target: MediaItem? = nil, startOver: Bool = false) -> LibraryPlaybackIntent? {

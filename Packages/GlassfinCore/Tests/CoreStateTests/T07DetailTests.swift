@@ -70,6 +70,18 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.focus, .episode(LibraryFixtureClient.episodeID(season: 2, episode: 6)))
     }
 
+    func testT07_09_finishedLastEpisodeCanAdvanceToTheNextSeason() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let model = series(rig)
+        await model.load(seriesID: LibraryFixtureClient.series, seasonID: LibraryFixtureClient.seasonOne)
+        XCTAssertEqual(model.playTarget?.seasonID, LibraryFixtureClient.seasonOne)
+        await model.returnedFromPlayback(itemID: LibraryFixtureClient.episodeID(season: 1, episode: 8), finished: true)
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
+        XCTAssertEqual(model.focus, .episode(LibraryFixtureClient.episodeID(season: 2, episode: 5)))
+    }
+
     func testT07_10_selectedOverviewFollowsFocusedEpisodeAsLiteralText() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -180,6 +192,24 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.state.value?.first?.name, Sample.other)
     }
 
+    func testT07_36_storeRefreshAndReloadPreserveEpisodeFocusAndSeason() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let model = series(rig)
+        await model.load(seriesID: LibraryFixtureClient.series)
+        let id = LibraryFixtureClient.episodeID(season: 2, episode: 6)
+        model.focusEpisode(id)
+        await rig.app.userData.applyRemote(
+            UserDataChange(itemID: id, played: true, positionTicks: 0, isFavorite: true), log: SilentLog())
+        await model.refreshFromStore()
+        XCTAssertEqual(model.episodes.value?.first(where: { $0.id == id })?.userData.isFavorite, true)
+        await model.load(seriesID: LibraryFixtureClient.series)
+        XCTAssertEqual(model.focus, .episode(id))
+        XCTAssertEqual(model.focusedEpisodeID, id)
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
+    }
+
     private func series(_ rig: Harness, clock: any GlassfinClock = SystemGlassfinClock()) -> SeriesViewModel {
         SeriesViewModel(
             library: JellyfinLibraryService(client: LibraryFixtureClient()), userData: rig.app.userData, app: rig.app,
@@ -197,7 +227,7 @@ private actor T07GatedClient: JellyfinAPIClient {
     init(error: APIError? = nil) { self.error = error }
     func send(_ request: APIRequest) async throws(APIError) -> Data {
         requests.append(request)
-        observers.forEach { $0.resume() }
+        for observer in observers { observer.resume() }
         observers.removeAll()
         if !released { await withCheckedContinuation { waiting.append($0) } }
         if let error { throw error }
@@ -214,6 +244,6 @@ private actor T07GatedClient: JellyfinAPIClient {
         released = true
         let current = waiting
         waiting.removeAll()
-        current.forEach { $0.resume() }
+        for waiter in current { waiter.resume() }
     }
 }

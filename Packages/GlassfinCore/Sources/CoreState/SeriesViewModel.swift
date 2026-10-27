@@ -60,6 +60,9 @@ public final class SeriesViewModel {
         generation += 1
         let expected = generation
         let sessionGeneration = app.requestGeneration
+        let wasLoaded = self.seriesID == seriesID && seasons.value != nil
+        let previousSeason = wasLoaded ? selectedSeasonID : nil
+        let previousEpisode = wasLoaded ? focusedEpisodeID : nil
         self.seriesID = seriesID
         seasons = .loading(previous: seasons.value)
         do {
@@ -82,14 +85,19 @@ public final class SeriesViewModel {
                 let rhs = $1.parentIndexNumber == 0 ? Int.max : ($1.parentIndexNumber ?? 1)
                 return lhs == rhs ? ($0.indexNumber ?? 0) < ($1.indexNumber ?? 0) : lhs < rhs
             }
+            let candidates = seasonID.map { id in chronological.filter { $0.seasonID == id } } ?? chronological
             playTarget =
-                chronological.first { !$0.userData.played && $0.userData.playbackPosition > .zero }
-                ?? chronological.first { !$0.userData.played } ?? chronological.first
-            let targetSeason = seasonID ?? playTarget?.seasonID ?? projected.first?.id
+                candidates.first { !$0.userData.played && $0.userData.playbackPosition > .zero }
+                ?? candidates.first { !$0.userData.played } ?? candidates.first
+            let targetSeason = seasonID ?? previousSeason ?? playTarget?.seasonID ?? projected.first?.id
             if let targetSeason { await select(seasonID: targetSeason) } else { episodes = .loaded([]) }
             initialEpisodeID = playTarget?.seasonID == selectedSeasonID ? playTarget?.id : preferredEpisodeID
-            focusedEpisodeID = initialEpisodeID
-            focus = .play
+            if let previousEpisode, episodes.value?.contains(where: { $0.id == previousEpisode }) == true {
+                focusedEpisodeID = previousEpisode
+            } else {
+                focusedEpisodeID = initialEpisodeID
+            }
+            if !wasLoaded { focus = .play }
         } catch {
             guard expected == generation, sessionGeneration == app.requestGeneration, !Task.isCancelled else { return }
             let mapped = map(error)
@@ -126,8 +134,9 @@ public final class SeriesViewModel {
         let sessionGeneration = app.requestGeneration
         let previous = episodes.value ?? lastEpisodes
         let previousSeasonID = episodes.value == nil ? lastSeasonID : selectedSeasonID
+        let sameSeason = selectedSeasonID == seasonID
         selectedSeasonID = seasonID
-        episodes = .loading(previous: nil)
+        episodes = .loading(previous: sameSeason ? previous : nil)
         do {
             let items = await userData.project(try await library.episodes(series: seriesID, season: seasonID))
             guard expected == selectionGeneration, sessionGeneration == app.requestGeneration, !Task.isCancelled else {
@@ -171,13 +180,19 @@ public final class SeriesViewModel {
     public func returnedFromPlayback(itemID: String, finished: Bool) async {
         if let items = episodes.value { episodes = .loaded(await userData.project(items)) }
         let items = episodes.value ?? []
-        let target: String?
+        var target = itemID
         if finished, let index = items.firstIndex(where: { $0.id == itemID }) {
-            target = items.dropFirst(index + 1).first(where: { !$0.userData.played })?.id ?? itemID
-        } else {
-            target = itemID
+            if let next = items.dropFirst(index + 1).first(where: { !$0.userData.played }) {
+                target = next.id
+            } else if let seasonIndex = seasons.value?.firstIndex(where: { $0.id == selectedSeasonID }),
+                let nextSeason = seasons.value?.dropFirst(seasonIndex + 1).first
+            {
+                await select(seasonID: nextSeason.id)
+                target = preferredEpisodeID ?? itemID
+            }
         }
-        if let target { focusEpisode(target) }
+        if let updated = episodes.value?.first(where: { $0.id == target }) { playTarget = updated }
+        focusEpisode(target)
     }
 
     public func refreshFromStore() async {

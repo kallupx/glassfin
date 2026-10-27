@@ -38,3 +38,18 @@ struct LibraryOverflowView: View {
         }
     }
 }
+
+struct LibraryIndexStateView: View {
+    let session: LibrarySession
+    var body: some View {
+        NavigationStack {
+            if let error = session.libraries.presentedError {
+                LibraryBlockingError(error: error) { Task { await session.load() } }
+            } else if session.libraries.value != nil {
+                Copy.text(.libraryNoLibraries).accessibilityIdentifier("libraries.empty")
+            } else {
+                ProgressView()
+            }
+        }
+    }
+}
