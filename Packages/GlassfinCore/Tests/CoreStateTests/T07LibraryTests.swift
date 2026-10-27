@@ -172,9 +172,9 @@ final class T07LibraryTests: XCTestCase {
         await model.loadNextPageIfNeeded(visibleIndex: 49)
         XCTAssertEqual(model.state.value, previous)
         XCTAssertTrue(model.hasContent)
-        XCTAssertEqual(model.errorKey, .serverUnreachable)
+        XCTAssertEqual(model.errorKey, AppErrorMessage.serverDownKey)
         XCTAssertEqual(rig.app.connectivity, .serverUnreachable)
-        XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
+        XCTAssertEqual(rig.app.bannerKey, AppErrorMessage.serverDownKey)
         XCTAssertEqual(rig.app.scheduledPingDelay, .seconds(10))
         await rig.app.probeServer()
         XCTAssertEqual(rig.app.connectivity, .online)
@@ -203,8 +203,8 @@ final class T07LibraryTests: XCTestCase {
         choices.unplayed = true
         await model.choose(choices)
         XCTAssertEqual(model.state.value, previous)
-        XCTAssertEqual(model.errorKey, .serverUnreachable)
-        XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
+        XCTAssertEqual(model.errorKey, AppErrorMessage.serverDownKey)
+        XCTAssertEqual(rig.app.bannerKey, AppErrorMessage.serverDownKey)
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
@@ -237,7 +237,7 @@ final class T07LibraryTests: XCTestCase {
         let model = make(rig, service: JellyfinLibraryService(client: client))
         await model.reload(libraryID: Sample.library)
         XCTAssertFalse(model.hasContent)
-        XCTAssertEqual(model.errorKey, .serverUnreachable)
+        XCTAssertEqual(model.errorKey, AppErrorMessage.serverDownKey)
         XCTAssertEqual(model.errorKey, rig.app.bannerKey)
         guard case .signedIn = rig.app.phase else { return XCTFail("Server down signed out") }
     }

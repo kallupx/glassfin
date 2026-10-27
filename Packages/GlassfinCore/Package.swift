@@ -15,7 +15,7 @@ let externalDependencies: [Package.Dependency] = [
     let packageDependencies = externalDependencies
     let coreAPIExternal: [Target.Dependency] = []
     // The Linux toolchain has no xcstringstool. Exclude the catalog and copy a marker
-    // so SwiftPM still generates Bundle.module for AuthCopy's NSLocalizedString lookups.
+    // so SwiftPM still generates Bundle.module for the shared catalog localization helper.
     let coreModelsExclude = ["Localizable.xcstrings"]
     let coreModelsResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
 #else

@@ -23,7 +23,7 @@ struct LibraryGridView: View {
     @State private var started = false
     @State private var scrollPosition = ScrollPosition()
     @State private var playbackNotice = false
-    @State private var playbackError: AuthCopy.Key?
+    @State private var playbackError: String?
 
     init(library: Library, session: LibrarySession) {
         self.library = library
@@ -44,13 +44,13 @@ struct LibraryGridView: View {
                     if let key = session.app.bannerKey {
                         GlassBanner(
                             message: .errorServerUnreachable, systemImage: "exclamationmark.icloud",
-                            identifier: "library.banner", literalMessage: AuthCopy.localized(key))
+                            identifier: "library.banner", literalMessage: AppErrorMessage.localized(key))
                     }
                     if let error = session.actions.lastError ?? model.filterError {
                         LibraryInlineError(error: error)
                     }
                     if let playbackError {
-                        Text(verbatim: AuthCopy.localized(playbackError)).accessibilityIdentifier(
+                        Text(verbatim: AppErrorMessage.localized(playbackError)).accessibilityIdentifier(
                             "library.playback.error")
                     }
                     if playbackNotice {
@@ -96,7 +96,7 @@ struct LibraryGridView: View {
         #if os(tvOS)
             .onPlayPauseCommand {
                 guard !session.app.playbackBlocked else {
-                    playbackError = session.app.playbackBlockedKey
+                    playbackError = session.app.playbackBlockedMessageKey
                     return
                 }
                 playbackError = nil
@@ -134,7 +134,7 @@ struct LibraryGridView: View {
                         .contextMenu {
                             Button {
                                 if session.app.playbackBlocked {
-                                    playbackError = session.app.playbackBlockedKey
+                                    playbackError = session.app.playbackBlockedMessageKey
                                 } else {
                                     session.requestPlayback(
                                         LibraryPlaybackIntent(itemID: id, start: item.userData.playbackPosition))
@@ -329,6 +329,6 @@ struct LibraryBlockingError: View {
             failure: .serverUnreachable, attempts: 0, onRetry: retry, onSwitchServer: {},
             messageOverride: AppErrorMessage.userFacing(error)
         )
-        .accessibilityValue(AppErrorMessage.key(for: error)?.rawValue ?? "")
+        .accessibilityValue(AppErrorMessage.messageKey(for: error) ?? "")
     }
 }

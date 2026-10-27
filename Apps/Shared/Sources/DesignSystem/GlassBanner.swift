@@ -19,7 +19,7 @@ struct GlassBanner: View {
         .ownGlassSurface(in: Capsule())
         .focusable(false)
         .accessibilityLabel(Text(verbatim: literalMessage ?? Copy.string(message)))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
 }

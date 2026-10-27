@@ -16,7 +16,9 @@ Unresolved. `GlassBanner` calls `ownGlassSurface` and is not wrapped in `GlassEf
 
 ## Q5-03 Contrast measurement
 
-Unresolved. Scrim geometry is the specified 60% black over the bottom 40% of height. The numeric check composites that scrim. Dark and colorful fixtures clear WCAG AA for white text. A white backdrop under a 60% black scrim does not. The pixel or vibrant method, and any snapshot diff tolerance, are not locked. Stored PNG baselines are not compared.
+Unresolved. Scrim geometry is the specified 60% black over the bottom 40% of height. T05-32 resolves `ContentPaint.heroText` (the hero title/overview's semantic primary foreground) and `ContentPaint.scrim` in dark appearance, then composites the scrim using `ScrimGradient` opacity. At the darkest stop, all three fixtures clear both AA thresholds; the bright white backdrop yields about 5.74:1 and fails even the large-text threshold without the scrim (1:1).
+
+`HeroHeader` has no blur or material layer behind its title/overview. Its padded, bottom-aligned text/action stack can extend into the transparent region, especially with an expanded overview. The conservative text-position check therefore uses zero opacity at the clear stop: bright fails both thresholds, dark passes both, and colorful passes large text but fails body text. Endpoint passes do not establish AA throughout the hero. Secondary metadata and the separate glass action controls need rendered measurements. The pixel or vibrant method, and any snapshot diff tolerance, are not locked. Stored PNG baselines are not compared.
 
 ## Q5-04 Dynamic Type on tvOS 26
 

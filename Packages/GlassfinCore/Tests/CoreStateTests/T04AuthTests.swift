@@ -558,6 +558,8 @@ final class T04AuthFlowTests: XCTestCase {
             XCTAssertEqual(rig.flow.screen, .home)
             XCTAssertEqual(rig.flow.connectivity, .serverUnreachable)
             XCTAssertEqual(rig.flow.bannerKey, .serverUnreachable)
+            XCTAssertEqual(rig.harness.app.bannerKey, AppErrorMessage.serverDownKey)
+            XCTAssertEqual(rig.flow.bannerKey?.rawValue, rig.harness.app.bannerKey)
             XCTAssertEqual(rig.flow.homeErrorKey, .serverUnreachable)
             rig.cleanup()
         }
@@ -834,7 +836,27 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNil(rig.flow.homeErrorKey)
         XCTAssertEqual(rig.flow.connectivity, .serverUnreachable)
         XCTAssertEqual(rig.flow.bannerKey, .serverUnreachable)
+        XCTAssertEqual(rig.harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        XCTAssertEqual(rig.flow.bannerKey?.rawValue, rig.harness.app.bannerKey)
         XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
+
+        rig.harness.app.handle(.offline)
+        XCTAssertEqual(rig.flow.bannerKey, .noNetworkConnection)
+        XCTAssertEqual(rig.flow.bannerKey?.rawValue, rig.harness.app.bannerKey)
+        XCTAssertEqual(rig.flow.cachedHome, snapshot)
+        XCTAssertNil(rig.flow.homeErrorKey)
+
+        rig.harness.app.beginServerSwitch()
+        XCTAssertEqual(rig.flow.connectivity, .offline)
+        XCTAssertEqual(rig.flow.bannerKey, .noNetworkConnection)
+        XCTAssertEqual(rig.flow.bannerKey?.rawValue, rig.harness.app.bannerKey)
+
+        rig.harness.app.handle(.serverUnreachable)
+        XCTAssertEqual(rig.flow.bannerKey, .serverUnreachable)
+        rig.harness.app.beginServerSwitch()
+        XCTAssertEqual(rig.flow.connectivity, .online)
+        XCTAssertNil(rig.flow.bannerKey)
+        XCTAssertNil(rig.harness.app.bannerKey)
     }
 
     @MainActor
@@ -874,6 +896,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.backend.currentUserCalls, 2)
         XCTAssertNil(rig.flow.homeErrorKey)
         XCTAssertNil(rig.flow.bannerKey)
+        XCTAssertNil(rig.harness.app.bannerKey)
         rig.flow.requestLogout()
         XCTAssertEqual(rig.flow.screen, .logoutConfirm)
         XCTAssertEqual(rig.flow.confirmFocus, .cancel)
@@ -932,6 +955,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.harness.suspending?.resumeAll()
         await waitUntil { rig.flow.connectivity == .online }
         XCTAssertNil(rig.flow.bannerKey)
+        XCTAssertNil(rig.harness.app.bannerKey)
         XCTAssertEqual(rig.flow.screen, .home)
         XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
         rig.harness.app.handle(.serverUnreachable)

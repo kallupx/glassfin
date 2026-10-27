@@ -115,7 +115,7 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("welcome.root")
             Button(AuthCopy.localized(.connectToServer)) { flow.connect() }
                 .buttonStyle(.glassProminent)
-                .accessibilityIdentifier("welcome.connect")
+                .accessibilityIdentifier(WelcomeCopy.Key.connect.rawValue)
                 .focused($focused, equals: .connect)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -471,7 +471,8 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         func pollQuickConnect(on server: ServerInfo, secret: QuickConnectSecret) async throws(APIError) -> Bool {
             _ = server
             _ = secret
-            if ProcessInfo.processInfo.arguments.contains("-uitest-qc-expired") { return false }
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-uitest-qc-expired") || arguments.contains("-uitest-qc-pending") { return false }
             do { try await Task.sleep(for: .seconds(2)) } catch { throw APIError.cancelled }
             return true
         }

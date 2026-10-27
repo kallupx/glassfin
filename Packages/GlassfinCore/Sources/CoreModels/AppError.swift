@@ -150,42 +150,142 @@ public enum AppErrorMapping {
 
 /// Plain-language copy. Technical detail stays in ``diagnostic(_:)``.
 public enum AppErrorMessage {
-    public static var offline: String { AuthCopy.localized(.noNetworkConnection) }
-    public static var serverDown: String { AuthCopy.localized(.serverUnreachable) }
-    public static var retry: String { AuthCopy.localized(.tryAgain) }
-    public static var switchServer: String { AuthCopy.localized(.switchServer) }
-    public static var sessionExpired: String { AuthCopy.localized(.sessionExpired) }
-    public static var forbidden: String { AuthCopy.localized(.forbidden) }
-    public static var playbackFailed: String { AuthCopy.localized(.playbackFailed) }
-    public static var buffering: String { AuthCopy.localized(.buffering) }
-    public static var playbackOffline: String { AuthCopy.localized(.playbackOffline) }
-    public static var playbackUnreachable: String { AuthCopy.localized(.playbackUnreachable) }
+    public static let offlineKey = "No network connection"
+    public static let serverDownKey = "Can't reach the server"
+    public static let retryKey = "Try again"
+    public static let changeServerKey = "Change server"
+    public static let sessionExpiredKey = "Session expired, please sign in again"
+    public static let forbiddenKey = "You don't have permission to do this"
+    public static let playbackFailedKey = "This file couldn't be played"
+    public static let bufferingKey = "Buffering is taking longer than usual"
+    public static let playbackOfflineKey = "Playback isn't available without a network connection"
+    public static let playbackUnreachableKey = "Playback isn't available because the server can't be reached"
+    public static let tlsUntrustedKey = "The server's certificate isn't trusted"
+    public static let invalidCredentialsKey = "Incorrect username or password"
+    public static let insecureRedirectKey = "The connection was redirected to an insecure address"
+    public static let notFoundKey = "Item not found"
+    public static let serverErrorKey = "The server returned an error"
+    public static let unsupportedServerKey =
+        "Server version %@ is not supported. Version %@ or later is required."
 
-    public static func key(for error: AppError) -> AuthCopy.Key? {
+    public static var offline: String {
+        localizedString(offlineKey)
+    }
+
+    public static var serverDown: String {
+        localizedString(serverDownKey)
+    }
+
+    public static var retry: String {
+        localizedString(retryKey)
+    }
+
+    public static var changeServer: String {
+        localizedString(changeServerKey)
+    }
+
+    public static var sessionExpired: String {
+        localizedString(sessionExpiredKey)
+    }
+
+    public static var forbidden: String {
+        localizedString(forbiddenKey)
+    }
+
+    public static var playbackFailed: String {
+        localizedString(playbackFailedKey)
+    }
+
+    public static var buffering: String {
+        localizedString(bufferingKey)
+    }
+
+    public static var playbackOffline: String {
+        localizedString(playbackOfflineKey)
+    }
+
+    public static var playbackUnreachable: String {
+        localizedString(playbackUnreachableKey)
+    }
+
+    public static var tlsUntrusted: String {
+        localizedString(tlsUntrustedKey)
+    }
+
+    public static var invalidCredentials: String {
+        localizedString(invalidCredentialsKey)
+    }
+
+    public static var insecureRedirect: String {
+        localizedString(insecureRedirectKey)
+    }
+
+    public static var notFound: String {
+        localizedString(notFoundKey)
+    }
+
+    public static var serverError: String {
+        localizedString(serverErrorKey)
+    }
+
+    /// Localized format with the server version first and the minimum version second.
+    public static var unsupportedServer: String {
+        // A format string with placeholders is looked up directly so `%@` is not treated as literal text.
+        #if os(Linux)
+            return unsupportedServerKey
+        #else
+            return Bundle.module.localizedString(forKey: unsupportedServerKey, value: unsupportedServerKey, table: nil)
+        #endif
+    }
+
+    /// Resolves a stored catalog key to its localized text.
+    public static func localized(_ key: String) -> String {
+        localizedString(key)
+    }
+
+    /// Catalog key for the error's message, or nil when the error must not be shown.
+    /// For `unsupportedServer` this is a raw format key containing `%@`, not display text.
+    /// Only ``userFacing(_:)`` substitutes the versions; never show the key directly.
+    public static func messageKey(for error: AppError) -> String? {
         switch error {
-        case .offline: .noNetworkConnection
-        case .serverUnreachable: .serverUnreachable
-        case .tlsUntrusted: .certificateUntrusted
-        case .unauthorized: .sessionExpired
-        case .invalidCredentials: .invalidCredentials
-        case .insecureRedirect: .insecureRedirect
-        case .forbidden: .forbidden
-        case .notFound: .itemNotFound
-        case .serverError: .serverError
-        case .unsupportedServer: .unsupportedServerDetail
-        case .playback: .playbackFailed
-        case .decoding, .cancelled, .internalInvariant: nil
-        case .publicHTTPRejected: .publicAddressRequiresHTTPS
+        case .offline:
+            return offlineKey
+        case .serverUnreachable:
+            return serverDownKey
+        case .tlsUntrusted:
+            return tlsUntrustedKey
+        case .unauthorized:
+            return sessionExpiredKey
+        case .invalidCredentials:
+            return invalidCredentialsKey
+        case .insecureRedirect:
+            return insecureRedirectKey
+        case .forbidden:
+            return forbiddenKey
+        case .notFound:
+            return notFoundKey
+        case .serverError:
+            return serverErrorKey
+        case .unsupportedServer:
+            return unsupportedServerKey
+        case .playback:
+            return playbackFailedKey
+        case .decoding, .cancelled, .internalInvariant:
+            return nil
+        case .publicHTTPRejected:
+            return AuthCopy.Key.publicAddressRequiresHTTPS.rawValue
         }
     }
 
     /// Nil when the error must not be shown (cancellation, skipped JSON, local invariant).
+    /// Server text is sanitized before formatting and must be rendered as plain text (`Text(verbatim:)`).
     public static func userFacing(_ error: AppError) -> String? {
-        guard let key = key(for: error) else { return nil }
+        guard let key = messageKey(for: error) else { return nil }
         if case .unsupportedServer(let version) = error {
-            return String(format: AuthCopy.localized(key), version, ServerVersionGate.dotted(.minimumJellyfin))
+            let safeVersion = MetadataSanitizer.displayText(version, limit: 200)
+            return String(format: unsupportedServer, safeVersion, ServerVersionGate.dotted(.minimumJellyfin))
         }
-        return AuthCopy.localized(key)
+        return localizedString(key)
     }
 
     /// Settings → Diagnostics. Must not include secrets; ``AppError`` has no token payload.

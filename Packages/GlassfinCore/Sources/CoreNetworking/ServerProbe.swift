@@ -6,7 +6,7 @@ import Foundation
 #endif
 
 /// Why a probe stopped without a usable server. ``httpSkippedByPolicy`` is the extra
-/// line under "Server not found" or "Not a Jellyfin server" when S4.3 skipped HTTP.
+/// hint below the server-not-found or non-Jellyfin error when S4.3 skipped HTTP.
 public struct ProbeFailureDetail: Sendable, Equatable {
     public var httpSkippedByPolicy: Bool
 

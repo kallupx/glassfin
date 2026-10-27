@@ -19,11 +19,7 @@ public enum MetadataSanitizer {
     }
 
     public static func plainText(_ raw: String) -> String {
-        String(
-            String.UnicodeScalarView(
-                raw.unicodeScalars.filter { scalar in
-                    !isControl(scalar)
-                }))
+        displayText(raw, limit: .max)
     }
 
     /// S4.7/Q4-16: literal display text, at most 64 extended grapheme clusters.

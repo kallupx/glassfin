@@ -5,6 +5,9 @@
 **Dependencies:** M01, M02, M03, M05, and M07. **Prerequisite for M08b:** the R2 performance prototype has passed, and the LGPL conditions L1–L5 are met (SPEC.md §7 R9). The license is no longer a blocker, because the app is open source and the license proposal is MPL-2.0.
 **Background (Researcher, part 3):** AVPlayer does not open MKV and does not support DTS, TrueHD, PGS, or ASS. Its strengths are a native UI, frame-rate and HDR matching, and Dolby Vision P5/P8. Apple TV does not bitstream TrueHD or DTS with any client, and Atmos works only through DD+ (E-AC-3 JOC).
 
+
+> **PoC tier:** for the PoC, [SPEC.md §3a](SPEC.md#3a-poc-tier-p0-poc-decided-27102026) "M08a-PoC playback" overrides this module (static DeviceProfile, no video transcoding, unsupported-video message). The rest of this module applies to full M08a.
+
 ## Split
 | Part | Contents | Priority |
 |---|---|---|

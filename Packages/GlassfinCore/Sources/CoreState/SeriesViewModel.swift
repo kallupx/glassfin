@@ -12,7 +12,7 @@ public enum SeriesFocus: Sendable, Hashable {
 
 @MainActor
 @Observable
-public final class SeriesViewModel {
+public final class SeriesViewModel: ViewContentProviding {
     public private(set) var seasons: LoadState<[MediaItem]> = .idle
     public private(set) var episodes: LoadState<[MediaItem]> = .idle
     public private(set) var selectedSeasonID: String?
@@ -45,6 +45,10 @@ public final class SeriesViewModel {
         self.clock = clock
     }
 
+    public var hasContent: Bool {
+        seasons.value?.isEmpty == false || episodes.value?.isEmpty == false
+    }
+
     public var preferredEpisodeID: String? {
         let items = episodes.value ?? []
         return items.first(where: { !$0.userData.played })?.id ?? items.first?.id
@@ -58,6 +62,7 @@ public final class SeriesViewModel {
     }
 
     public func load(seriesID: String, seasonID: String? = nil) async {
+        app.currentView = self
         guard ItemID(seriesID) != nil else {
             seasons = .failed(.internalInvariant, previous: seasons.value)
             return

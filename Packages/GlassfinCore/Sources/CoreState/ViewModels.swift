@@ -72,10 +72,14 @@ public final class UserDataEditor {
 
 @MainActor
 @Observable
-public final class HomeViewModel {
+public final class HomeViewModel: ViewContentProviding {
     public private(set) var resume: LoadState<[MediaItem]> = .idle
     public private(set) var nextUp: LoadState<[MediaItem]> = .idle
     public private(set) var latest: LoadState<[MediaItem]> = .idle
+
+    public var hasContent: Bool {
+        [resume, nextUp, latest].contains { $0.value?.isEmpty == false }
+    }
 
     @ObservationIgnored private let library: any LibraryService
     @ObservationIgnored private let userData: UserDataStore
@@ -124,6 +128,7 @@ public final class HomeViewModel {
     }
 
     public func reload(libraryIDs: [String], coldStart: Bool = false) async {
+        app.currentView = self
         let generation = app.requestGeneration
         var cold = coldStart ? signposter.begin(.coldStartHomeFirstRow) : nil
         let sections = signposter.begin(.homeSectionsLoaded)
@@ -258,10 +263,15 @@ public final class HomeViewModel {
 
 @MainActor
 @Observable
-public final class PlayerViewModel {
+public final class PlayerViewModel: ViewContentProviding {
     public private(set) var state: LoadState<PlaybackSource> = .idle
-    public var stallMessageKey: AuthCopy.Key? { stallMessage == nil ? nil : .buffering }
-    public private(set) var stallMessage: String?
+    public private(set) var stallMessageKey: String?
+
+    public var hasContent: Bool { state.value != nil }
+
+    public var stallMessage: String? {
+        stallMessageKey.map(AppErrorMessage.localized)
+    }
     public private(set) var method: PlayMethod?
 
     @ObservationIgnored private let playback: any PlaybackInfoService
@@ -289,6 +299,7 @@ public final class PlayerViewModel {
     }
 
     public func load(itemID: String, maxBitrate: Int = 120_000_000) async {
+        app.currentView = self
         guard ItemID(itemID) != nil else {
             state = .failed(.internalInvariant, previous: state.value)
             log.warning("Non-fatal invariant failure")
@@ -325,9 +336,9 @@ public final class PlayerViewModel {
 
     public func noteBuffering(elapsed: Duration) {
         if elapsed > NetworkThresholds.stallMessageAfter {
-            stallMessage = AppErrorMessage.buffering
+            stallMessageKey = AppErrorMessage.bufferingKey
         } else {
-            stallMessage = nil
+            stallMessageKey = nil
         }
     }
 
@@ -367,9 +378,11 @@ public final class PlayerViewModel {
 
 @MainActor
 @Observable
-public final class SearchViewModel {
+public final class SearchViewModel: ViewContentProviding {
     public private(set) var term = ""
     public private(set) var state: LoadState<[MediaItem]> = .idle
+
+    public var hasContent: Bool { state.value?.isEmpty == false }
 
     @ObservationIgnored private let search: any SearchService
     @ObservationIgnored private let userData: UserDataStore
@@ -394,6 +407,7 @@ public final class SearchViewModel {
     }
 
     public func setTerm(_ newTerm: String) {
+        app.currentView = self
         term = newTerm
         task?.cancel()
         ticket += 1

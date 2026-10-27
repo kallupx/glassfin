@@ -7,7 +7,7 @@ struct ItemDetailScreen: View {
     @State private var model: ItemDetailViewModel
     @State private var series: SeriesViewModel
     @State private var playbackNotice = false
-    @State private var playbackError: AuthCopy.Key?
+    @State private var playbackError: String?
     @FocusState private var focus: SeriesFocus?
 
     init(id: String, session: LibrarySession) {
@@ -46,11 +46,11 @@ struct ItemDetailScreen: View {
                 if let key = session.app.bannerKey {
                     GlassBanner(
                         message: .errorServerUnreachable, systemImage: "exclamationmark.icloud",
-                        identifier: "detail.banner", literalMessage: AuthCopy.localized(key))
+                        identifier: "detail.banner", literalMessage: AppErrorMessage.localized(key))
                 }
                 if let error = session.actions.lastError { LibraryInlineError(error: error) }
                 if let playbackError {
-                    Text(verbatim: AuthCopy.localized(playbackError)).accessibilityIdentifier("detail.playback.error")
+                    Text(verbatim: AppErrorMessage.localized(playbackError)).accessibilityIdentifier("detail.playback.error")
                 }
                 if playbackNotice {
                     Copy.text(.detailPlaybackPending).accessibilityIdentifier("detail.playback.pending")
@@ -189,7 +189,7 @@ struct ItemDetailScreen: View {
     private func play(startOver: Bool) {
         guard !session.app.playbackBlocked else {
             playbackNotice = false
-            playbackError = session.app.playbackBlockedKey
+            playbackError = session.app.playbackBlockedMessageKey
             return
         }
         playbackError = nil

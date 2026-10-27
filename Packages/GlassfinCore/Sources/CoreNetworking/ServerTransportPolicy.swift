@@ -10,8 +10,16 @@ public enum ServerTransportPolicy {
         case invalid
     }
 
-    public static var unencryptedWarning: String { AuthCopy.localized(.connectionNotEncrypted) }
-    public static var publicAddressRequiresHTTPS: String { AuthCopy.localized(.publicAddressRequiresHTTPS) }
+    public static var unencryptedWarningKey: String { AuthCopy.Key.connectionNotEncrypted.rawValue }
+    public static var publicAddressRequiresHTTPSKey: String { AuthCopy.Key.publicAddressRequiresHTTPS.rawValue }
+
+    public static var unencryptedWarning: String {
+        AuthCopy.localized(.connectionNotEncrypted)
+    }
+
+    public static var publicAddressRequiresHTTPS: String {
+        AuthCopy.localized(.publicAddressRequiresHTTPS)
+    }
 
     public static func messageKey(for verdict: Verdict) -> AuthCopy.Key? {
         switch verdict {

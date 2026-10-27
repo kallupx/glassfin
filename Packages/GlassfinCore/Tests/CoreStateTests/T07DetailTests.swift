@@ -22,7 +22,7 @@ final class T07DetailTests: XCTestCase {
         await gate.release()
         await edit.value
         XCTAssertFalse(actions.visible(item).userData.played)
-        XCTAssertEqual(actions.lastError.flatMap(AppErrorMessage.key), .forbidden)
+        XCTAssertEqual(actions.lastError.flatMap(AppErrorMessage.messageKey), AppErrorMessage.forbiddenKey)
         guard case .signedIn = rig.app.phase else { return XCTFail("Forbidden action signed out") }
         XCTAssertNil(rig.app.sessionNoticeKey)
     }
@@ -41,9 +41,9 @@ final class T07DetailTests: XCTestCase {
         await client.setHandler { _ async throws(APIError) -> Data in throw .network }
         await model.load(id: previous.id)
         XCTAssertEqual(model.state.value, previous)
-        XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.key), .serverUnreachable)
+        XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.messageKey), AppErrorMessage.serverDownKey)
         XCTAssertEqual(rig.app.connectivity, .serverUnreachable)
-        XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
+        XCTAssertEqual(rig.app.bannerKey, AppErrorMessage.serverDownKey)
     }
 
     /// T07-64: no detail content means the same key is used by the blocking error component.
@@ -56,7 +56,7 @@ final class T07DetailTests: XCTestCase {
         let model = ItemDetailViewModel(library: JellyfinLibraryService(client: client), app: rig.app)
         await model.load(id: Sample.movie)
         XCTAssertNil(model.state.value)
-        XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.key), .serverUnreachable)
+        XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.messageKey), AppErrorMessage.serverDownKey)
     }
 
     /// T07-43: Q7-25 also requires a picker for a single-season series.
@@ -322,7 +322,7 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.episodes.value, before)
         XCTAssertEqual(model.selectedSeasonID, Sample.season)
         XCTAssertEqual(model.episodes.value?.first?.name, "<b>x</b>")
-        XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
+        XCTAssertEqual(rig.app.bannerKey, AppErrorMessage.serverDownKey)
     }
 
     /// T07-27: canonical spec/TESTPLAN-M07.md.
@@ -342,7 +342,7 @@ final class T07DetailTests: XCTestCase {
         await gate.release()
         await edit.value
         XCTAssertFalse(actions.visible(item).userData.played)
-        XCTAssertEqual(actions.lastError.flatMap(AppErrorMessage.key), .serverError)
+        XCTAssertEqual(actions.lastError.flatMap(AppErrorMessage.messageKey), AppErrorMessage.serverErrorKey)
         let stored = await rig.app.userData.state(for: item.id)
         XCTAssertEqual(stored?.played, false)
         let requests = await gate.requests

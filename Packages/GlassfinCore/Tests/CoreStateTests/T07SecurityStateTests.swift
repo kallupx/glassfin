@@ -28,7 +28,7 @@ final class T07SecurityStateTests: XCTestCase {
         } catch { XCTAssertEqual(error, .unauthorized) }
         let failure = await slow.value
         XCTAssertEqual(failure, .cancelled)
-        XCTAssertEqual(rig.app.sessionNoticeKey, .sessionExpired)
+        XCTAssertEqual(rig.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
         guard case .needsLogin = rig.app.phase else { return XCTFail("Expected sign-in") }
         do { _ = try await client.send(APIRequest(method: "GET", path: "/unauthorized")) } catch {
             XCTAssertEqual(error, .cancelled)
@@ -73,7 +73,7 @@ final class T07SecurityStateTests: XCTestCase {
             } catch {}
             guard case .signedIn = rig.app.phase else { return XCTFail("Non-401 signed out") }
             XCTAssertNil(rig.app.sessionNoticeKey)
-            if error == .cancelled { XCTAssertNil(AppErrorMessage.key(for: .cancelled)) }
+            if error == .cancelled { XCTAssertNil(AppErrorMessage.messageKey(for: .cancelled)) }
         }
     }
 

@@ -1,7 +1,20 @@
+import CoreModels
+import CoreNetworking
 import Foundation
 import XCTest
 
 final class StringCatalogTests: XCTestCase {
+    /// The stack merge retains the previous catalog keys alongside #7's shared keys.
+    private let retainedCatalogKeys: Set<String> = [
+        "Playback is unavailable because the server cannot be reached",
+        "Playback is unavailable without a network connection",
+        "Server version %@ is too old (required ≥ %@)",
+        "Switch server",
+        "The server certificate is not trusted",
+        "This file could not be played",
+        "You do not have permission for this action",
+    ]
+
     /// Every `*.xcstrings` in the checkout is checked, not only CoreModels.
     /// That includes `Apps/Shared/Resources/Localizable.xcstrings`.
     func testEveryStringCatalogHasTranslatedEnglishAndFinnish() throws {
@@ -19,6 +32,97 @@ final class StringCatalogTests: XCTestCase {
         )
         let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
         XCTAssertEqual(issues, [], issues.joined(separator: "\n"))
+    }
+
+    func testNetworkingCatalogKeysAndLocalizedAccessors() throws {
+        let englishValues = try catalogEnglishValues(module: "CoreModels")
+        try assertLocalized(
+            ServerTransportPolicy.unencryptedWarning,
+            key: ServerTransportPolicy.unencryptedWarningKey,
+            englishValues: englishValues
+        )
+        try assertLocalized(
+            ServerTransportPolicy.publicAddressRequiresHTTPS,
+            key: ServerTransportPolicy.publicAddressRequiresHTTPSKey,
+            englishValues: englishValues
+        )
+        try assertLocalized(
+            SessionEndCopy.serverSessionMayRemain,
+            key: SessionEndCopy.serverSessionMayRemainKey,
+            englishValues: englishValues
+        )
+    }
+
+    func testModelsCatalogKeysAndLocalizedAccessor() throws {
+        let englishValues = try catalogEnglishValues(module: "CoreModels")
+        XCTAssertEqual(Set(englishValues.keys), Set(AuthCopy.Key.allCases.map(\.rawValue)).union(retainedCatalogKeys))
+        for key in englishValues.keys.sorted() {
+            try assertLocalized(AppErrorMessage.localized(key), key: key, englishValues: englishValues)
+        }
+    }
+
+    private func catalogEnglishValues(module: String, excluding nonlocalizedConstants: Set<String> = []) throws
+        -> [String: String]
+    {
+        let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
+        let sources = root.appendingPathComponent("Packages/GlassfinCore/Sources/\(module)")
+        let files = try FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.path < $1.path }
+        let pattern = #"\bstatic\s+let\s+(\w+Key)\s*=\s*"([^"\r\n]+)""#
+        let regex = try NSRegularExpression(pattern: pattern)
+        var keys: Set<String> = []
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for match in regex.matches(in: source, range: NSRange(source.startIndex..., in: source)) {
+                let nameRange = try XCTUnwrap(Range(match.range(at: 1), in: source))
+                if nonlocalizedConstants.contains(String(source[nameRange])) { continue }
+                let range = try XCTUnwrap(Range(match.range(at: 2), in: source))
+                keys.insert(String(source[range]))
+            }
+        }
+        XCTAssertFalse(keys.isEmpty, "\(module): expected source key constants")
+        if module == "CoreModels" {
+            keys.formUnion(AuthCopy.Key.allCases.map(\.rawValue))
+            keys.formUnion(retainedCatalogKeys)
+        }
+        let data = try Data(contentsOf: sources.appendingPathComponent("Localizable.xcstrings"))
+        let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        XCTAssertEqual(Set(strings.keys).subtracting(keys), [], "\(module): orphan catalog keys")
+        var englishValues: [String: String] = [:]
+        for key in keys.sorted() {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], "Missing catalog key: \(key)")
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], "\(key): missing localizations")
+            for locale in ["en", "fi"] {
+                let translation = try XCTUnwrap(
+                    localizations[locale] as? [String: Any],
+                    "\(key): missing \(locale)"
+                )
+                let unit = try XCTUnwrap(
+                    translation["stringUnit"] as? [String: Any],
+                    "\(key): missing \(locale) string unit"
+                )
+                XCTAssertEqual(unit["state"] as? String, "translated", "\(key): \(locale) must be translated")
+                let value = try XCTUnwrap(unit["value"] as? String, "\(key): missing \(locale) value")
+                XCTAssertFalse(
+                    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    "\(key): \(locale) value must not be empty"
+                )
+                if locale == "en" {
+                    englishValues[key] = value
+                }
+            }
+        }
+        return englishValues
+    }
+
+    private func assertLocalized(_ localized: String, key: String, englishValues: [String: String]) throws {
+        #if os(Linux)
+            XCTAssertEqual(localized, key)
+        #else
+            XCTAssertEqual(localized, try XCTUnwrap(englishValues[key]), key)
+        #endif
     }
 
     func testScannerChecksCatalogsOutsideCoreModels() throws {

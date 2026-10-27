@@ -13,7 +13,7 @@ private struct LibraryCachedPage: Codable, Sendable {
 
 @MainActor
 @Observable
-public final class LibraryViewModel {
+public final class LibraryViewModel: ViewContentProviding {
     public private(set) var state: LoadState<[MediaItem]> = .idle
     public private(set) var totalCount: Int?
     public private(set) var choices = LibraryChoices()
@@ -52,7 +52,7 @@ public final class LibraryViewModel {
         self.preferences = preferences
     }
 
-    public var errorKey: AuthCopy.Key? { state.presentedError.flatMap(AppErrorMessage.key) }
+    public var errorKey: String? { state.presentedError.flatMap(AppErrorMessage.messageKey) }
     public var hasContent: Bool { !(state.value ?? []).isEmpty }
 
     public func browse(_ definition: Library) async {
@@ -79,6 +79,7 @@ public final class LibraryViewModel {
     }
 
     public func reload(libraryID: String, query: ItemQuery = ItemQuery(), force: Bool = false) async {
+        app.currentView = self
         guard ItemID(libraryID) != nil else {
             state = .failed(.internalInvariant, previous: state.value)
             return

@@ -27,7 +27,7 @@ struct HeroHeader: View {
                 if let logoContent { logoContent }
                 Text(verbatim: title)
                     .font(.largeTitle)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(ContentPaint.heroText)
                     .lineLimit(2)
                     .accessibilityIdentifier("design.hero.title")
                 Text(verbatim: meta)
@@ -36,7 +36,7 @@ struct HeroHeader: View {
                     .accessibilityIdentifier("design.hero.meta")
                 Text(verbatim: overview)
                     .font(.body)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(ContentPaint.heroText)
                     .lineLimit(expanded ? TruncationPolicy.errorMessageLineLimit : 2)
                     .focusable(false)
                     .accessibilityIdentifier(overviewIdentifier)
@@ -61,6 +61,9 @@ struct HeroHeader: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 640)
+        // The full hero guides Down from the tab bar to the action bar's default Play button.
+        .designFocusSection()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.hero.root")
     }
 
@@ -152,6 +155,7 @@ struct NextUpCard: View {
             .padding(SpacingToken.m)
             .ownGlassSurface(in: ContentShape.concentric)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.nextUp.root")
     }
 }
@@ -168,6 +172,7 @@ struct LoginPanel: View {
             .frame(maxWidth: 480, alignment: .leading)
             .ownGlassSurface(in: ContentShape.concentric)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.login.root")
     }
 }
@@ -188,8 +193,8 @@ struct FocusGlassSample: View {
                 .padding(.vertical, SpacingToken.s)
                 .ownGlassSurface(in: Capsule(), kind: .focused(isFocused))
                 .focusable(forcedFocus == nil)
+                .accessibilityIdentifier(isFocused ? "design.focusGlass.focused" : "design.focusGlass.idle")
         }
-        .accessibilityIdentifier(isFocused ? "design.focusGlass.focused" : "design.focusGlass.idle")
     }
 }
 
@@ -200,8 +205,8 @@ struct InteractiveGlassProbe: View {
                 .padding(.horizontal, SpacingToken.l)
                 .padding(.vertical, SpacingToken.s)
                 .ownGlassSurface(in: Capsule(), kind: .interactiveProbe)
+                .accessibilityIdentifier("design.probe.interactive")
         }
-        .accessibilityIdentifier("design.probe.interactive")
     }
 }
 
