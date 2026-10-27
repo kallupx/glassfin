@@ -113,14 +113,14 @@ final class StringCatalogTests: XCTestCase {
         #endif
     }
 
-    func testScannerChecksCatalogsOutsideCoreNetworking() throws {
+    func testScannerChecksCatalogsOutsideCoreModels() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
             "glassfin-catalogs-\(UUID().uuidString)",
             isDirectory: true
         )
         defer { try? FileManager.default.removeItem(at: root) }
         let packageCatalog = root.appendingPathComponent(
-            "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings"
+            "Packages/GlassfinCore/Sources/CoreModels/Localizable.xcstrings"
         )
         let appCatalog = root.appendingPathComponent("Apps/Shared/Resources/Localizable.xcstrings")
         try writeCatalog(packageCatalog, fi: ("translated", "fi-translation"))
@@ -131,13 +131,13 @@ final class StringCatalogTests: XCTestCase {
             catalogs.map { StringCatalogLint.relative($0, root: root) },
             [
                 "Apps/Shared/Resources/Localizable.xcstrings",
-                "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings",
+                "Packages/GlassfinCore/Sources/CoreModels/Localizable.xcstrings",
             ]
         )
         let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
         let appIssues = issues.filter { $0.hasPrefix("Apps/Shared/Resources/Localizable.xcstrings") }
         XCTAssertTrue(appIssues.contains { $0.contains("missing fi") })
-        XCTAssertFalse(issues.contains { $0.contains("Sources/CoreNetworking/Localizable.xcstrings") })
+        XCTAssertFalse(issues.contains { $0.contains("Sources/CoreModels/Localizable.xcstrings") })
     }
 
     func testCatalogLintRejectsMissingOrUntranslatedLocales() throws {

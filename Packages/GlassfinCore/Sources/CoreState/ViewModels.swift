@@ -508,9 +508,9 @@ public final class PlayerViewModel: ViewContentProviding {
 
     public func noteBuffering(elapsed: Duration) {
         if elapsed > NetworkThresholds.stallMessageAfter {
-            stallMessage = AppErrorMessage.buffering
+            stallMessageKey = AppErrorMessage.bufferingKey
         } else {
-            stallMessage = nil
+            stallMessageKey = nil
         }
     }
 

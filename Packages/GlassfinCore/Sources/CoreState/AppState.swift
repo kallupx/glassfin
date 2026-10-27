@@ -302,7 +302,7 @@ public final class AppState {
         activate(session)
     }
 
-    /// Local sign-out that is not the HTTP 401 path. `notice` is an existing session string, if any.
+    /// Local sign-out that is not the HTTP 401 path. `notice` is an existing catalog key, if any.
     public func signOutLocally(notice: String?) {
         guard case .signedIn(let session) = phase else { return }
         logoutStarted = true
@@ -438,7 +438,7 @@ public final class AppState {
         case .ok:
             recoverFromServerDown()
         case .failed(let error):
-            if SessionTermination.shouldEndSession(error) || AppErrorMapping.isConnectivity(error) {
+            if CoreModels.SessionTermination.shouldEndSession(error) || AppErrorMapping.isConnectivity(error) {
                 handle(error)
             } else if case .tlsUntrusted = error {
                 handle(error)

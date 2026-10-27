@@ -120,7 +120,7 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("welcome.root")
             Button(AuthCopy.localized(.connectToServer)) { flow.connect() }
                 .buttonStyle(.glassProminent)
-                .accessibilityIdentifier("welcome.connect")
+                .accessibilityIdentifier(WelcomeCopy.Key.connect.rawValue)
                 .focused($focused, equals: .connect)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
