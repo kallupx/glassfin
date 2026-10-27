@@ -200,6 +200,8 @@ public struct JellyfinLibraryService: LibraryService {
             URLQueryItem(name: "limit", value: String(page.limit)),
             URLQueryItem(name: "recursive", value: query.recursive ? "true" : "false"),
             URLQueryItem(name: "enableTotalRecordCount", value: "true"),
+            URLQueryItem(name: "enableUserData", value: "true"),
+            URLQueryItem(name: "fields", value: "PrimaryImageAspectRatio"),
         ]
         items.append(contentsOf: query.includeItemTypes.map { URLQueryItem(name: "includeItemTypes", value: $0) })
         items.append(contentsOf: query.sortBy.map { URLQueryItem(name: "sortBy", value: $0) })
@@ -213,7 +215,8 @@ public struct JellyfinLibraryService: LibraryService {
         if let searchTerm = query.searchTerm { items.append(URLQueryItem(name: "searchTerm", value: searchTerm)) }
         let data = try await client.send(APIRequest(method: "GET", path: "/Items", query: items))
         let decoded = try ResilientItemDecoder.mediaItems(from: data, log: log)
-        return Page(items: decoded.items, totalCount: decoded.totalCount)
+        return Page(
+            items: decoded.items, totalCount: decoded.totalCount, consumedCount: decoded.items.count + decoded.skipped)
     }
 
     public func resume(limit: Int) async throws(APIError) -> [MediaItem] {
@@ -258,14 +261,23 @@ public struct JellyfinLibraryService: LibraryService {
     }
 
     public func episodes(series: MediaItem.ID, season: MediaItem.ID?) async throws(APIError) -> [MediaItem] {
-        var query: [URLQueryItem] = []
-        if let season { query.append(URLQueryItem(name: "seasonId", value: season)) }
+        var query = [
+            URLQueryItem(name: "enableUserData", value: "true"),
+            URLQueryItem(name: "fields", value: "Overview,PrimaryImageAspectRatio"),
+        ]
+        if let season { query.append(URLQueryItem(name: "seasonId", value: try validatedItemID(season))) }
         return try await list(path: "/Shows/\(try validatedItemID(series))/Episodes", query: query)
     }
 
     public func item(id: MediaItem.ID) async throws(APIError) -> MediaItem {
         let dto = try await client.send(
-            APIRequest(method: "GET", path: "/Items/\(try validatedItemID(id))"), as: BaseItemDTO.self)
+            APIRequest(
+                method: "GET", path: "/Items/\(try validatedItemID(id))",
+                query: [
+                    URLQueryItem(
+                        name: "fields", value: "Overview,People,Studios,Genres,Taglines,MediaStreams,MediaSources"),
+                    URLQueryItem(name: "enableUserData", value: "true"),
+                ]), as: BaseItemDTO.self)
         guard let item = DTOMapper.mediaItem(dto, log: log) else { throw APIError.decoding }
         return item
     }

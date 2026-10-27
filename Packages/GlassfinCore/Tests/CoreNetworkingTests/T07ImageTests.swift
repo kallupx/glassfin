@@ -28,7 +28,8 @@ final class T07ImageTests: XCTestCase {
 
     func testT07_23_cacheKeyIsStableSHA256OfTheWholeTuple() throws {
         let item = try XCTUnwrap(ItemID("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-        let request = LibraryImageRequest(serverID: "s", itemID: item, type: .primary, tag: "t", width: 250, height: 375)
+        let request = LibraryImageRequest(
+            serverID: "s", itemID: item, type: .primary, tag: "t", width: 250, height: 375)
         let framed = "1:s32:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7:Primary1:t3:2503:375"
         XCTAssertEqual(request.cacheKey, CertificateFingerprint.sha256Hex(Data(framed.utf8)))
         XCTAssertEqual(request.cacheKey.count, 64)
@@ -47,7 +48,8 @@ final class T07ImageTests: XCTestCase {
             server: url, identity: ClientIdentity(deviceName: "TV", deviceID: "d", version: "1"),
             transport: OversizeImageTransport(url: url))
         do {
-            _ = try await client.send(APIRequest(method: "GET", path: "/image", maximumResponseBytes: MetadataPolicy.imageMaxBytes))
+            _ = try await client.send(
+                APIRequest(method: "GET", path: "/image", maximumResponseBytes: MetadataPolicy.imageMaxBytes))
             XCTFail("Oversize image accepted")
         } catch { XCTAssertEqual(error, .decoding) }
     }
@@ -56,7 +58,9 @@ final class T07ImageTests: XCTestCase {
 private struct OversizeImageTransport: RequestTransport {
     let url: URL
     func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
-        (Data(repeating: 0, count: MetadataPolicy.imageMaxBytes + 1),
-         HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil)
+        (
+            Data(repeating: 0, count: MetadataPolicy.imageMaxBytes + 1),
+            HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil
+        )
     }
 }

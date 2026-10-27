@@ -141,7 +141,10 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
 
     private func finish(_ result: Result<(Data, URLResponse, Int?), any Error>) {
         lock.lock()
-        guard !stopped else { lock.unlock(); return }
+        guard !stopped else {
+            lock.unlock()
+            return
+        }
         stopped = true
         let continuation = continuation
         self.continuation = nil

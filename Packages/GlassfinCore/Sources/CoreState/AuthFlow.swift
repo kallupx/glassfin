@@ -20,6 +20,28 @@ public final class AuthFlow {
     public private(set) var quickConnectRenewals = 0
     public private(set) var cachedHome: HomeSnapshot?
     public var appPhase: AppState.Phase { app.phase }
+    /// Shared signed-in state for feature composition; authentication still owns the session.
+    public var featureApp: AppState { app }
+
+    /// Loads credentials only inside the core; the UI never receives the token.
+    public func makeFeatureClient() throws(APIError) -> any JellyfinAPIClient {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID)
+        else { throw .unauthorized }
+        let fingerprint = try? pins.fingerprint(for: session.server.id)
+        let pin = fingerprint.map { OriginCertificatePin(url: session.server.url, sha256: $0) }
+        let deviceID: String
+        do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) }
+        catch { throw .headerRejected }
+        let identity = ClientIdentity(
+            deviceName: "Apple TV", deviceID: deviceID,
+            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0",
+            token: token)
+        return SessionFeatureClient(
+            inner: RetryingAPIClient(
+                inner: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
+                clock: clock), app: app)
+    }
     public var connectivity: Connectivity { app.connectivity }
     public var homeErrorKey: AuthCopy.Key? {
         guard cachedHome == nil else { return nil }

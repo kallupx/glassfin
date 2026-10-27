@@ -77,7 +77,8 @@ public enum DTOMapper {
                 people: (dto.People ?? []).map { ItemPerson(name: $0.Name ?? "", role: $0.Role) },
                 studios: (dto.Studios ?? []).compactMap(\.Name),
                 streams: (dto.MediaStreams ?? dto.MediaSources?.first?.MediaStreams ?? []).map {
-                    ItemStream(id: $0.Index ?? 0, kind: $0.Type ?? "", title: $0.DisplayTitle,
+                    ItemStream(
+                        id: $0.Index ?? 0, kind: $0.Type ?? "", title: $0.DisplayTitle,
                         language: $0.Language, codec: $0.Codec, channels: $0.Channels,
                         width: $0.Width, height: $0.Height, videoRange: $0.VideoRangeType,
                         dolbyVisionProfile: $0.DvProfile)
@@ -87,7 +88,9 @@ public enum DTOMapper {
 
     public static func library(_ dto: BaseItemDTO) -> Library? {
         guard let id = dto.Id else { return nil }
-        return Library(id: id, name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax), collectionType: dto.CollectionType)
+        return Library(
+            id: id, name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            collectionType: dto.CollectionType)
     }
 
     public static func page(_ dto: QueryResultDTO, log: any GlassfinLog) -> Page<MediaItem> {

@@ -12,7 +12,9 @@ public struct APIRequest: Sendable, Equatable {
     public var body: Data?
     public var maximumResponseBytes: Int?
 
-    public init(method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil, maximumResponseBytes: Int? = nil) {
+    public init(
+        method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil, maximumResponseBytes: Int? = nil
+    ) {
         self.method = method
         self.path = path
         self.query = query

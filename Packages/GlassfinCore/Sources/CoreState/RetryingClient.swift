@@ -63,7 +63,17 @@ public final class RequestScope: @unchecked Sendable {
         lock.lock()
         tasks[id] = task
         lock.unlock()
+        Task { [weak self] in
+            await task.value
+            self?.remove(id)
+        }
         return id
+    }
+
+    public func remove(_ id: UUID) {
+        lock.lock()
+        tasks[id] = nil
+        lock.unlock()
     }
 
     public func cancelAll() {
