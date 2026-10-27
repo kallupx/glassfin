@@ -131,6 +131,7 @@ final class T02FoundationTests: XCTestCase {
             (.notFound, AppErrorMessage.notFoundKey),
             (.serverError(status: 500), AppErrorMessage.serverErrorKey),
             (.unsupportedServer(version: "10.9.11"), AppErrorMessage.unsupportedServerKey),
+            (.publicHTTPRejected, AuthCopy.Key.publicAddressRequiresHTTPS.rawValue),
             (.playback(.itemFailed(code: "NoCompatibleStream")), AppErrorMessage.playbackFailedKey),
             (.playback(.itemFailed(code: nil)), AppErrorMessage.playbackFailedKey),
             (.playback(.stalled), AppErrorMessage.playbackFailedKey),
