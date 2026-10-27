@@ -11,12 +11,14 @@ public enum SearchKind: String, CaseIterable, Sendable, Hashable, Codable {
 public enum SearchPolicy {
     public static let pageSize = 24
     public static let minimumCharacters = 2
+    /// Q9-03: canonical-plan default pending a product limit decision.
+    public static let maximumQueryCharacters = 100
 
     public static func accepts(_ term: String) -> Bool {
         let text = term.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.count >= minimumCharacters { return true }
         guard text.count == 1 else { return false }
-        // TODO(Q9-01): Treat Han, kana and Hangul as CJK, including supplementary Han.
+        // TODO(Q9-11): Treat Han, kana and Hangul as CJK, including supplementary Han.
         return text.unicodeScalars.contains {
             (0x3400...0x9FFF).contains($0.value) || (0x20000...0x323AF).contains($0.value)
                 || (0x3040...0x30FF).contains($0.value) || (0xAC00...0xD7AF).contains($0.value)
@@ -40,10 +42,12 @@ public struct SearchGroup: Identifiable, Sendable, Equatable {
 public struct SearchResponse: Sendable, Equatable {
     public var term: String
     public var groups: [SearchGroup]
+    public var failedRows: [SearchKind: APIError]
 
-    public init(term: String, groups: [SearchGroup]) {
+    public init(term: String, groups: [SearchGroup], failedRows: [SearchKind: APIError] = [:]) {
         self.term = term
         self.groups = groups
+        self.failedRows = failedRows
     }
 }
 

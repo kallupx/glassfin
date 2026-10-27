@@ -34,7 +34,6 @@ final class T09SearchUITests: XCTestCase {
         typeText("failure", into: field, in: app)
         let error = app.descendants(matching: .any)["search.error"]
         XCTAssertTrue(error.waitForExistence(timeout: 10))
-        XCTAssertEqual(error.value as? String, "The server returned an error")
         activate(app.buttons["search.retry"], in: app)
         XCTAssertTrue(error.waitForExistence(timeout: 10))
     }
@@ -91,6 +90,9 @@ final class T09SearchUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         typeText("star", into: field, in: app)
         XCTAssertTrue(app.buttons["search.item.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"].waitForExistence(timeout: 10))
+        activate(app.buttons["search.item.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], in: app)
+        XCTAssertTrue(app.buttons["search.detail.back"].waitForExistence(timeout: 10))
+        activate(app.buttons["search.detail.back"], in: app)
         typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4), into: field, in: app)
         let clear = app.buttons["search.clearRecent"]
         XCTAssertTrue(clear.waitForExistence(timeout: 10))

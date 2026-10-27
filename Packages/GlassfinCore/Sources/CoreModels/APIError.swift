@@ -29,6 +29,8 @@ public enum APIError: Error, Sendable, Equatable {
     case network
     case tls
     case decoding
+    /// The response exceeded its byte budget while being received.
+    case responseTooLarge
     case cancelled
     case redirectRejected(RedirectRejection)
     case invalidURL

@@ -12,13 +12,13 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(AuthFocusPolicy.cleartextAndCertificate, .cancel)
     }
 
-    func testT04_16_serverNameDropsMarkupAndCapsAt64() {
+    func testT04_16_serverNameKeepsLiteralMarkupAndCapsAt64() {
         let raw = "<b>Home</b>\u{0007}" + String(repeating: "n", count: 500)
         let shown = AuthServerName.display(raw)
-        XCTAssertFalse(shown.contains("<"))
+        XCTAssertTrue(shown.hasPrefix("<b>"))
         XCTAssertFalse(shown.contains("\u{0007}"))
         XCTAssertEqual(shown.count, 64)
-        XCTAssertEqual(shown, "Home" + String(repeating: "n", count: 60))
+        XCTAssertEqual(shown, "<b>Home</b>" + String(repeating: "n", count: 53))
     }
 
     func testT04_16_serverNameIsCappedOnAddressAndSavedUserPicker() async throws {
@@ -37,7 +37,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.flow.submitAddress()
         await rig.wait()
         XCTAssertEqual(rig.flow.displayedName.count, 64)
-        XCTAssertFalse(rig.flow.displayedName.contains("<"))
+        XCTAssertTrue(rig.flow.displayedName.hasPrefix("<b>"))
         await rig.flow.acceptCleartext()
         XCTAssertEqual(rig.flow.screen, .userPicker)
         XCTAssertEqual(rig.flow.displayedName.count, 64)

@@ -62,20 +62,24 @@ public final class SearchViewModel {
         return state.presentedError.flatMap { AppErrorMessage.key(for: $0) }
     }
     public var bannerKey: AuthCopy.Key? { app.bannerKey }
+    public var isOffline: Bool { app.connectivity == .offline }
 
     public func setTerm(_ newTerm: String) {
-        guard newTerm != term else { return }
-        term = newTerm
+        let bounded = String(newTerm.prefix(SearchPolicy.maximumQueryCharacters))
+        guard bounded != term else { return }
+        term = bounded
         cancelWork()
         ticket += 1
         rememberedIDs = [:]
         focusedKind = nil
-        guard SearchPolicy.accepts(newTerm) else {
+        guard SearchPolicy.accepts(term) else {
             groups = []
             state = .idle
             loadRecents()
             return
         }
+        groups = []
+        state = .idle
         start(debounce: true)
     }
 
@@ -108,6 +112,16 @@ public final class SearchViewModel {
         cancelWork()
         ticket += 1
         if state.isLoading { state = state.value.map { .loaded($0) } ?? .idle }
+    }
+
+    /// Q9-06: save only a deliberate result selection, never each debounce or empty result.
+    public func open(_ item: MediaItem) {
+        selectedItem = item
+        guard let session, app.phase == .signedIn(session) else { return }
+        do {
+            try app.recentSearches.record(normalizedTerm, serverID: session.server.id, userID: session.userID)
+            loadRecents()
+        } catch { historyFailed = true }
     }
 
     public func clearRecents() {
@@ -160,6 +174,10 @@ public final class SearchViewModel {
     private var normalizedTerm: String { term.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func start(debounce: Bool) {
+        guard !isOffline else {
+            state = .failed(.offline, previous: state.value)
+            return
+        }
         let current = ticket
         let query = normalizedTerm
         let generation = app.requestGeneration
@@ -187,12 +205,8 @@ public final class SearchViewModel {
                 groups = projected
                 resultsTerm = query
                 publish()
-                if let session, app.phase == .signedIn(session) {
-                    do {
-                        // TODO(Q9-03): Record completed queries, including zero results; deduplicate exact text.
-                        try app.recentSearches.record(query, serverID: session.server.id, userID: session.userID)
-                        loadRecents()
-                    } catch { historyFailed = true }
+                for error in response.failedRows.values {
+                    app.handle(AppErrorMapping.map(error, context: .authenticated, deviceOffline: isOffline))
                 }
             } catch {
                 fail(error as? APIError ?? .network, current: current, query: query, generation: generation)
@@ -210,7 +224,10 @@ public final class SearchViewModel {
         if error == .unauthorized, generation == app.requestGeneration { app.handle(.unauthorized) }
         guard isCurrent(current, query, generation) else { return }
         let mapped = AppErrorMapping.map(error, context: .authenticated, deviceOffline: app.connectivity == .offline)
-        guard mapped != .cancelled else { return }
+        guard mapped != .cancelled else {
+            state = state.value.map { .loaded($0) } ?? .idle
+            return
+        }
         state = .failed(mapped, previous: state.value)
         app.handle(mapped)
     }

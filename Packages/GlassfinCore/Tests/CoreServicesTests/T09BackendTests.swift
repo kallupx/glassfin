@@ -6,6 +6,51 @@ import GlassfinServices
 import XCTest
 
 final class T09BackendTests: XCTestCase, @unchecked Sendable {
+    /// T09-17: cancelling the parent cancels all three /Items children before any response is released.
+    func testT09_17_parallelRequestsAreCancelledTogether() async throws {
+        let client = SearchRequestGate()
+        let work = Task {
+            try await ItemsSearchBackend(client: client).results(term: "star", kind: nil, page: PageRequest(limit: 24))
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while client.requests.count < 3 && ContinuousClock.now < deadline { await Task.yield() }
+        work.cancel()
+        while client.cancellations < 3 && ContinuousClock.now < deadline { await Task.yield() }
+        XCTAssertEqual(client.cancellations, 3)
+        client.releaseAll()
+        do {
+            _ = try await work.value
+            XCTFail("Expected cancellation of the whole query")
+        } catch { XCTAssertEqual(error as? APIError, .cancelled) }
+    }
+
+    /// T09-29: a 500 in one row does not suppress successful sibling rows.
+    func testT09_29_failedSiblingIsHiddenWhileSuccessfulRowsRemain() async throws {
+        let response = try await ItemsSearchBackend(client: PartialSearchClient()).results(
+            term: "star", kind: nil, page: PageRequest(limit: 24))
+        XCTAssertEqual(response.groups.map(\.id), [.movies, .episodes])
+        XCTAssertEqual(response.groups.flatMap(\.items).map(\.name), ["Movie", "Episode"])
+        XCTAssertEqual(response.failedRows, [.series: .server(status: 500)])
+    }
+
+    /// T09-30, T09-61: unsupported types and broken elements do not discard valid P0 results.
+    func testT09_61_brokenItemsAreSkippedAndP1KindsAreExcluded() async throws {
+        let data = Data(
+            """
+            {"Items":[
+              {"Id":"valid","Type":"Movie","Name":"valid"},
+              {"Id":"broken","Type":"Movie","Name":123},
+              {"Id":"person","Type":"Person","Name":"person"},
+              {"Id":"music","Type":"Audio","Name":"music"},
+              {"Id":"collection","Type":"BoxSet","Name":"collection"}
+            ]}
+            """.utf8)
+        let response = try await ItemsSearchBackend(client: FixedSearchClient(data: data)).results(
+            term: "star", kind: nil, page: PageRequest(limit: 24))
+        XCTAssertEqual(response.groups.flatMap(\.items).map(\.id), ["valid"])
+        XCTAssertEqual(SearchKind.allCases, [.movies, .series, .episodes])
+    }
+
     /// T09-23: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
     func testT09_23_threeItemsRequestsStartInParallelWithIndependentLimits() async throws {
         let client = SearchRequestGate()
@@ -131,21 +176,27 @@ private final class SearchRequestGate: JellyfinAPIClient, @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [APIRequest] = []
     private var pending: [CheckedContinuation<Void, Never>] = []
+    private var cancelled = 0
+    var cancellations: Int { lock.withLock { cancelled } }
     private var open: Bool
     var requests: [APIRequest] { lock.withLock { recorded } }
     init(open: Bool = false) { self.open = open }
 
     func send(_ request: APIRequest) async throws(APIError) -> Data {
-        await withCheckedContinuation { continuation in
-            lock.lock()
-            recorded.append(request)
-            if open {
-                lock.unlock()
-                continuation.resume()
-            } else {
-                pending.append(continuation)
-                lock.unlock()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                recorded.append(request)
+                if open {
+                    lock.unlock()
+                    continuation.resume()
+                } else {
+                    pending.append(continuation)
+                    lock.unlock()
+                }
             }
+        } onCancel: {
+            self.lock.withLock { self.cancelled += 1 }
         }
         let kind = request.query.first { $0.name == "includeItemTypes" }?.value ?? "Movie"
         if request.path == "/Search/Hints" { return Data("{\"SearchHints\":[]}".utf8) }
@@ -169,5 +220,13 @@ private final class SearchRequestGate: JellyfinAPIClient, @unchecked Sendable {
             return values
         }
         for value in values { value.resume() }
+    }
+}
+
+private struct PartialSearchClient: JellyfinAPIClient {
+    func send(_ request: APIRequest) async throws(APIError) -> Data {
+        let kind = request.query.first { $0.name == "includeItemTypes" }?.value ?? "Movie"
+        if kind == "Series" { throw .server(status: 500) }
+        return Data("{\"Items\":[{\"Id\":\"\(kind)\",\"Type\":\"\(kind)\",\"Name\":\"\(kind)\"}]}".utf8)
     }
 }

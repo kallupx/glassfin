@@ -38,8 +38,7 @@ public enum DTOMapper {
         )
     }
 
-    public static func mediaItem(_ dto: BaseItemDTO, log: any GlassfinLog, literalMetadata: Bool = false) -> MediaItem?
-    {
+    public static func mediaItem(_ dto: BaseItemDTO, log: any GlassfinLog) -> MediaItem? {
         guard let id = dto.Id else { return nil }
         let positionTicks = dto.UserData?.PlaybackPositionTicks ?? 0
         let images = ImageSet(
@@ -59,24 +58,20 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: literalMetadata
-                ? MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax)
-                : MetadataSanitizer.plainText(dto.Name ?? ""),
-            overview: literalMetadata
-                ? dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) }
-                : dto.Overview.map(MetadataSanitizer.plainText),
+            name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            overview: dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) },
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,
             parentIndexNumber: dto.ParentIndexNumber,
             runtime: Ticks.runtimeDuration(from: dto.RunTimeTicks),
             productionYear: dto.ProductionYear,
-            officialRating: dto.OfficialRating,
+            officialRating: dto.OfficialRating.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) },
             communityRating: dto.CommunityRating,
             images: images,
             userData: userData,
             trickplay: trickplay(dto.Trickplay),
-            chapters: chapters(dto.Chapters, log: log, literalMetadata: literalMetadata)
+            chapters: chapters(dto.Chapters, log: log)
         )
     }
 
@@ -147,21 +142,20 @@ public enum DTOMapper {
         streams.filter { $0.`Type` == type }.map { stream in
             Track(
                 id: stream.Index ?? 0,
-                displayTitle: stream.DisplayTitle.map(MetadataSanitizer.plainText),
+                displayTitle: stream.DisplayTitle.map { MetadataSanitizer.plainText($0) },
                 language: stream.Language,
                 codec: stream.Codec
             )
         }
     }
 
-    private static func chapters(_ chapters: [ChapterDTO]?, log: any GlassfinLog, literalMetadata: Bool)
+    private static func chapters(_ chapters: [ChapterDTO]?, log: any GlassfinLog)
         -> [ChapterMark]
     {
         (chapters ?? []).map { chapter in
             ChapterMark(
                 name: chapter.Name.map {
-                    literalMetadata
-                        ? MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) : MetadataSanitizer.plainText($0)
+                    MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax)
                 },
                 start: Ticks.positionDuration(from: chapter.StartPositionTicks ?? 0, log: log)
             )

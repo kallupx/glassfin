@@ -152,8 +152,8 @@ final class LiveServerTests: XCTestCase {
                 token: auth.accessToken))
         for backend: any SearchBackend in [ItemsSearchBackend(client: client), SearchHintsBackend(client: client)] {
             let response = try await backend.results(
-                term: "Sääasema", kind: nil, page: PageRequest(limit: SearchPolicy.pageSize))
-            XCTAssertTrue(response.groups.flatMap(\.items).contains { $0.name.contains("Sääasema") })
+                term: "hämä", kind: nil, page: PageRequest(limit: SearchPolicy.pageSize))
+            XCTAssertTrue(response.groups.flatMap(\.items).contains { $0.name.contains("Hämärä") })
         }
     }
 

@@ -5,11 +5,11 @@ import XCTest
 final class SecurityNameTests: XCTestCase {
     private let url = URL(string: "https://media.example")!
 
-    func testQ416_sharedSanitizerStripsAllControlCharactersAfterEntityDecoding() {
+    func testQ416_sharedSanitizerStripsControlsAndKeepsEntitiesLiteral() {
         let raw = "A\u{0000}\u{0007}\n\r\t\u{007F}\u{0085}\u{009F}B&#x07;"
-        XCTAssertEqual(MetadataSanitizer.plainText(raw), "AB")
-        XCTAssertEqual(server(raw).name, "AB")
-        XCTAssertEqual(PublicUser(id: "user", name: raw, host: "media.example").name, "AB")
+        XCTAssertEqual(MetadataSanitizer.plainText(raw), "AB&#x07;")
+        XCTAssertEqual(server(raw).name, "AB&#x07;")
+        XCTAssertEqual(PublicUser(id: "user", name: raw, host: "media.example").name, "AB&#x07;")
     }
 
     func testQ416_sharedSanitizerStripsEveryBidiControl() {
@@ -18,9 +18,9 @@ final class SecurityNameTests: XCTestCase {
             0x2066, 0x2067, 0x2068, 0x2069,
         ]
         let raw = "A" + controls.compactMap(Unicode.Scalar.init).map(String.init).joined() + "B&#x202e;"
-        XCTAssertEqual(MetadataSanitizer.plainText(raw), "AB")
-        XCTAssertEqual(server(raw).name, "AB")
-        XCTAssertEqual(PublicUser(id: "user", name: raw).name, "AB")
+        XCTAssertEqual(MetadataSanitizer.plainText(raw), "AB&#x202e;")
+        XCTAssertEqual(server(raw).name, "AB&#x202e;")
+        XCTAssertEqual(PublicUser(id: "user", name: raw).name, "AB&#x202e;")
     }
 
     func testQ416_limitCountsGraphemeClustersAndPreservesEmojiAndCombiningMarks() {
@@ -40,7 +40,7 @@ final class SecurityNameTests: XCTestCase {
     }
 
     func testQ416_emptyOrWhitespaceOnlySanitizedNamesFallBackToHost() {
-        for raw in ["", " \t\n\r", "\u{00A0}\u{2003}", "<b> </b>\u{202E}\u{0007}"] {
+        for raw in ["", " \t\n\r", "\u{00A0}\u{2003}"] {
             XCTAssertEqual(server(raw).name, "media.example")
             XCTAssertEqual(PublicUser(id: "user", name: raw, host: "media.example").name, "media.example")
         }
@@ -58,7 +58,7 @@ final class SecurityNameTests: XCTestCase {
     func testQ416_mutatingNamesStillUsesTheSharedDisplayRules() {
         var info = server("Home")
         info.name = "<b>A</b>\u{202E}\u{0007}"
-        XCTAssertEqual(info.name, "A")
+        XCTAssertEqual(info.name, "<b>A</b>")
         var user = PublicUser(id: "user", name: "Ada", host: "media.example")
         user.name = " \u{202E}"
         XCTAssertEqual(user.name, "media.example")
@@ -69,7 +69,7 @@ final class SecurityNameTests: XCTestCase {
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         object["name"] = "<b>Home</b>\u{202E}\u{0007}"
         let decoded = try JSONDecoder().decode(ServerInfo.self, from: JSONSerialization.data(withJSONObject: object))
-        XCTAssertEqual(decoded.name, "Home")
+        XCTAssertEqual(decoded.name, "<b>Home</b>")
     }
 
     private func server(_ name: String) -> ServerInfo {

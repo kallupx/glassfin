@@ -8,7 +8,7 @@ public protocol SearchBackend: Sendable {
 }
 
 /// ADR-M09-1: the default is three concurrent /Items requests, one limit per row.
-/// TODO(Q9-04): Keep this default until all three versions have accepted benchmark evidence.
+/// Keep this default until all three versions have accepted benchmark evidence (Q9-01).
 public struct ItemsSearchBackend: SearchBackend {
     private let client: any JellyfinAPIClient
 
@@ -17,15 +17,33 @@ public struct ItemsSearchBackend: SearchBackend {
     public func results(term: String, kind: SearchKind?, page: PageRequest) async throws(APIError) -> SearchResponse {
         do {
             let kinds = kind.map { [$0] } ?? SearchKind.allCases
-            let groups = try await withThrowingTaskGroup(of: SearchGroup.self) { tasks in
+            let response = try await withThrowingTaskGroup(of: (SearchKind, Result<SearchGroup, APIError>).self) {
+                tasks in
                 for kind in kinds {
-                    tasks.addTask { try await fetch(term: term, kind: kind, page: page) }
+                    tasks.addTask {
+                        do { return (kind, .success(try await fetch(term: term, kind: kind, page: page))) } catch let
+                            error as APIError
+                        {
+                            if error == .unauthorized || error == .cancelled { throw error }
+                            return (kind, .failure(error))
+                        } catch {
+                            throw APIError.cancelled
+                        }
+                    }
                 }
                 var collected: [SearchKind: SearchGroup] = [:]
-                for try await group in tasks { collected[group.id] = group }
-                return kinds.compactMap { collected[$0] }
+                var failures: [SearchKind: APIError] = [:]
+                for try await (kind, result) in tasks {
+                    switch result {
+                    case .success(let group): collected[kind] = group
+                    case .failure(let error): failures[kind] = error
+                    }
+                }
+                // Q9-05: hide a failed sibling row; a failure of every row remains retryable.
+                if collected.isEmpty, let error = kinds.compactMap({ failures[$0] }).first { throw error }
+                return SearchResponse(term: term, groups: kinds.compactMap { collected[$0] }, failedRows: failures)
             }
-            return SearchResponse(term: term, groups: groups)
+            return response
         } catch let error as APIError {
             throw error
         } catch {
@@ -47,7 +65,8 @@ public struct ItemsSearchBackend: SearchBackend {
                     URLQueryItem(name: "enableUserData", value: "true"),
                     URLQueryItem(name: "enableTotalRecordCount", value: "true"),
                 ]))
-        let decoded = try ResilientItemDecoder.mediaItems(from: data, log: SilentLog(), literalMetadata: true)
+        if Task.isCancelled { throw .cancelled }
+        let decoded = try ResilientItemDecoder.mediaItems(from: data, log: SilentLog())
         // Use raw page consumption, including skipped/unsupported elements, for the cursor.
         let consumed = decoded.items.count + decoded.skipped
         let next = page.startIndex + consumed
@@ -73,7 +92,7 @@ public struct SearchHintsBackend: SearchBackend {
             URLQueryItem(name: "isIncludeMedia", value: "true"),
         ]
         let data = try await client.send(request)
-        let items = try ResilientItemDecoder.searchHints(from: data, log: SilentLog(), literalMetadata: true)
+        let items = try ResilientItemDecoder.searchHints(from: data, log: SilentLog())
         let groups = kinds.map { kind in
             let matched = items.filter { $0.kind == kind.mediaKind }
             // Initial hints share one server limit. Subsequent pages query just this type.

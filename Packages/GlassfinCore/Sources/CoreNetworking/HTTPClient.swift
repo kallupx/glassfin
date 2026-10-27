@@ -10,12 +10,17 @@ public struct APIRequest: Sendable, Equatable {
     public var path: String
     public var query: [URLQueryItem]
     public var body: Data?
+    /// Count response bytes during transfer; never rely on Content-Length.
+    public var maximumResponseBytes: Int?
 
-    public init(method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil) {
+    public init(
+        method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil, maximumResponseBytes: Int? = nil
+    ) {
         self.method = method
         self.path = path
         self.query = query
         self.body = body
+        self.maximumResponseBytes = maximumResponseBytes
     }
 }
 
@@ -63,7 +68,7 @@ public struct ClientIdentity: Sendable, Equatable {
 }
 
 protocol RequestTransport: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?)
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?)
 }
 
 struct URLSessionRequestTransport: RequestTransport {
@@ -71,7 +76,18 @@ struct URLSessionRequestTransport: RequestTransport {
     var redirects: RedirectSessionDelegate
     var certificatePin: OriginCertificatePin? = nil
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
+        if let maximumBytes {
+            // Each bounded transfer owns a session; task identifiers are local to that session.
+            let owner = RedirectSessionDelegate()
+            let proxy = RedirectTaskProxy(owner: owner, certificatePin: certificatePin)
+            let result = try await BoundedResponseDownload(maximumBytes: maximumBytes, redirects: proxy)
+                .data(for: request, configuration: session.configuration)
+            if let identifier = result.2, let reason = owner.consumeRejection(for: identifier) {
+                throw APIError.redirectRejected(reason)
+            }
+            return result
+        }
         let proxy = RedirectTaskProxy(owner: redirects, certificatePin: certificatePin)
         let (data, response) = try await session.data(for: request, delegate: proxy)
         return (data, response, proxy.capturedTaskIdentifier())
@@ -161,7 +177,8 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.invalidURL
         }
         do {
-            let (data, response, taskIdentifier) = try await transport.data(for: urlRequest)
+            let (data, response, taskIdentifier) = try await transport.data(
+                for: urlRequest, maximumBytes: request.maximumResponseBytes)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
             if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
                 if case .redirectRejected = failure {
@@ -237,7 +254,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
 }
 
 /// Per-request delegate so a redirect rejection stays tied to that task.
-private final class RedirectTaskProxy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class RedirectTaskProxy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let owner: RedirectSessionDelegate
     private let lock = NSLock()
     private var identifier: Int?

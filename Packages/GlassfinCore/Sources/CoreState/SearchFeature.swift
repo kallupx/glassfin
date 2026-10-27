@@ -15,7 +15,8 @@ public final class SearchFeature {
 
     public init(app: AppState, session: UserSession, client: any JellyfinAPIClient, backend: (any SearchBackend)? = nil)
     {
-        let scoped = SessionAPIClient(inner: SearchQueryClient(inner: client), app: app)
+        let scoped = SessionAPIClient(
+            inner: RetryingAPIClient(inner: SearchQueryClient(inner: client), clock: SystemGlassfinClock()), app: app)
         self.client = scoped
         self.app = app
         serverID = session.server.id
@@ -27,7 +28,7 @@ public final class SearchFeature {
         guard let id = ItemID(item.id) else { throw .invalidItemID }
         let dto = try await client.send(
             APIRequest(method: "GET", path: "/Items/\(id.value)"), as: BaseItemDTO.self)
-        guard let result = DTOMapper.mediaItem(dto, log: SilentLog(), literalMetadata: true) else { throw .decoding }
+        guard let result = DTOMapper.mediaItem(dto, log: SilentLog()) else { throw .decoding }
         return result.searchDisplayItem
     }
 

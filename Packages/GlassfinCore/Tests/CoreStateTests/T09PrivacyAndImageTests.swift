@@ -78,6 +78,54 @@ final class T09PrivacyAndImageTests: XCTestCase {
         try checkCleanup(removeServer: true, unauthorized: false)
     }
 
+    /// T09-45, T09-46: trimmed case-insensitive duplicates move to the front without losing display text.
+    func testT09_46_historyDeduplicatesTrimmedTextIgnoringCase() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RecentSearchStore(directory: root)
+        try store.record("Star", serverID: Sample.serverID, userID: Sample.userID)
+        try store.record("second", serverID: Sample.serverID, userID: Sample.userID)
+        try store.record("  STAR  ", serverID: Sample.serverID, userID: Sample.userID)
+        XCTAssertEqual(try store.queries(serverID: Sample.serverID, userID: Sample.userID), ["STAR", "second"])
+    }
+
+    /// T09-55: corrupt/oversize history is discarded and a new query can be recorded after recovery.
+    func testT09_55_corruptAndOversizeHistoryStartEmpty() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RecentSearchStore(directory: root)
+        for data in [Data("invalid json".utf8), Data(repeating: 0, count: RecentSearchStore.maximumFileBytes + 1)] {
+            try store.record("valid", serverID: Sample.serverID, userID: Sample.userID)
+            let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+            let file = try XCTUnwrap(enumerator.compactMap { $0 as? URL }.first { $0.pathExtension == "json" })
+            try data.write(to: file, options: .atomic)
+            XCTAssertEqual(try store.queries(serverID: Sample.serverID, userID: Sample.userID), [])
+            XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        }
+        try store.record("recovered", serverID: Sample.serverID, userID: Sample.userID)
+        XCTAssertEqual(
+            try RecentSearchStore(directory: root).queries(serverID: Sample.serverID, userID: Sample.userID),
+            ["recovered"])
+    }
+
+    /// T09-48: history files and their scoped directory are excluded from Apple backups.
+    func testT09_48_historyUsesApplicationSupportAndExcludesBackup() throws {
+        let support = try XCTUnwrap(
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)
+        XCTAssertTrue(RecentSearchStore.applicationSupportDirectory.path.hasPrefix(support.path))
+        #if !os(Linux)
+            let root = temporaryRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let store = RecentSearchStore(directory: root)
+            try store.record("query", serverID: Sample.serverID, userID: Sample.userID)
+            let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+            let file = try XCTUnwrap(enumerator.compactMap { $0 as? URL }.first { $0.pathExtension == "json" })
+            for url in [file, file.deletingLastPathComponent()] {
+                XCTAssertEqual(try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+            }
+        #endif
+    }
+
     /// T09-65: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
     func testT09_65_imageCacheUsesStableSHA256TupleAsActualFilename() async throws {
@@ -162,6 +210,28 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertEqual(app.sessionNoticeKey, .sessionExpired)
         do { _ = try await client.send(APIRequest(method: "GET", path: "/blocked")) } catch {}
         XCTAssertEqual(gate.started, 2)
+    }
+
+    /// T09-68: the production ImageIO dictionary bounds pixels and eagerly decodes only the thumbnail.
+    func testT09_68_thumbnailOptionsUseTheDisplayedPixelSizeOnAllPlatforms() throws {
+        let request = ItemImageRequest(
+            serverID: Sample.serverID, itemID: try XCTUnwrap(ItemID(Sample.movie)), type: .primary, tag: nil,
+            width: 600, height: 900)
+        let options = SearchImageDecoder.thumbnailOptions(maximumPixelSize: request.maximumPixelSize)
+        XCTAssertEqual(options["kCGImageSourceThumbnailMaxPixelSize"] as? Int, 900)
+        for key in [
+            "kCGImageSourceCreateThumbnailFromImageAlways", "kCGImageSourceCreateThumbnailWithTransform",
+            "kCGImageSourceShouldCacheImmediately",
+        ] { XCTAssertEqual(options[key] as? Bool, true) }
+        XCTAssertEqual(options.count, 4)
+        XCTAssertEqual(
+            SearchImageDecoder.thumbnailOptions(maximumPixelSize: 0)["kCGImageSourceThumbnailMaxPixelSize"] as? Int, 1)
+        #if canImport(ImageIO)
+            XCTAssertEqual(options[kCGImageSourceThumbnailMaxPixelSize as String] as? Int, 900)
+            XCTAssertEqual(options[kCGImageSourceCreateThumbnailFromImageAlways as String] as? Bool, true)
+            XCTAssertEqual(options[kCGImageSourceCreateThumbnailWithTransform as String] as? Bool, true)
+            XCTAssertEqual(options[kCGImageSourceShouldCacheImmediately as String] as? Bool, true)
+        #endif
     }
 
     #if canImport(ImageIO)

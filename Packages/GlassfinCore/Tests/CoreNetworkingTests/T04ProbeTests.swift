@@ -372,7 +372,7 @@ final class T04ProbeTests: XCTestCase {
         let packet = Data(
             #"{"Address":"http://192.168.1.10:8096","Id":"id-1","Name":"<b>\#(long)</b>"}"#.utf8)
         let parsed = try XCTUnwrap(DiscoveryPolicy.parse(packet, storedURL: nil, publicInfoID: nil))
-        XCTAssertFalse(parsed.name.contains("<"))
+        XCTAssertTrue(parsed.name.hasPrefix("<b>"))
         XCTAssertLessThanOrEqual(parsed.name.count, DiscoveryPolicy.maximumNameLength)
     }
 
@@ -757,7 +757,7 @@ private final class RecordingRequestTransport: RequestTransport, @unchecked Send
     private let lock = NSLock()
     private var stored: [URLRequest] = []
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         record(request)
         let url = request.url ?? URL(string: "https://media.example")!
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!

@@ -740,8 +740,8 @@ final class SecurityDiscoveryTests: XCTestCase {
         XCTAssertTrue(presentation.idMismatch)
         XCTAssertEqual(presentation.storedURL, stored)
         XCTAssertEqual(DiscoveryPolicy.storedAddress(afterDiscovery: stored, packet: packet), stored)
-        XCTAssertFalse(presentation.name.contains("<"))
-        XCTAssertFalse(presentation.name.contains("alert"))
+        XCTAssertTrue(presentation.name.contains("<"))
+        XCTAssertTrue(presentation.name.contains("alert"))
         XCTAssertFalse(presentation.name.contains("\n"))
         XCTAssertEqual(presentation.name.count, 64)
         XCTAssertEqual(presentation.id, "discovered-id")
@@ -877,7 +877,7 @@ final class SecurityContentTests: XCTestCase {
     /// T03-14. Metadata is plain text, external links follow the platform rule, and search stays in the query.
     func testT03_14_plainTextLinksSubtitlesAndSearch() throws {
         let raw = "<script>alert(1)</script><b>Hello</b> Tom &amp; Jerry **bold** [x](http://e.test)"
-        XCTAssertEqual(MetadataSanitizer.plainText(raw), "Hello Tom & Jerry **bold** [x](http://e.test)")
+        XCTAssertEqual(MetadataSanitizer.plainText(raw), raw)
         XCTAssertEqual(MetadataSanitizer.plainText("a < b"), "a < b")
         let dto = try JSONDecoder().decode(
             BaseItemDTO.self,
@@ -888,8 +888,8 @@ final class SecurityContentTests: XCTestCase {
             )
         )
         let item = try XCTUnwrap(DTOMapper.mediaItem(dto, log: SilentLog()))
-        XCTAssertEqual(item.name, "North")
-        XCTAssertEqual(item.overview, "A quiet film.")
+        XCTAssertEqual(item.name, "<b>North</b>")
+        XCTAssertEqual(item.overview, "<p>A quiet film.</p>")
 
         XCTAssertFalse(ExternalLinkPolicy.canOpen(try XCTUnwrap(URL(string: "https://example.com")), on: .tvOS))
         XCTAssertFalse(ExternalLinkPolicy.canOpen(try XCTUnwrap(URL(string: "http://example.com")), on: .tvOS))
@@ -1042,7 +1042,7 @@ private final class RecordingRequestTransport: RequestTransport, @unchecked Send
     private let lock = NSLock()
     private var stored: [URLRequest] = []
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         record(request)
         guard let url = request.url ?? URL(string: "http://invalid.example/"),
             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)

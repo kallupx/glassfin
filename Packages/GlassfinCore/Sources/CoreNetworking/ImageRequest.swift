@@ -35,6 +35,8 @@ public struct ItemImageRequest: Sendable {
             URLQueryItem(name: "maxHeight", value: String(height)),
         ]
         if let tag { query.append(URLQueryItem(name: "tag", value: tag)) }
-        request = APIRequest(method: "GET", path: "/Items/\(itemID.value)/Images/\(type.rawValue)", query: query)
+        request = APIRequest(
+            method: "GET", path: "/Items/\(itemID.value)/Images/\(type.rawValue)", query: query,
+            maximumResponseBytes: MetadataPolicy.imageMaxBytes)
     }
 }

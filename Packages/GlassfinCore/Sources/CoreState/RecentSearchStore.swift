@@ -17,6 +17,8 @@ public final class RecentSearchStore: RecentSearchStoring, @unchecked Sendable {
             .appendingPathComponent("Glassfin/RecentSearches", isDirectory: true)
     }
 
+    public static let maximumFileBytes = 256 * 1024
+
     private let directory: URL
     private let lock = NSLock()
 
@@ -29,11 +31,15 @@ public final class RecentSearchStore: RecentSearchStoring, @unchecked Sendable {
     }
 
     public func record(_ query: String, serverID: String, userID: String) throws {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let query = String(
+            query.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchPolicy.maximumQueryCharacters))
+        guard !query.isEmpty else { return }
         try lock.withLock {
             var url = file(serverID: serverID, userID: userID)
             let old = try read(url)
-            let values = Array(([query] + old.filter { $0 != query }).prefix(MetadataPolicy.recentSearchesMax))
+            let values = Array(
+                ([query] + old.filter { $0.lowercased() != query.lowercased() }).prefix(
+                    MetadataPolicy.recentSearchesMax))
             var folder = url.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             var excluded = URLResourceValues()
@@ -66,9 +72,23 @@ public final class RecentSearchStore: RecentSearchStoring, @unchecked Sendable {
 
     private func read(_ url: URL) throws -> [String] {
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
-        let values = try JSONDecoder().decode([String].self, from: Data(contentsOf: url))
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let size = attributes[.size] as? NSNumber, size.intValue <= Self.maximumFileBytes else {
+            try removeIfPresent(url)
+            return []
+        }
+        let data = try Data(contentsOf: url)
+        guard data.count <= Self.maximumFileBytes,
+            let values = try? JSONDecoder().decode([String].self, from: data)
+        else {
+            try removeIfPresent(url)
+            return []
+        }
         var seen: Set<String> = []
-        return Array(values.filter { seen.insert($0).inserted }.prefix(MetadataPolicy.recentSearchesMax))
+        return Array(
+            values.map {
+                String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchPolicy.maximumQueryCharacters))
+            }.filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }.prefix(MetadataPolicy.recentSearchesMax))
     }
 
     private func removeIfPresent(_ url: URL) throws {

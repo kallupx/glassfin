@@ -19,11 +19,26 @@ public actor SearchImageLoader {
 
     public func bytes(for image: ItemImageRequest) async throws -> Data {
         if let data = await disk.data(for: image.cacheKey) { return data }
-        let data = try await client.send(image.request)
+        let data: Data
+        do { data = try await client.send(image.request) } catch APIError.responseTooLarge {
+            throw SearchImageError.oversized
+        }
         guard data.count <= MetadataPolicy.imageMaxBytes else { throw SearchImageError.oversized }
         try Task.checkCancellation()
         _ = await disk.store(imageKey: image.cacheKey, data: data)
         return data
+    }
+}
+
+/// The same option dictionary is tested on Linux and passed directly to ImageIO on Apple.
+public enum SearchImageDecoder {
+    public static func thumbnailOptions(maximumPixelSize: Int) -> [String: Any] {
+        [
+            "kCGImageSourceCreateThumbnailFromImageAlways": true,
+            "kCGImageSourceThumbnailMaxPixelSize": max(1, maximumPixelSize),
+            "kCGImageSourceCreateThumbnailWithTransform": true,
+            "kCGImageSourceShouldCacheImmediately": true,
+        ]
     }
 }
 
@@ -36,7 +51,7 @@ public actor SearchImageLoader {
         public let decodedOffMainThread: Bool
     }
 
-    public enum SearchImageDecoder {
+    extension SearchImageDecoder {
         public static func downsample(_ data: Data, maximumPixelSize: Int) async throws -> DecodedSearchImage {
             guard data.count <= MetadataPolicy.imageMaxBytes else { throw SearchImageError.oversized }
             let work = Task.detached(priority: .utility) {
@@ -45,13 +60,7 @@ public actor SearchImageLoader {
                 guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
                     throw SearchImageError.invalidImage
                 }
-                let options =
-                    [
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceThumbnailMaxPixelSize: max(1, maximumPixelSize),
-                        kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceShouldCacheImmediately: true,
-                    ] as CFDictionary
+                let options = thumbnailOptions(maximumPixelSize: maximumPixelSize) as CFDictionary
                 guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
                     throw SearchImageError.invalidImage
                 }

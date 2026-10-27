@@ -7,6 +7,126 @@ import XCTest
 
 @MainActor
 final class T09SearchTests: XCTestCase {
+    /// T09-03: a single Latin character sends no request and keeps recents available.
+    func testT09_03_oneLatinCharacterKeepsRecentsWithoutSearching() throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.record("previous", serverID: Sample.serverID, userID: Sample.userID)
+        fixture.model.setTerm("s")
+        XCTAssertTrue(fixture.backend.calls.isEmpty)
+        XCTAssertEqual(fixture.model.recentQueries, ["previous"])
+        XCTAssertEqual(fixture.model.state, .idle)
+    }
+
+    /// T09-04: two characters start a request.
+    func testT09_04_twoCharactersSearch() async throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        fixture.model.setTerm("st")
+        await waitUntil { fixture.backend.calls.count == 1 }
+        XCTAssertEqual(fixture.backend.calls.first?.term, "st")
+    }
+
+    /// T09-06: whitespace alone sends nothing; transmitted input has surrounding whitespace trimmed.
+    func testT09_06_whitespaceIsIgnoredForEligibilityAndTransmission() async throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        fixture.model.setTerm("   ")
+        XCTAssertTrue(fixture.backend.calls.isEmpty)
+        fixture.model.setTerm("  star  ")
+        await waitUntil { fixture.backend.calls.count == 1 }
+        XCTAssertEqual(fixture.backend.calls.first?.term, "star")
+    }
+
+    /// T09-07: twenty rapidly entered characters result in exactly one final request.
+    func testT09_07_twentyCharactersDebounceToOneRequest() async throws {
+        let clock = SuspendingClock()
+        let fixture = try SearchFixture(clock: clock)
+        defer {
+            clock.resumeAll()
+            fixture.cleanup()
+        }
+        let text = "abcdefghijklmnopqrst"
+        for count in 1...text.count {
+            fixture.model.setTerm(String(text.prefix(count)))
+            if count >= 2 { await clock.waitForSleeps(count - 1) }
+        }
+        XCTAssertTrue(fixture.backend.calls.isEmpty)
+        clock.resumeAll()
+        await waitUntil { fixture.backend.calls.count == 1 }
+        XCTAssertEqual(fixture.backend.calls.first?.term, text)
+        XCTAssertEqual(fixture.model.term, text)
+    }
+
+    /// T09-08: the canonical default is 100 graphemes, including multi-scalar emoji.
+    func testT09_08_longQueryIsCappedBeforeRequest() async throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        fixture.model.setTerm(String(repeating: "👩🏽‍🚀", count: 500))
+        await waitUntil { fixture.backend.calls.count == 1 }
+        XCTAssertEqual(fixture.model.term.count, 100)
+        XCTAssertEqual(fixture.backend.calls.first?.term, String(repeating: "👩🏽‍🚀", count: 100))
+    }
+
+    /// T09-09, T09-15: clearing cancels pending work and rejects a late response.
+    func testT09_09_clearDiscardsLateResultsAndShowsRecents() async throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.record("previous", serverID: Sample.serverID, userID: Sample.userID)
+        fixture.model.setTerm("star")
+        await waitUntil { fixture.backend.calls.count == 1 }
+        fixture.model.setTerm("")
+        fixture.backend.succeed(0, names: ["late"])
+        await waitUntil { fixture.backend.completed == 1 }
+        XCTAssertTrue(fixture.model.groups.isEmpty)
+        XCTAssertEqual(fixture.model.state, .idle)
+        XCTAssertEqual(fixture.model.recentQueries, ["previous"])
+        XCTAssertEqual(fixture.backend.cancelledCompletions, 1)
+    }
+
+    /// T09-16: a cancellation response is never displayed or reported as an error.
+    func testT09_16_cancelledResponseIsSilent() async throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        fixture.model.setTerm("star")
+        await waitUntil { fixture.backend.calls.count == 1 }
+        let previousLogs = fixture.log.messages()
+        fixture.backend.fail(0, .cancelled)
+        await waitUntil { !fixture.model.state.isLoading }
+        XCTAssertNil(fixture.model.blockingErrorKey)
+        XCTAssertEqual(fixture.model.state, .idle)
+        XCTAssertEqual(fixture.app.connectivity, .online)
+        XCTAssertEqual(fixture.log.messages(), previousLogs)
+    }
+
+    /// T09-43: completing or retrying a query does not save it; opening a result does.
+    func testT09_43_historyRecordsOnlyResultSelection() async throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        fixture.model.setTerm("star")
+        await waitUntil { fixture.backend.calls.count == 1 }
+        fixture.backend.succeed(0, names: ["match"])
+        await waitUntil { fixture.model.hasContent }
+        XCTAssertTrue(fixture.model.recentQueries.isEmpty)
+        fixture.model.open(try XCTUnwrap(fixture.model.state.value?.first))
+        XCTAssertEqual(fixture.model.recentQueries, ["star"])
+    }
+
+    /// T09-56: offline searches send no request and retain usable recent-query text.
+    func testT09_56_offlineSearchKeepsRecentsAndDoesNotSend() throws {
+        let fixture = try SearchFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.record("previous", serverID: Sample.serverID, userID: Sample.userID)
+        fixture.app.handle(.offline)
+        fixture.model.onAppear()
+        fixture.model.setTerm("previous")
+        XCTAssertTrue(fixture.backend.calls.isEmpty)
+        XCTAssertEqual(fixture.model.term, "previous")
+        XCTAssertEqual(fixture.model.recentQueries, ["previous"])
+        XCTAssertEqual(fixture.model.bannerKey, .noNetworkConnection)
+        XCTAssertEqual(fixture.model.blockingErrorKey, .noNetworkConnection)
+    }
+
     /// T09-02: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
     func testT09_02_debounceAndCancellationBeforeRequest() async throws {
         let clock = SuspendingClock()
@@ -198,8 +318,10 @@ final class T09SearchTests: XCTestCase {
         let query = "private-search-marker"
         fixture.model.setTerm(query)
         await waitUntil { fixture.backend.calls.count == 1 }
-        fixture.backend.succeed(0, names: [])
-        await waitUntil { fixture.model.recentQueries == [query] }
+        fixture.backend.succeed(0, names: ["match"])
+        await waitUntil { fixture.model.hasContent }
+        fixture.model.open(try XCTUnwrap(fixture.model.state.value?.first))
+        XCTAssertEqual(fixture.model.recentQueries, [query])
         XCTAssertFalse(fixture.log.messages().joined().contains(query))
     }
 
@@ -210,8 +332,10 @@ final class T09SearchTests: XCTestCase {
         defer { fixture.cleanup() }
         fixture.model.setTerm("star")
         await waitUntil { fixture.backend.calls.count == 1 }
-        fixture.backend.succeed(0, names: [])
-        await waitUntil { fixture.model.recentQueries == ["star"] }
+        fixture.backend.succeed(0, names: ["match"])
+        await waitUntil { fixture.model.hasContent }
+        fixture.model.open(try XCTUnwrap(fixture.model.state.value?.first))
+        XCTAssertEqual(fixture.model.recentQueries, ["star"])
         fixture.model.clearRecents()
         XCTAssertTrue(fixture.model.recentQueries.isEmpty)
         XCTAssertEqual(try fixture.store.queries(serverID: Sample.serverID, userID: Sample.userID), [])

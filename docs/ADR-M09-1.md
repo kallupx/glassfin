@@ -24,11 +24,11 @@ bash scripts/docker-integration.sh
 bash scripts/docker-integration.sh 10.10.7
 ```
 
-`Tests/Fixtures/search-seed.json` and `scripts/jellyfin_search_seed.py` generate exactly 5,000 searchable items: 2,000 movies, 1,000 series and 2,000 episodes. The movies include `Sääasema (2024)` for T09-22. Media files are hard links to one ffmpeg dummy clip. Local NFOs and poster/episode images avoid external metadata dependencies. The bootstrap waits for the complete scan, excluding folders and seasons from its count.
+`Tests/Fixtures/search-seed.json` and `scripts/jellyfin_search_seed.py` generate exactly 5,000 searchable items: 2,000 movies, 1,000 series and 2,000 episodes. The movies include `Hämärä (2024)` for T09-22. Media files are hard links to one ffmpeg dummy clip. Local NFOs and poster/episode images avoid external metadata dependencies. The bootstrap waits for the complete scan, excluding folders and seasons from its count.
 
 `LiveServerTests.testT09_21_searchBackendLatencyAndResultCounts` measures both production backend implementations against the same authenticated HTTP client. It uses two warm-up rounds followed by 12 paired samples, alternating endpoint order. Each sample measures the entire initial grouped request, including decoding, but excludes debounce, image loading and UI rendering. It records milliseconds, per-row counts in Movie/Series/Episode order, and the number of primary image tags. The JSON includes nearest-rank median and p95 plus raw samples. T09-22 separately requires the umlaut item to be found through both implementations.
 
-Output goes to the CI console as `T09-21 search-benchmark` JSON and to `artifacts/integration/search/search-<version>.json`. `integration.yml` needs the narrowly scoped redaction/upload steps added here: it previously had no artifact upload, so measurements would otherwise disappear with the runner. The `search-backend-benchmarks` artifact retains only these JSON files for seven days. No query text, credential, URL or raw server metadata is emitted. No xcresult is uploaded.
+Output goes to the CI console as `T09-21 search-benchmark` JSON and to `artifacts/integration/search/search-<version>.json`. Artifact publication depends on the existing CI integration runner; this follow-up does not modify workflows. No successful artifact upload is claimed until a CI run confirms it. No query text, credential, URL or raw server metadata is emitted. No xcresult is uploaded.
 
 Docker measurements run on the host loopback connection. They compare endpoint cost and do not replace the P10 LAN/device acceptance measurement (T09-62: first results within 500 ms after debounce).
 

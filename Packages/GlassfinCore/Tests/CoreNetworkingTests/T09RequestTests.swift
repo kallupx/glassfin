@@ -70,7 +70,9 @@ final class T09RequestTests: XCTestCase {
 
 private struct SearchFailingTransport: RequestTransport {
     enum Failure: Error { case failed }
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) { throw Failure.failed }
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
+        throw Failure.failed
+    }
 }
 
 private final class SearchLogSpy: GlassfinLog, @unchecked Sendable {

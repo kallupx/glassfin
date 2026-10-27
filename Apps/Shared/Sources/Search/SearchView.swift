@@ -40,7 +40,7 @@ struct SearchView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: SpacingToken.l) {
-                    if model.term.isEmpty {
+                    if !SearchPolicy.accepts(model.term) {
                         recentSearches
                     } else if model.state.showsSkeleton {
                         SkeletonRow(style: .poster, count: 4, phase: 0, identifier: "search.loading")
@@ -54,13 +54,14 @@ struct SearchView: View {
                         Copy.text(.searchMinimum)
                             .accessibilityIdentifier("search.minimum")
                     }
+                    if model.isOffline, SearchPolicy.accepts(model.term) { recentSearches }
                     ForEach(model.groups.filter { !$0.items.isEmpty }) { group in
                         SearchResultRow(
                             feature: feature, group: group,
                             rememberedID: Binding(
                                 get: { model.rememberedIDs[group.id] },
                                 set: { model.rememberedIDs[group.id] = $0 }),
-                            onSelect: { model.selectedItem = $0 })
+                            onSelect: model.open)
                     }
                     if model.hasContent, model.state.presentedError != nil {
                         Button(action: model.retry) { Copy.text(.actionRetry) }
@@ -258,7 +259,7 @@ private struct SearchResultCard: View {
     }
 }
 
-/// TODO(Q9-02): Route to M07 when its destination lands; keep the search model owned by this tab.
+/// TODO(Q9-12): Route to M07 when its destination lands; keep the search model owned by this tab.
 private struct SearchItemDetail: View {
     let feature: SearchFeature
     let initial: MediaItem
