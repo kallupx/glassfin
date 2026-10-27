@@ -70,9 +70,9 @@
 - **S6.2** External links (`ExternalUrls`) do not open on tvOS. On iOS they are opened only with an http(s) scheme.
 - **S6.3** Media is untrusted input. **[AGREED]** Possible FFmpeg, VLCKit, or MPV libraries are kept up to date (Renovate, security updates ≤ 14 days from release), and only the needed demuxers and decoders are used (a smaller attack surface).
 - **S6.4** Subtitle files (SRT, VTT, ASS) are parsed with a size limit (max 10 MB) and a timeout.
+- **S6.5** Search and filter parameters are passed only through the SDK's query builder (URL encoding). Strings are not concatenated into paths.
 - **S6.6** Images (v1.3.4, AGREED with Security 27.10.2026): image requests carry the `Authorization` header and never a token in the URL. Image bytes are cached only in `DiskImageCache` in the app's Caches directory, keyed by a SHA-256 hash of (server ID, item ID, image type, tag, size). Raw URLs are not used as file names or logged unredacted. Images are decoded with a size limit (max 20 MB per image, downsampled to the displayed size). The 20 MB limit is enforced by counting bytes while downloading; `Content-Length` is never trusted. Images are decoded only with `CGImageSourceCreateThumbnailAtIndex` and `kCGImageSourceThumbnailMaxPixelSize`; a full-size bitmap is never decoded.
 - **S6.7** Recent searches (v1.3.4, Security ruling 27.10.2026): stored per server ID + user ID, max 20, in `Application Support` (not the Keychain, not UserDefaults). Only the search text is stored, never tokens or URLs. Never synced or logged. Deleted when that user signs out or the server is removed; the user can also clear them in the search view.
-- **S6.5** Search and filter parameters are passed only through the SDK's query builder (URL encoding). Strings are not concatenated into paths.
 
 ## S7 Permissions and admin
 - **S7.1** Admin views are shown only if `User.Policy.IsAdministrator == true`. That is only a UI hint, because **the server does the real authorization**, and 403 is handled cleanly (02).
