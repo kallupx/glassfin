@@ -314,8 +314,12 @@ final class ADRM08PrototypeTests: XCTestCase {
         let client = ScriptedOrigin([ok()])
         let log = CapturingLog()
         let resolver = PlaybackURLResolver(client: client, log: log)
+        // Userinfo is rejected by playback; this row still verifies query stripping.
+        var queryOnly = try XCTUnwrap(URLComponents(url: raw, resolvingAgainstBaseURL: true))
+        queryOnly.user = nil
+        queryOnly.password = nil
         let resolution = try await resolver.resolve(
-            start: raw,
+            start: try XCTUnwrap(queryOnly.url),
             method: "GET",
             authorizationHeader: try playbackHeader(),
             trust: .publiclyTrusted

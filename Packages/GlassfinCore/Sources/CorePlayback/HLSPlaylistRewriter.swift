@@ -20,6 +20,7 @@ public struct HLSRewrite: Sendable, Equatable, CustomStringConvertible, CustomDe
 }
 
 public enum PlaylistURIRejection: Error, Sendable, Equatable {
+    case userInfo
     case crossOrigin
     case httpsDowngrade
     case unresolvable
@@ -35,6 +36,7 @@ public enum PlaylistURIRejection: Error, Sendable, Equatable {
 /// risk) and must be redacted wherever it is logged.
 public enum HLSPlaylistRewriter {
     public static func rewrite(playlist: String, baseURL: URL) -> Result<HLSRewrite, PlaylistURIRejection> {
+        guard MediaURLValidation.hasNoUserInfo(baseURL) else { return .failure(.userInfo) }
         let text = stripBOM(playlist)
         let base = MediaCredentialQuery.stripping(baseURL)
         var rewritten = 0
@@ -100,6 +102,7 @@ public enum HLSPlaylistRewriter {
         guard let resolved = URL(string: uri, relativeTo: base)?.absoluteURL else {
             return .failure(.unresolvable)
         }
+        guard MediaURLValidation.hasNoUserInfo(resolved) else { return .failure(.userInfo) }
         if MediaOrigin.isHTTPSDowngrade(base, resolved) {
             return .failure(.httpsDowngrade)
         }

@@ -46,8 +46,7 @@ public enum PlaybackDecision: Sendable, Equatable {
         guard let video = videos.first(where: { $0.IsDefault == true }) ?? videos.first else {
             return .couldNotPlay
         }
-        // Provisional: accept the h265 alias alongside Jellyfin's canonical hevc codec name.
-        return ["h264", "hevc", "h265"].contains(video.Codec?.lowercased() ?? "") ? nil : .unsupportedVideo
+        return ["h264", "hevc"].contains(video.Codec?.lowercased() ?? "") ? nil : .unsupportedVideo
     }
 
     public static func supportsVideo(streams: [MediaStreamDTO]?) -> Bool {

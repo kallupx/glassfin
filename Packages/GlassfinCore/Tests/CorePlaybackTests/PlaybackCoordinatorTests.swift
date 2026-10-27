@@ -968,7 +968,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
             + ["H264", "Hevc", "HEVC", "h264", "H265", "h265", "MPEG2VIDEO", "Vc1", "avc"].map { codec in
                 (
                     [["Type": "Video", "Codec": codec]],
-                    ["MPEG2VIDEO", "Vc1", "avc"].contains(codec) ? .unsupportedVideo : nil
+                    ["H265", "h265", "MPEG2VIDEO", "Vc1", "avc"].contains(codec) ? .unsupportedVideo : nil
                 )
             }
         for (streams, expected) in cases {
@@ -987,6 +987,27 @@ final class PlaybackCoordinatorTests: XCTestCase {
             XCTAssertEqual(calls.filter { $0.method == "GET" }.count, 1)
             XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, expected == nil ? 1 : 0)
             await rig.coordinator.stop()
+        }
+    }
+
+    /// Follow-up 4: userinfo is a test-plan gap adjacent to T08P-70/88.
+    func testUserInfoTranscodingURLFailsBeforeMediaRequest() async throws {
+        for credentials in ["user:password@", "user@", ":password@", "@", ":@", "user:@"] {
+            for prefix in ["https:", ""] {
+                let fixture = try playbackFixture(
+                    container: "mkv", direct: false,
+                    transcodingURL: "\(prefix)//\(credentials)server.example/master.m3u8")
+                let rig = try rig(data: fixture)
+                await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+                XCTAssertEqual(rig.coordinator.failure, .insecureRedirect)
+                XCTAssertTrue(rig.engine.loads.isEmpty)
+                let requests = await rig.origin.requests
+                XCTAssertTrue(requests.isEmpty)
+                let calls = await rig.client.calls
+                XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 1)
+                XCTAssertEqual(rig.session.expirationCount, 0)
+                await rig.coordinator.stop()
+            }
         }
     }
 

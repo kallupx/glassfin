@@ -204,6 +204,9 @@ public enum MediaOpenPlanner {
         authorizationHeader: String?,
         options: MediaOpenOptions
     ) -> MediaOpenPlan {
+        if let resolvedURL, !MediaURLValidation.hasNoUserInfo(resolvedURL) {
+            return blocked(.missingMediaURL, findings: [])
+        }
         switch delivery {
         case .directFile:
             return directFile(resolvedURL: resolvedURL, authorizationHeader: authorizationHeader, options: options)
@@ -348,7 +351,7 @@ public enum MediaOpenPlanner {
         } else {
             findings.append(.headerFieldsKeyUnavailable)
         }
-        if let fallbackURL = options.apiKeyFallbackURL {
+        if let fallbackURL = options.apiKeyFallbackURL, MediaURLValidation.hasNoUserInfo(fallbackURL) {
             result.append(.apiKeyQuery(fallbackURL))
         } else {
             findings.append(.apiKeyFallbackDisabled)
@@ -374,6 +377,7 @@ public enum DirectPlayURL {
         mediaSourceID: String,
         playSessionID: String
     ) throws(APIError) -> PreparedMediaRequest {
+        guard MediaURLValidation.hasNoUserInfo(server) else { throw .invalidURL }
         let item = try ItemID.require(itemID).value
         let source = try ItemID.require(mediaSourceID).value
         do {

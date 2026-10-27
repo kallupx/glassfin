@@ -1,4 +1,10 @@
-# M08a-PoC implementation
+# M08a-PoC implementation note
+
+The normative PoC rules are [SPEC.md §3a](SPEC.md#3a-poc-tier-p0-poc-decided-27102026),
+with [03-security.md](03-security.md) and [ADR M08-2](adr/M08-2.md). This file
+records integration details, test traceability and validation gaps; it does not
+define a competing specification. Follow-up 4 was rebased onto `abc2017`
+(including #20 `a30a181`, #21 `dd38838` and #25 `abc2017`).
 
 Implemented on 2026-10-27. This is the playback slice of the hands-on PoC. The
 M04 sign-in, M06 Home and M07 detail implementations are separate work; this
@@ -27,63 +33,44 @@ includes `Apps/Shared/Sources` in both application targets.
   failure catalog key, and session expiry. Menu/dismiss stops the loader and
   attempts a Stopped report. Call `stop()` before releasing a coordinator.
 
-## Codec and security choices
+## Playback implementation
 
-The static profile accepts MP4/MOV/M4V/HLS, H.264/HEVC and AAC/AC-3/E-AC-3. Other
-containers use server HLS with fMP4; unsupported audio becomes AAC. The
-TranscodingProfile's H.264/HEVC list describes compatible source/output codecs,
-not permission to encode video: every HLS URL enforces `VideoCodec=copy` and
-`SegmentContainer=mp4`. Unsupported source video, missing codec metadata, video
-conversion reasons fail before engine loading. The first IsDefault video wins,
-otherwise the first video; an empty/audio-only stream list uses the generic error
-without refetch or negotiation. Codec names are case-insensitive; the h265 alias
-is provisional pending specification confirmation. Missing server fallback URLs use the generic
-playback error. The unsupported format uses its own catalog key in English and Finnish.
-MPEG-2 (`mpeg2video`) is the canonical unsupported fixture; VC-1 is an additional
-unit case. DTS and TrueHD request audio conversion with video copy; HEVC/AC-3 remuxes.
+`PlaybackDecision` provides the static profile and default-video preflight;
+`VideoTranscodeReasons` provides the pure, locked query parser. `MediaURLBuilder`
+enforces video copy, fMP4 segments and disabled subtitles. `PlaybackCoordinator`
+serializes startup, one DirectPlay-to-DirectStream retry, reports and the media
+401 session probe. The retry uses a new PlaySessionId and waits for Stopped.
+`AVPlayerEngine` and `PlaybackView` adapt this to the native Apple player.
 
-The pure `VideoTranscodeReasons` parser reads only the `TranscodeReasons` URL query
-parameter; the DTO has no JSON-body reasons property. Exactly the 14 locked Q8P-05
-video reasons block playback, including reference frames, interlacing, anamorphic
-video and unknown video stream info. Other/unknown reasons are ignored. The
-PlaybackInfo request keeps transcoding enabled so audio conversion can run.
+Both delivery methods use `PlaybackPreparation` and `AVPlayerMediaSession` with
+prototype fallbacks disabled. `MediaURLValidation.hasNoUserInfo` is separate
+from `MediaOrigin.matches`: it checks URLComponents.user/password for nil before
+any credential stripping, URL wrapping, playlist delivery or transport fetch.
+This implements the Follow-up 4 security decision, including empty user/password
+fields. The loader rechecks mutable requests and the URLSession adapter checks
+again before creating its request. The HLS rewriter checks the master base URL
+and every variant, segment, init segment and key URI. Server-generated segment
+query tokens retain the ADR's accepted-risk behavior; RFC 6454 origin identity
+and its documenting test are unchanged.
 
-`SubtitleStreamIndex=-1`, an empty SubtitleProfiles list, disabled manifest
-subtitles and disabled native legible selection prevent subtitle burn-in. No
-audio/subtitle selection UI is provided.
+## Differences resolved against merged main
 
-Both DirectPlay and HLS use the existing `PlaybackPreparation` and
-`AVPlayerMediaSession` resource loader. The coordinator never enables the
-prototype's header-key or query-token fallbacks, in Debug or Release. HLS
-playlists/keys use Authorization; server-written segment credentials retain the
-ADR M08-2 accepted risk. Absolute cross-origin URLs and HTTPS downgrades are
-rejected before fetching. Pinned self-signed HLS stays blocked by the existing
-planner because AVPlayer fetches its segments outside the app's trust delegate;
-the error uses the distinct `hlsSegmentsBypassPinnedTrust` case and localized key.
-It is raised before requesting a stream. DirectPlay retains the loader pin.
-The error dialog focuses its sole OK action and dismissal returns to the caller.
-Release also rejects query-token construction in the general media URL builder,
-and the planner discards any supplied fallback URL. Test doubles live in test
-targets so 401, logging and credential-policy tests execute in Release.
+- Removed the provisional `h265` alias. Only `h264` and `hevc`, matched without
+  case sensitivity, pass video preflight, as required by SPEC §3a / Q8P-21.
+- The prior T08-2-14 test let the playback resolver strip URL userinfo. Its query
+  stripping assertions remain, while userinfo now rejects playback under the
+  explicit Follow-up 4 decision. The low-level redaction utility is unchanged.
+- Rebase conflicts preserve main's 12.2 startup worker readiness, bounded refresh
+  retries, persisted library path verification/repair, idle-worker restart and
+  redacted diagnostics. These now apply to the PoC's Movies/Shows libraries,
+  codec probing and two-season/four-episode completion checks. All 16 combined
+  Python mocks pass. Main's chunked bounded-body implementation is retained.
+- The former duplicated playback rules in this note are replaced by references
+  to the merged specification. The implementation audit found no further
+  contradictions with the merged PoC codec, profile, reason-parser, retry,
+  pinning, string, reporting or token rules. Native validation remains pending.
 
-A DirectPlay engine or loader failure other than 401 retries exactly once with a
-new PlaybackInfo request (`EnableDirectPlay=false`, `AllowVideoStreamCopy=true`)
-and a distinct PlaySessionId. The retry is forced to DirectStream, with video
-copy and optional audio conversion. Failed Stopped is awaited before retry
-negotiation. Initial DirectStream failures never retry. A retry video reason uses
-`playback.unsupportedVideoFormat` before any stream request; other failures use
-the generic playback key. A pinned DirectPlay failure immediately uses
-`playback.selfSignedRemuxBlocked` without negotiating remux. Duplicate/stale
-engine events and dismissal cannot start another attempt.
-
-Reports use CoreNetworking, preserve ordering, clamp outbound positions and
-retry transient failures once. A media/report 401 stops playback and attempts
-Stopped before exactly one `/Users/Me` probe. Only a second 401 expires the
-session; no playback retry is made. The probe survives cancellation of the
-engine event task. AVPlayer URIs and error comments, and reporting diagnostics,
-pass through `PlaybackLog`/`MediaLogRedactor`.
-
-## Complete test-plan mapping (Follow-up 3)
+## Complete test-plan mapping (updated Follow-up 4)
 
 Authoritative plans re-read on 2026-10-27: `/workspace/jellyfin-tvos/test/TESTPLAN-M08a-PoC.md`
 (T08P-01–99) and `TESTPLAN-PoC-ACCEPTANCE.md` (TPOC-01–82). Every ID appears below.
@@ -192,7 +179,7 @@ this table is traceability, not a claim of PoC acceptance.
 | T08P-94 | [`testT08P_94_defaultVideoSelectionIgnoresIndexHints`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_94_95_96_97_defaultVideoPrecheck`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L first IsDefault video, both orders and conflicting index hint; native X pending. |
 | T08P-95 | [`testT08P_94_95_96_97_defaultVideoPrecheck`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L first video fallback, ignores default audio, both orders. |
 | T08P-96 | [`testT08P_94_95_96_97_defaultVideoPrecheck`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L empty/audio-only streams: generic error, no refetch/negotiation/player; native focus X pending. |
-| T08P-97 | [`testT08P_94_95_96_97_defaultVideoPrecheck`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L case-insensitive canonical codec names; h265 alias is provisional, avc rejected. |
+| T08P-97 | [`testT08P_94_95_96_97_defaultVideoPrecheck`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L case-insensitive canonical codec names; h265/H265 and avc rejected per merged SPEC §3a. |
 | T08P-98 | [`testT08P_98_missingStreamsRefetchExactlyOnce`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L item refetch exactly once with Fields=MediaStreams; success/missing/empty/unsupported outcomes; HTTP-mock X pending. |
 | T08P-99 | [`testT08P_99_retryVideoReasonBlocksBeforeStreamOrPlayer`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L retry video reason: unsupported key, no remux stream/player/job, no third attempt; native X pending. |
 
@@ -201,7 +188,7 @@ this table is traceability, not a claim of PoC acceptance.
 | Plan ID | Matching tests/scripts | Evidence and remaining validation |
 | --- | --- | --- |
 | TPOC-01 | — | Pending merged-main CI/recorded SHA. |
-| TPOC-02 | [`testTPOC_02_seedConfigurationAndNonAdminUser`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift)<br>[`BootstrapTests.test_TPOC_02_non_admin_random_password_is_private`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_resume_threshold_and_quick_connect_preserve_configuration`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_library_paths_and_offline_metadata`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_scan_waits_for_probing_episodes_and_idle_task`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_configuration_failures_are_not_ignored`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_scan_requires_both_seasons_and_all_four_episodes`](../scripts/test_jellyfin_bootstrap.py) | Python mocks passed + I gated seed/config/user/library checks; native macOS/bootstrap/version evidence pending. |
+| TPOC-02 | [`testTPOC_02_seedConfigurationAndNonAdminUser`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift)<br>[`PoCBootstrapTests.test_TPOC_02_non_admin_random_password_is_private`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_resume_threshold_and_quick_connect_preserve_configuration`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_library_paths_and_offline_metadata`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_scan_waits_for_probing_episodes_and_idle_task`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_configuration_failures_are_not_ignored`](../scripts/test_jellyfin_bootstrap.py)<br>[`test_TPOC_02_scan_requires_both_seasons_and_all_four_episodes`](../scripts/test_jellyfin_bootstrap.py) | Python mocks passed + I gated seed/config/user/library checks; native macOS/bootstrap/version evidence pending. |
 | TPOC-03 | — | Pending cross-module green CI on same SHA. |
 | TPOC-04 | — | Pending clean tvOS simulator setup. |
 | TPOC-05 | — | Pending native simulator journey/cross-module integration; no matching playback-slice test. |
@@ -278,10 +265,33 @@ this table is traceability, not a claim of PoC acceptance.
 | TPOC-76 | — | Optional manual Apple TV checklist; not run. |
 | TPOC-77 | — | Optional manual Apple TV checklist; not run. |
 | TPOC-78 | [`testT08P_55_pinnedDirectPlayUsesLoader`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift)<br>[`testT08P_54_87_resolverAndTrustRejections`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L pinned carrier and remux blocking only; native TLS/focus U pending. |
-| TPOC-79 | [`BootstrapTests.test_TPOC_02_non_admin_random_password_is_private`](../scripts/test_jellyfin_bootstrap.py) | Python private random viewer-password test only; admin/per-run/CI masking/full scan evidence pending. |
+| TPOC-79 | [`PoCBootstrapTests.test_TPOC_02_non_admin_random_password_is_private`](../scripts/test_jellyfin_bootstrap.py) | Python private random viewer-password test only; admin/per-run/CI masking/full scan evidence pending. |
 | TPOC-80 | — | Pending pre-upload reject-on-secret scanner; redact_artifacts self-test alone is not this row. |
 | TPOC-81 | — | Pending per-journey xcresult + recording + redacted API/session logs. |
 | TPOC-82 | — | Pending mock-only single-season focusable picker; two-season seed is intentionally not used. |
+
+## Follow-up 4 security traceability
+
+The plans under `/workspace/jellyfin-tvos/test` were checked again. They have
+no dedicated userinfo rejection row. T08-2-52/53 are in merged main's plan but
+absent from that external snapshot; T08-2-52 documents origin comparison, not
+playback rejection. The supplemental cases are therefore recorded as gaps
+related to the existing origin/token rows. All new userinfo tests below run
+in both Debug and Release.
+
+| ID / gap | Matching coverage | Scope |
+| --- | --- | --- |
+| T08P-14/97 | `PlaybackPoCDecisionTests.testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`, `PlaybackCoordinatorTests.testT08P_94_95_96_97_defaultVideoPrecheck` | Canonical codecs still accept mixed case; h265/H265 now reject before negotiation/media. |
+| T08-2-14 | `ADRM08PrototypeTests.testT08_2_14_headerPathStripsCredentialQueriesIgnoringCase` | Query stripping remains covered; userinfo playback stripping is superseded by rejection. |
+| T08P-70/88; T08-2-50 | `MediaLoaderSecurityTests.testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin`, existing cross-origin URI tests | Existing header, segment-query-token and origin/downgrade regressions retained. |
+| T08-2-52/53 (merged plan) | `MediaOriginTests`, `MediaFailurePrecedenceTests` | Existing origin/userinfo documentation and loader failure precedence retained unchanged. |
+| Gap: userinfo segment/key rejection (related T08P-88 / T08-2-50) | [`MediaUserInfoSecurityTests.testUserInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Reject complete fetched playlists with credential-bearing media, map, part or key URLs; no bytes delivered; mock log contains only the clean playlist request. |
+| Gap: userinfo variant rejection (related T08P-70 / T08-2-50) | [`MediaUserInfoSecurityTests.testUserInfoVariantPlaylistsRejectServerMasterBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Plain/scheme-relative variants, audio rendition and I-frame URI attributes reject before handoff. |
+| Gap: userinfo TranscodingUrl / resolved URL (related T08P-54/69/70) | [`MediaUserInfoSecurityTests.testUserInfoTranscodingURLsAndServerURLsAreRejected`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift), `testUserInfoInitialAndResolvedURLsNeverReachTransportOrPlayer`, `testUserInfoRedirectNeverReachesTransport`, [`PlaybackCoordinatorTests.testUserInfoTranscodingURLFailsBeforeMediaRequest`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | Builders, initial/master URL, absolute/scheme-relative TranscodingUrl, resolver redirects and planner block; initial failures send zero media requests, redirects send only the clean first request. |
+| Gap: loader request credentials (related T08P-69/70) | [`MediaUserInfoSecurityTests.testUserInfoLoaderRequestsAreRejectedEvenAfterMutation`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift), `testAtSignInPathAndQueryDoesNotRejectSafePlayback` | Direct wrapper/planner and mutable request bypass attempts reject with an empty mock request log; harmless path/query @ still works. Request-log assertions inspect URLComponents.user/password directly. |
+
+The matrix includes nonempty, empty and percent-encoded user/password fields:
+`user:password@`, `user@`, `:password@`, `@`, `:@`, `user:@`, `%75ser:%70w@`.
 
 ## Generated media and bootstrap
 
@@ -320,36 +330,34 @@ subtitle rendering, trickplay, media segments, next-up, buffering timeout UI,
 Ping and reconnect delivery of failed Stopped reports.
 Video transcoding is deliberately excluded from this PoC.
 
-## Local verification (Follow-up 3)
+## Local verification (Follow-up 4)
 
 - Linux Swift 6.4.1 `swift build`, `swift test` and `swift test -c release` passed.
-  Debug: 242 tests; Release: 241 tests; each has seven gated live-server skips,
-  zero failures. The native coverage run also passed all 242 tests with seven skips.
-- `scripts/coverage-gate.sh`: 92.93% line coverage (4139/4454), threshold 80%.
-- All ci.yml lint commands passed: swift-format, SwiftLint 0.65.1, license checks
-  and self-test, source greps, entitlements, Debug-only/credential-construction
-  checks and self-test, artifact-redactor self-test, six Python bootstrap mocks,
-  shell syntax and path filter. SwiftLint warns that custom_rules need unavailable
-  SourceKit; the source grep passed. `git diff --check` passed.
-- ffprobe verified ten generated video files, including three 60-second Season 1
-  episodes and a six-second S02E01. Five local NFOs parse and fix 2026 dates.
-- Mapping audit: every T08P-01–99 and TPOC-01–82 occurs exactly once, and every
-  linked test function/script exists. Linux counterparts are explicitly marked
-  as partial where the plan requires native playback or UI.
+  Debug: 253 tests; Release: 252 tests; each has seven gated live-server skips
+  and zero failures. Coverage's native test run passed 253 tests with seven skips.
+- `scripts/coverage-gate.sh`: 92.95% line coverage (4180/4497), threshold 80%.
+- All lint commands from `ci.yml` passed: SwiftLint 0.65.1, strict recursive
+  swift-format, license checks and self-test, source greps, entitlements,
+  debug-string/credential-construction checks and self-test, artifact-redactor
+  self-test. SwiftLint warns that custom_rules require prohibited SourceKit;
+  `ci-grep.sh` passed independently. Path filter and shell syntax also passed.
+- All 16 combined bootstrap Python tests passed, including 12.2 recovery and
+  the two-season/four-episode scan requirements. `git diff --check` passed.
+- `MediaOrigin.swift` and `MediaOriginTests.swift` have no diff from merged main.
+  Main's chunked body reader/appender and failure precedence remain intact.
 
-Docker and Xcode are not installed here. Live Jellyfin, Apple builds, decoded
-playback, UI/device journeys and the Release app binary scan were not run;
-no simulator acceptance is claimed by the Linux test counterparts above.
+Live-server tests are gated off. Apple compilation, actual AVPlayer/TLS behavior,
+UI/device journeys, the three-version live matrix and Release app binary scans
+were not run on Linux. The model tests do not establish simulator acceptance.
 
 ## Open questions
 
-- h265 remains a provisional alias; h264/hevc matching and default-track/refetch
-  rules are locked, and avc is not accepted.
+- Test-plan gap: assign dedicated IDs for the new userinfo rejection cases.
 - Q8P-04: audio output preference/channel policy; current profile keeps AAC/EAC3
   and current video-copy URL chooses AAC for audio conversion.
 - Q8P-07: whether remux requires Ping; Q8P-09: report-401/auth handling and pending
   report policy; Q8P-12: media timeout bound. These existing questions remain
-  outside this retry correction.
+  outside this credential check.
 - Native AVPlayer decoding, first-frame timing/watchdog, focus/VoiceOver,
   simulator recordings, three-version live matrix and artifact/binary evidence
   remain runner validation. The complete mapping marks the specific gaps.

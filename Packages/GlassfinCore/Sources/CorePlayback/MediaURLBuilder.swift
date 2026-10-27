@@ -5,11 +5,17 @@ import Foundation
 /// Builds playback URLs. The credential-query fallback is constructed only here.
 public enum MediaURLBuilder {
     public static func resolveTranscodingURL(server: URL, transcodingURL: String) -> URL? {
+        guard MediaURLValidation.hasNoUserInfo(server),
+            let candidate = URL(string: transcodingURL), MediaURLValidation.hasNoUserInfo(candidate)
+        else { return nil }
         // The mapper's slash-relative path preserves both proxy subpaths and query parameters.
         let relative =
             URL(string: transcodingURL)?.scheme == nil && !transcodingURL.hasPrefix("/")
             ? "/" + transcodingURL : transcodingURL
-        return DTOMapper.resolve(server: server, relative: relative)
+        guard let resolved = DTOMapper.resolve(server: server, relative: relative),
+            MediaURLValidation.hasNoUserInfo(resolved)
+        else { return nil }
+        return resolved
     }
 
     /// M08a-PoC: keep the negotiated URL but prohibit video encoding and subtitle burn-in.
@@ -19,7 +25,7 @@ public enum MediaURLBuilder {
     ) throws(PlaybackFailure) -> URL {
         guard let url = resolveTranscodingURL(server: server, transcodingURL: transcodingURL),
             MediaOrigin.matches(server, url), !MediaOrigin.isHTTPSDowngrade(server, url),
-            url.user == nil, url.password == nil,
+            MediaURLValidation.hasNoUserInfo(url),
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         else { throw .insecureRedirect }
         let enforced = [
@@ -55,6 +61,7 @@ public enum MediaURLBuilder {
     /// Opt-in fallback. The result has a credential query and no Authorization header.
     public static func queryCredentialFallback(strippedURL: URL, token: String) -> URL? {
         #if DEBUG
+            guard MediaURLValidation.hasNoUserInfo(strippedURL) else { return nil }
             guard !token.isEmpty else { return nil }
             guard !MediaCredentialQuery.contains(strippedURL) else { return nil }
             guard var components = URLComponents(url: strippedURL, resolvingAgainstBaseURL: false) else { return nil }

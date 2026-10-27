@@ -200,6 +200,7 @@
         }
 
         public func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
+            guard MediaURLValidation.hasNoUserInfo(request.url) else { throw .invalidURL }
             var urlRequest = URLRequest(url: request.url)
             urlRequest.httpMethod = request.method
             if let header = request.authorizationHeader {

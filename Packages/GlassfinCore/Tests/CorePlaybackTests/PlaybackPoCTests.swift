@@ -61,7 +61,7 @@ final class PlaybackPoCDecisionTests: XCTestCase {
             let source = try XCTUnwrap(dto.MediaSources?.first)
             XCTAssertEqual(PlaybackDecision.decide(mediaSource: source), expected)
         }
-        for codec in ["mpeg2video", "vc1", "av1", "mpeg4", ""] {
+        for codec in ["mpeg2video", "vc1", "av1", "mpeg4", "h265", "H265", ""] {
             let data = try playbackFixture(video: codec, transcodingURL: "/master.m3u8")
             let dto = try JSONDecoder().decode(PlaybackInfoResponseDTO.self, from: data)
             XCTAssertEqual(
