@@ -131,8 +131,8 @@ final class T09SearchTests: XCTestCase {
         XCTAssertTrue(fixture.backend.calls.isEmpty)
         XCTAssertEqual(fixture.model.term, "previous")
         XCTAssertEqual(fixture.model.recentQueries, ["previous"])
-        XCTAssertEqual(fixture.model.bannerKey, .noNetworkConnection)
-        XCTAssertEqual(fixture.model.blockingErrorKey, .noNetworkConnection)
+        XCTAssertEqual(fixture.model.bannerKey, AppErrorMessage.offlineKey)
+        XCTAssertEqual(fixture.model.blockingErrorKey, AppErrorMessage.offlineKey)
     }
 
     /// T09-02: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
@@ -212,7 +212,7 @@ final class T09SearchTests: XCTestCase {
         fixture.model.setTerm("star")
         await waitUntil { fixture.backend.calls.count == 1 }
         fixture.backend.fail(0, .server(status: 500))
-        await waitUntil { fixture.model.blockingErrorKey == .serverError }
+        await waitUntil { fixture.model.blockingErrorKey == AppErrorMessage.serverErrorKey }
         fixture.model.retry()
         await waitUntil { fixture.backend.calls.count == 2 }
         fixture.backend.succeed(1, names: ["recovered"])
@@ -374,7 +374,7 @@ final class T09SearchTests: XCTestCase {
         fixture.model.setTerm("newer")
         await waitUntil { fixture.backend.calls.count == 2 }
         fixture.backend.fail(0, .unauthorized)
-        await waitUntil { fixture.app.sessionNoticeKey == .sessionExpired }
+        await waitUntil { fixture.app.sessionNoticeKey == AppErrorMessage.sessionExpiredKey }
         fixture.backend.fail(1, .unauthorized)
         await waitUntil { fixture.backend.completed == 2 }
         XCTAssertEqual(fixture.app.requestGeneration, 1)
@@ -391,6 +391,7 @@ final class T09SearchTests: XCTestCase {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
         fixture.model.setTerm("star")
+        XCTAssertTrue(fixture.app.currentView === fixture.model)
         await waitUntil { fixture.backend.calls.count == 1 }
         fixture.backend.succeed(0, names: ["retained"])
         await waitUntil { fixture.model.hasContent }
@@ -399,8 +400,9 @@ final class T09SearchTests: XCTestCase {
         fixture.backend.fail(1, .network)
         await waitUntil { fixture.app.connectivity == .serverUnreachable }
         XCTAssertEqual(fixture.model.state.value?.first?.name, "retained")
-        XCTAssertEqual(fixture.model.bannerKey, .serverUnreachable)
+        XCTAssertEqual(fixture.model.bannerKey, AppErrorMessage.serverDownKey)
         XCTAssertNil(fixture.model.blockingErrorKey)
+        XCTAssertFalse(fixture.app.showsServerDown)
         XCTAssertEqual(fixture.app.scheduledPingDelay, .seconds(10))
         await fixture.app.probeServer()
         XCTAssertEqual(fixture.app.connectivity, .online)
@@ -412,13 +414,16 @@ final class T09SearchTests: XCTestCase {
         fixture.model.setTerm("empty-screen")
         await waitUntil { fixture.backend.calls.count == 4 }
         fixture.backend.fail(3, .network)
-        await waitUntil { fixture.model.blockingErrorKey == .serverUnreachable }
-        XCTAssertEqual(fixture.model.blockingErrorKey, AppErrorMessage.key(for: .serverUnreachable))
+        await waitUntil { fixture.model.blockingErrorKey == AppErrorMessage.serverDownKey }
+        XCTAssertEqual(fixture.model.blockingErrorKey, AppErrorMessage.messageKey(for: .serverUnreachable))
+        XCTAssertTrue(fixture.app.showsServerDown)
         fixture.model.onDisappear()
+        fixture.app.currentView = nil
         await fixture.app.probeServer()
         fixture.model.retryAfterRecovery()
         XCTAssertFalse(fixture.model.state.isLoading, "Recovery must not restart requests in a hidden tab")
         fixture.model.onAppear()
+        XCTAssertTrue(fixture.app.currentView === fixture.model)
         await waitUntil { fixture.backend.calls.count == 5 }
         fixture.backend.succeed(4, names: ["visible again"])
         await waitUntil { fixture.model.state.value?.first?.name == "visible again" }

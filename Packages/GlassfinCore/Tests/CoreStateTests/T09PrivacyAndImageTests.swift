@@ -217,7 +217,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertTrue(gate.imageCancelled)
         XCTAssertEqual(gate.started, 2)
         XCTAssertEqual(app.requestGeneration, 1)
-        XCTAssertEqual(app.sessionNoticeKey, .sessionExpired)
+        XCTAssertEqual(app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
         do { _ = try await client.send(APIRequest(method: "GET", path: "/blocked")) } catch {}
         XCTAssertEqual(gate.started, 2)
     }

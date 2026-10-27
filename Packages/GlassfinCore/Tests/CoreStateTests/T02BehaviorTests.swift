@@ -51,12 +51,24 @@ final class T02BehaviorTests: XCTestCase {
         try seed(harness, version: "10.9.11", token: Sample.token)
         harness.app.bootstrap()
         XCTAssertEqual(harness.app.blockingError, .unsupportedServer(version: "10.9.11"))
-        XCTAssertEqual(AppErrorMessage.key(for: .unsupportedServer(version: "10.9.11")), .unsupportedServerDetail)
-        XCTAssertEqual(ServerVersionGate.dotted(.minimumJellyfin), "10.10.0")
+        let error = try XCTUnwrap(harness.app.blockingError)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: error), AppErrorMessage.unsupportedServerKey)
+        let key = try XCTUnwrap(AppErrorMessage.messageKey(for: error))
+        XCTAssertTrue(key.contains("%@"))
         // Version numbers are format arguments, not translated copy.
-        let message = try XCTUnwrap(AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")))
+        let message = try XCTUnwrap(AppErrorMessage.userFacing(error))
+        XCTAssertNotEqual(message, key)
+        XCTAssertFalse(message.contains("%@"))
+        XCTAssertEqual(
+            message,
+            String(
+                format: try englishCatalogText(for: key), "10.9.11", ServerVersionGate.dotted(.minimumJellyfin)))
         XCTAssertTrue(message.contains("10.9.11"))
         XCTAssertTrue(message.contains(ServerVersionGate.dotted(.minimumJellyfin)))
+        XCTAssertEqual(ServerVersionGate.dotted(.minimumJellyfin), "10.10.0")
+        let serverVersionRange = try XCTUnwrap(message.range(of: "10.9.11"))
+        let minimumVersionRange = try XCTUnwrap(message.range(of: ServerVersionGate.dotted(.minimumJellyfin)))
+        XCTAssertLessThan(serverVersionRange.lowerBound, minimumVersionRange.lowerBound)
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         harness.app.removeServer(id: Sample.serverID)
@@ -93,9 +105,10 @@ final class T02BehaviorTests: XCTestCase {
         let harness = Harness.make(online: false)
         defer { harness.cleanup() }
         XCTAssertEqual(harness.app.connectivity, .offline)
-        XCTAssertEqual(harness.app.bannerKey, .noNetworkConnection)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.offlineKey)
+        try assertEnglishCopy(harness.app.banner, key: AppErrorMessage.offlineKey, expected: "No network connection")
         XCTAssertTrue(harness.app.playbackBlocked)
-        XCTAssertEqual(harness.app.playbackBlockedKey, .playbackOffline)
+        XCTAssertEqual(harness.app.playbackBlockedMessageKey, AppErrorMessage.playbackOfflineKey)
         try harness.signIn()
         XCTAssertTrue(harness.app.playbackBlocked)
         let box = Counter()
@@ -110,9 +123,10 @@ final class T02BehaviorTests: XCTestCase {
         guard case .signedIn = harness.app.phase else { return XCTFail("stayed signed in") }
 
         harness.path.setOnline(false)
-        await waitUntil { harness.app.bannerKey == .noNetworkConnection }
+        await waitUntil { harness.app.bannerKey == AppErrorMessage.offlineKey }
+        try assertEnglishCopy(harness.app.banner, key: AppErrorMessage.offlineKey, expected: "No network connection")
         XCTAssertTrue(harness.app.playbackBlocked)
-        XCTAssertEqual(harness.app.playbackBlockedKey, .playbackOffline)
+        XCTAssertEqual(harness.app.playbackBlockedMessageKey, AppErrorMessage.playbackOfflineKey)
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 
@@ -131,9 +145,13 @@ final class T02BehaviorTests: XCTestCase {
         harness.app.handle(.serverUnreachable)
         harness.app.noteRequestFinished(elapsed: .seconds(9))
         XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
-        XCTAssertEqual(harness.app.playbackBlockedKey, .playbackUnreachable)
-        XCTAssertEqual(harness.app.bannerKey, .serverUnreachable)
+        XCTAssertEqual(harness.app.playbackBlockedMessageKey, AppErrorMessage.playbackUnreachableKey)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
         harness.app.handle(.offline)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.offlineKey)
+        try assertEnglishCopy(harness.app.banner, key: AppErrorMessage.offlineKey, expected: "No network connection")
         harness.app.noteRequestFinished(elapsed: .seconds(9))
         XCTAssertEqual(harness.app.connectivity, .offline)
     }
@@ -145,13 +163,19 @@ final class T02BehaviorTests: XCTestCase {
         try harness.signIn()
         harness.app.handle(.serverUnreachable)
         XCTAssertTrue(harness.app.showsServerDown)
-        XCTAssertEqual(harness.app.bannerKey, .serverUnreachable)
-        XCTAssertEqual(AuthCopy.Key.tryAgain.rawValue, "Try again")
-        XCTAssertEqual(AuthCopy.Key.switchServer.rawValue, "Switch server")
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
+        XCTAssertEqual(harness.app.serverDownTitleKey, AppErrorMessage.serverDownKey)
+        XCTAssertEqual(harness.app.retryTitleKey, AppErrorMessage.retryKey)
+        XCTAssertEqual(harness.app.changeServerTitleKey, AppErrorMessage.changeServerKey)
         await waitUntil { harness.suspending?.sleeps() == [.seconds(10)] }
         harness.pinger.outcome = .ok
         harness.suspending?.resumeAll()
         await waitUntil { harness.app.connectivity == .online }
+        XCTAssertNil(harness.app.bannerKey)
+        XCTAssertNil(harness.app.banner)
+        XCTAssertFalse(harness.app.showsServerDown)
         guard case .signedIn = harness.app.phase else { return XCTFail("must stay signed in") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         XCTAssertGreaterThanOrEqual(harness.pinger.calls(), 1)
@@ -160,7 +184,303 @@ final class T02BehaviorTests: XCTestCase {
         harness.pinger.outcome = .failed(.serverError(status: 401))
         await harness.app.retryNow()
         XCTAssertEqual(harness.app.connectivity, .online)
+        XCTAssertNil(harness.app.bannerKey)
+        XCTAssertNil(harness.app.banner)
         guard case .signedIn = harness.app.phase else { return XCTFail("public 401 is not logout") }
+    }
+
+    @MainActor
+    func testT02_35a_serverDownWithContentKeepsContentAndShowsBanner() async throws {
+        for cached in [false, true] {
+            let harness = Harness.make(automaticPing: true, suspendingClock: true)
+            defer { harness.cleanup() }
+            try harness.signIn()
+            let resume = [Sample.movie(name: "Resume")]
+            let next = [Sample.movie(id: Sample.other, name: "Next")]
+            let latest = [Sample.movie(id: Sample.season, name: "Latest")]
+            let home = harness.home()
+            if cached {
+                XCTAssertTrue(harness.app.snapshots.save(HomeSnapshot(resume: resume, nextUp: next, latest: latest)))
+            } else {
+                harness.library.resumeItems = resume
+                harness.library.nextItems = next
+                harness.library.latestByID[Sample.library] = .success(latest)
+                await home.reload(libraryIDs: [Sample.library])
+                harness.app.handle(.serverUnreachable)
+                XCTAssertFalse(harness.app.showsServerDown)
+                // Exercise previous loaded values independently of both caches.
+                harness.app.snapshots.purge()
+                await harness.app.responses.invalidateAll()
+            }
+
+            harness.library.resumeError = .network
+            harness.library.nextError = .network
+            harness.library.latestByID[Sample.library] = .failure(.network)
+            await home.reload(libraryIDs: [Sample.library])
+            XCTAssertEqual(home.resume.value, resume)
+            XCTAssertEqual(home.nextUp.value, next)
+            XCTAssertEqual(home.latest.value, latest)
+            XCTAssertEqual(home.resume, .failed(.serverUnreachable, previous: resume))
+            XCTAssertEqual(home.nextUp, .failed(.serverUnreachable, previous: next))
+            XCTAssertEqual(home.latest, .failed(.serverUnreachable, previous: latest))
+            XCTAssertEqual(home.resume.presentedError, .serverUnreachable)
+            XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
+            XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+            try assertEnglishCopy(
+                harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
+            XCTAssertFalse(harness.app.showsServerDown)
+
+            let editor = UserDataEditor(
+                store: harness.app.userData, library: harness.library, app: harness.app, log: harness.log)
+            harness.library.error = .network
+            await editor.setFavorite(id: Sample.movie, favorite: true)
+            XCTAssertEqual(harness.library.favorites().map(\.0), [Sample.movie])
+            XCTAssertEqual(editor.lastError, .serverUnreachable)
+            let actionError = try XCTUnwrap(editor.lastError)
+            try assertEnglishCopy(
+                AppErrorMessage.userFacing(actionError), key: AppErrorMessage.serverDownKey,
+                expected: "Can't reach the server")
+            guard case .signedIn = harness.app.phase else { return XCTFail("action failure must keep the session") }
+            XCTAssertEqual(try harness.secure.data(for: Sample.account()), Data(Sample.token.utf8))
+            XCTAssertTrue(harness.secure.removed().isEmpty)
+            XCTAssertFalse(harness.app.showsServerDown)
+
+            await waitUntil { harness.suspending?.sleeps() == [.seconds(10)] }
+            XCTAssertEqual(harness.pinger.calls(), 0)
+            harness.pinger.outcome = .ok
+            harness.suspending?.resumeAll()
+            await waitUntil { harness.app.connectivity == .online }
+            XCTAssertEqual(harness.app.connectivity, .online)
+            XCTAssertEqual(harness.pinger.calls(), 1)
+            XCTAssertNil(harness.app.bannerKey)
+            XCTAssertNil(harness.app.banner)
+            XCTAssertFalse(harness.app.showsServerDown)
+            XCTAssertEqual(home.resume.value, resume)
+            XCTAssertEqual(home.nextUp.value, next)
+            XCTAssertEqual(home.latest.value, latest)
+            guard case .signedIn = harness.app.phase else { return XCTFail("recovery must keep the session") }
+            XCTAssertEqual(try harness.secure.data(for: Sample.account()), Data(Sample.token.utf8))
+            XCTAssertTrue(harness.secure.removed().isEmpty)
+            XCTAssertEqual(harness.log.messages(level: "debug").filter { $0 == "Signed in." }.count, 1)
+        }
+    }
+
+    @MainActor
+    func testT02_35b_serverDownWithoutContentShowsFullScreen() async throws {
+        let harness = Harness.make(automaticPing: true, suspendingClock: true)
+        defer { harness.cleanup() }
+        try harness.signIn()
+        XCTAssertNil(harness.app.snapshots.load())
+        let home = harness.home()
+        XCTAssertNil(home.resume.value)
+        XCTAssertNil(home.nextUp.value)
+        XCTAssertNil(home.latest.value)
+        harness.library.resumeError = .network
+        harness.library.nextError = .network
+        harness.library.latestByID[Sample.library] = .failure(.network)
+
+        await home.reload(libraryIDs: [Sample.library])
+        XCTAssertEqual(harness.library.resumeCallCount(), 1)
+        XCTAssertEqual(harness.library.nextCallCount(), 1)
+        XCTAssertEqual(harness.library.latestIdentifiers(), [Sample.library])
+        XCTAssertEqual(home.resume, .failed(.serverUnreachable, previous: nil))
+        XCTAssertEqual(home.nextUp, .failed(.serverUnreachable, previous: nil))
+        XCTAssertEqual(home.latest, .failed(.serverUnreachable, previous: nil))
+        XCTAssertFalse(home.hasContent)
+        XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
+        XCTAssertTrue(harness.app.showsServerDown)
+        XCTAssertEqual(harness.app.serverDownTitleKey, AppErrorMessage.serverDownKey)
+        XCTAssertEqual(harness.app.retryTitleKey, AppErrorMessage.retryKey)
+        XCTAssertEqual(harness.app.changeServerTitleKey, AppErrorMessage.changeServerKey)
+        try assertEnglishCopy(
+            harness.app.serverDownTitle, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
+        try assertEnglishCopy(harness.app.retryTitle, key: AppErrorMessage.retryKey, expected: "Try again")
+        try assertEnglishCopy(
+            harness.app.changeServerTitle, key: AppErrorMessage.changeServerKey, expected: "Change server")
+        guard case .signedIn = harness.app.phase else { return XCTFail("first fetch failure must keep the session") }
+        XCTAssertEqual(try harness.secure.data(for: Sample.account()), Data(Sample.token.utf8))
+        XCTAssertTrue(harness.secure.removed().isEmpty)
+
+        await waitUntil { harness.suspending?.sleeps() == [.seconds(10)] }
+        XCTAssertEqual(harness.pinger.calls(), 0)
+        harness.pinger.outcome = .ok
+        harness.suspending?.resumeAll()
+        await waitUntil { harness.app.connectivity == .online }
+        XCTAssertEqual(harness.app.connectivity, .online)
+        XCTAssertEqual(harness.pinger.calls(), 1)
+        XCTAssertFalse(harness.app.showsServerDown)
+        XCTAssertNil(harness.app.bannerKey)
+        XCTAssertNil(harness.app.banner)
+        guard case .signedIn = harness.app.phase else { return XCTFail("automatic recovery must keep the session") }
+        XCTAssertEqual(try harness.secure.data(for: Sample.account()), Data(Sample.token.utf8))
+        XCTAssertTrue(harness.secure.removed().isEmpty)
+        XCTAssertEqual(harness.log.messages(level: "debug").filter { $0 == "Signed in." }.count, 1)
+    }
+
+    @MainActor
+    func testT02_36_bannerTextResolvesFromKey() async throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        harness.library.resumeItems = [Sample.movie()]
+        let home = harness.home()
+        await home.reload(libraryIDs: [])
+
+        harness.app.handle(.offline)
+        XCTAssertEqual(harness.app.connectivity, .offline)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.offlineKey)
+        try assertEnglishCopy(harness.app.banner, key: AppErrorMessage.offlineKey, expected: "No network connection")
+
+        await harness.app.probeServer()
+        XCTAssertEqual(harness.app.connectivity, .online)
+        XCTAssertNil(harness.app.banner)
+        harness.app.handle(.serverUnreachable)
+        XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
+        XCTAssertTrue(home.hasContent)
+        XCTAssertFalse(harness.app.showsServerDown)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
+
+        await harness.app.probeServer()
+        XCTAssertEqual(harness.app.connectivity, .online)
+        XCTAssertNil(harness.app.bannerKey)
+        XCTAssertNil(harness.app.banner)
+    }
+
+    @MainActor
+    func testT02_37_sessionNoticeTextResolvesFromKey() async throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        XCTAssertNil(harness.app.sessionNotice)
+        harness.library.resumeError = .unauthorized
+        let home = harness.home()
+        await home.reload(libraryIDs: [])
+
+        guard case .needsLogin = harness.app.phase else { return XCTFail("authenticated 401 must end the session") }
+        XCTAssertEqual(home.resume.presentedError, .unauthorized)
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
+        try assertEnglishCopy(
+            harness.app.sessionNotice, key: AppErrorMessage.sessionExpiredKey,
+            expected: "Session expired, please sign in again")
+
+        try harness.signIn()
+        guard case .signedIn = harness.app.phase else { return XCTFail("expected a new session") }
+        XCTAssertNil(harness.app.sessionNoticeKey)
+        XCTAssertNil(harness.app.sessionNotice)
+    }
+
+    @MainActor
+    func testT02_38_stallMessageTextResolvesFromKey() async throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let player = PlayerViewModel(
+            playback: harness.playback, reporting: harness.reporting, userData: harness.app.userData, app: harness.app,
+            signposter: harness.signposter, log: harness.log)
+        await player.load(itemID: Sample.movie)
+        XCTAssertEqual(player.state.value, harness.playback.source)
+
+        player.noteBuffering(elapsed: .seconds(5))
+        XCTAssertNil(player.stallMessageKey)
+        XCTAssertNil(player.stallMessage)
+        player.noteBuffering(elapsed: .seconds(5) + .milliseconds(1))
+        XCTAssertEqual(player.stallMessageKey, AppErrorMessage.bufferingKey)
+        try assertEnglishCopy(
+            player.stallMessage, key: AppErrorMessage.bufferingKey, expected: "Buffering is taking longer than usual")
+        player.noteBuffering(elapsed: .zero)
+        XCTAssertNil(player.stallMessageKey)
+        XCTAssertNil(player.stallMessage)
+    }
+
+    @MainActor
+    func testServerDownUsesOnlyCurrentViewContent() async throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let home = harness.home()
+        await home.reload(libraryIDs: [])
+        harness.app.handle(.serverUnreachable)
+        XCTAssertTrue(harness.app.showsServerDown)  // Loaded empty lists have nothing to display.
+
+        harness.library.resumeItems = [Sample.movie()]
+        await harness.app.responses.invalidateAll()
+        await home.reload(libraryIDs: [])
+        XCTAssertFalse(harness.app.showsServerDown)
+
+        let library = LibraryViewModel(
+            library: harness.library, userData: harness.app.userData, responses: harness.app.responses,
+            app: harness.app, clock: harness.clock)
+        harness.library.error = .network
+        await library.reload(libraryID: Sample.library)
+        XCTAssertNil(library.state.value)
+        XCTAssertEqual(library.state.presentedError, .serverUnreachable)
+        XCTAssertTrue(harness.app.showsServerDown)
+        XCTAssertEqual(home.resume.value, [Sample.movie()])  // Home is retained, but is no longer visible.
+
+        let items = (0..<50).map { Sample.movie(id: String(format: "%032x", $0)) }
+        harness.library.error = nil
+        harness.library.pages[0] = Page(items: items, totalCount: 70)
+        await library.reload(libraryID: Sample.library)
+        XCTAssertFalse(harness.app.showsServerDown)
+        harness.library.error = .network
+        await library.loadNextPageIfNeeded(visibleIndex: 39)
+        XCTAssertEqual(library.state.value, items)
+        XCTAssertEqual(library.state.presentedError, .serverUnreachable)
+        XCTAssertFalse(harness.app.showsServerDown)
+
+        await harness.app.responses.invalidateAll()
+        await library.reload(libraryID: Sample.library)
+        XCTAssertEqual(library.state.value, items)
+        XCTAssertFalse(harness.app.showsServerDown)
+        await library.reload(libraryID: Sample.other)
+        XCTAssertNil(library.state.value)
+        XCTAssertTrue(harness.app.showsServerDown)
+        harness.app.currentView = home  // Returning to a retained screen without a reload.
+        XCTAssertFalse(harness.app.showsServerDown)
+        harness.app.currentView = nil
+        XCTAssertTrue(harness.app.showsServerDown)
+        XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
+    }
+
+    @MainActor
+    func testStoredUnparseableVersionIsCleanedAndCappedBeforeFormatting() async throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        let tail = String(repeating: "e\u{0301}👩‍👩‍👧‍👦", count: 210)
+        let raw = "\u{202E}10.\u{0007}x\u{061C}\u{200E}\u{200F}\u{0085}\u{2066}<b>**" + tail
+        XCTAssertGreaterThan(raw.count, 200)
+        try seed(harness, version: raw, token: Sample.token)
+        harness.app.bootstrap()
+        guard case .needsLogin = harness.app.phase else { return XCTFail("expected a blocking login screen") }
+        let error = try XCTUnwrap(harness.app.blockingError)
+        let key = try XCTUnwrap(AppErrorMessage.messageKey(for: error))
+        XCTAssertEqual(key, AppErrorMessage.unsupportedServerKey)
+        let message = try XCTUnwrap(AppErrorMessage.userFacing(error))
+        let expectedVersion = String(("10.x<b>**" + tail).prefix(200))
+        XCTAssertEqual(
+            message,
+            String(
+                format: try englishCatalogText(for: key), expectedVersion,
+                ServerVersionGate.dotted(.minimumJellyfin)))
+        let versionEnd = try XCTUnwrap(message.range(of: " is not supported."))
+        let embedded = String(message[..<versionEnd.lowerBound].dropFirst("Server version ".count))
+        XCTAssertEqual(embedded, expectedVersion)
+        XCTAssertEqual(embedded.count, 200)
+        XCTAssertLessThanOrEqual(embedded.count, 200)
+        XCTAssertGreaterThan(embedded.unicodeScalars.count, embedded.count)
+        XCTAssertTrue(embedded.contains("<b>**"))  // Untrusted markup stays literal.
+        XCTAssertFalse(message.unicodeScalars.contains { $0.properties.generalCategory == .control })
+        let bidi: Set<UInt32> = [
+            0x061C, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069,
+        ]
+        XCTAssertTrue(bidi.isDisjoint(with: message.unicodeScalars.map(\.value)))
+        XCTAssertFalse(message.contains("%@"))
+        XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 
     @MainActor
@@ -176,7 +496,10 @@ final class T02BehaviorTests: XCTestCase {
         await home.reload(libraryIDs: [])
         guard case .needsLogin(let info) = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertEqual(info.id, Sample.serverID)
-        XCTAssertEqual(harness.app.sessionNoticeKey, .sessionExpired)
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
+        try assertEnglishCopy(
+            harness.app.sessionNotice, key: AppErrorMessage.sessionExpiredKey,
+            expected: "Session expired, please sign in again")
         XCTAssertEqual(harness.secure.removed(), [Sample.account()])
         XCTAssertNil(try harness.secure.data(for: Sample.account()))
         XCTAssertFalse(harness.log.contains(Sample.token))
@@ -203,11 +526,14 @@ final class T02BehaviorTests: XCTestCase {
         }
         XCTAssertEqual(harness.secure.removed().count, 1)
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
-        XCTAssertEqual(harness.app.sessionNoticeKey, .sessionExpired)
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
+        try assertEnglishCopy(
+            harness.app.sessionNotice, key: AppErrorMessage.sessionExpiredKey,
+            expected: "Session expired, please sign in again")
     }
 
     @MainActor
-    func testT02_08_network403And5xxDoNotLogOut() async throws {
+    func testT02_31_network403And5xxDoNotLogOut() async throws {
         let errors: [APIError] = [
             .network, .timeout, .forbidden, .server(status: 500), .server(status: 502), .tls,
             .redirectRejected(.notFollowed),
@@ -225,12 +551,17 @@ final class T02BehaviorTests: XCTestCase {
             }
             XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
             XCTAssertNil(harness.app.sessionNotice)
+            if harness.app.connectivity == .serverUnreachable {
+                XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+                try assertEnglishCopy(
+                    harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
+            }
             XCTAssertTrue(harness.secure.removed().isEmpty)
         }
     }
 
     @MainActor
-    func testT02_09_forbiddenKeepsTheSession() async throws {
+    func testT02_32_forbiddenKeepsTheSession() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()
@@ -238,7 +569,7 @@ final class T02BehaviorTests: XCTestCase {
         let home = harness.home()
         await home.reload(libraryIDs: [])
         XCTAssertEqual(home.resume.presentedError, .forbidden)
-        XCTAssertEqual(AppErrorMessage.key(for: .forbidden), .forbidden)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .forbidden), AppErrorMessage.forbiddenKey)
         guard case .signedIn = harness.app.phase else { return XCTFail("session dropped") }
     }
 
@@ -375,6 +706,9 @@ final class T02BehaviorTests: XCTestCase {
         harness.app.watch(events)
         events.emit(.serverRestarting)
         await waitUntil { harness.app.connectivity == .serverUnreachable }
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
         guard case .signedIn = harness.app.phase else { return XCTFail("restart logged out") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         events.emit(.serverShuttingDown)
@@ -471,7 +805,7 @@ final class T02BehaviorTests: XCTestCase {
     }
 
     @MainActor
-    func testT02_19_libraryPagesAndCacheTTL() async throws {
+    func testT02_34_libraryPagesAndCacheTTL() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()
@@ -527,6 +861,10 @@ final class T02BehaviorTests: XCTestCase {
         if case .failed(.serverUnreachable, _) = series.seasons {} else { XCTFail("expected unreachable") }
         XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
         guard case .signedIn = harness.app.phase else { return XCTFail("session dropped") }
+        XCTAssertFalse(harness.app.showsServerDown)
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
         await series.select(seasonID: "not-a-guid")
         if case .failed(.internalInvariant, _) = series.episodes {} else { XCTFail("expected invariant") }
     }
@@ -548,7 +886,9 @@ final class T02BehaviorTests: XCTestCase {
         player.noteBuffering(elapsed: .seconds(5))
         XCTAssertNil(player.stallMessage)
         player.noteBuffering(elapsed: .seconds(5) + .milliseconds(1))
-        XCTAssertEqual(player.stallMessageKey, .buffering)
+        XCTAssertEqual(player.stallMessageKey, AppErrorMessage.bufferingKey)
+        try assertEnglishCopy(
+            player.stallMessage, key: AppErrorMessage.bufferingKey, expected: "Buffering is taking longer than usual")
         let scrubbed = await player.measureScrub { 1 }
         let trick = await player.measureTrickplay { 2 }
         let switched = await player.measureTrackSwitch { 3 }
@@ -575,6 +915,9 @@ final class T02BehaviorTests: XCTestCase {
         await player.stop(itemID: Sample.movie, position: .seconds(2), playSessionID: "play", finished: false)
         XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
         guard case .signedIn = harness.app.phase else { return XCTFail("network stop logged out") }
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
 
         harness.playback.error = .cancelled
         await player.load(itemID: Sample.other)
@@ -583,6 +926,10 @@ final class T02BehaviorTests: XCTestCase {
         harness.playback.error = .unauthorized
         await player.load(itemID: Sample.other)
         guard case .needsLogin = harness.app.phase else { return XCTFail("401 should log out") }
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
+        try assertEnglishCopy(
+            harness.app.sessionNotice, key: AppErrorMessage.sessionExpiredKey,
+            expected: "Session expired, please sign in again")
     }
 
     @MainActor
@@ -693,6 +1040,9 @@ final class T02BehaviorTests: XCTestCase {
         await harness.app.probeServer()
         XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
         guard case .signedIn = harness.app.phase else { return XCTFail("probe logged out") }
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverDownKey)
+        try assertEnglishCopy(
+            harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 }

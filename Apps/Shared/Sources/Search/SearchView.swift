@@ -74,12 +74,12 @@ struct SearchView: View {
             .safeAreaInset(edge: .top) {
                 if let key = model.bannerKey {
                     ContainedGlass {
-                        Text(verbatim: AuthCopy.localized(key))
+                        Text(verbatim: AppErrorMessage.localized(key))
                             .padding(SpacingToken.s)
                             .ownGlassSurface(in: Capsule())
                             .focusable(false)
                             .accessibilityIdentifier("search.banner")
-                            .accessibilityValue(key.rawValue)
+                            .accessibilityValue(key)
                     }
                 }
             }
@@ -132,15 +132,15 @@ struct SearchView: View {
 }
 
 struct SearchErrorState: View {
-    let key: AuthCopy.Key
+    let key: String
     let retry: () -> Void
 
     var body: some View {
         VStack(spacing: SpacingToken.l) {
-            Text(verbatim: AuthCopy.localized(key))
+            Text(verbatim: AppErrorMessage.localized(key))
                 .font(.title2)
                 .accessibilityIdentifier("search.error")
-                .accessibilityValue(key.rawValue)
+                .accessibilityValue(key)
             GlassActionBar(
                 actions: [
                     GlassAction(
@@ -264,7 +264,7 @@ private struct SearchItemDetail: View {
     let feature: SearchFeature
     let initial: MediaItem
     @State private var item: MediaItem?
-    @State private var failure: AuthCopy.Key?
+    @State private var failure: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -298,7 +298,7 @@ private struct SearchItemDetail: View {
             guard error != .cancelled else { return }
             feature.handle(error)
             let mapped = AppErrorMapping.map(error, context: .authenticated, deviceOffline: false)
-            failure = AppErrorMessage.key(for: mapped)
+            failure = AppErrorMessage.messageKey(for: mapped)
         }
     }
 }

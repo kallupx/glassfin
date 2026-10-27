@@ -108,7 +108,7 @@ PY
   export GLASSFIN_PASSWORD="$(openssl rand -hex 16)"
   echo "docker-integration: bootstrapping $version"
   set +e
-  python3 "$root/scripts/jellyfin_bootstrap.py"
+  python3 -u "$root/scripts/jellyfin_bootstrap.py"
   boot=$?
   set -e
   if [[ "$boot" -ne 0 ]]; then

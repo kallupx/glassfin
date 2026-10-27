@@ -72,10 +72,14 @@ public final class UserDataEditor {
 
 @MainActor
 @Observable
-public final class HomeViewModel {
+public final class HomeViewModel: ViewContentProviding {
     public private(set) var resume: LoadState<[MediaItem]> = .idle
     public private(set) var nextUp: LoadState<[MediaItem]> = .idle
     public private(set) var latest: LoadState<[MediaItem]> = .idle
+
+    public var hasContent: Bool {
+        [resume, nextUp, latest].contains { $0.value?.isEmpty == false }
+    }
 
     @ObservationIgnored private let library: any LibraryService
     @ObservationIgnored private let userData: UserDataStore
@@ -124,6 +128,7 @@ public final class HomeViewModel {
     }
 
     public func reload(libraryIDs: [String], coldStart: Bool = false) async {
+        app.currentView = self
         let generation = app.requestGeneration
         var cold = coldStart ? signposter.begin(.coldStartHomeFirstRow) : nil
         let sections = signposter.begin(.homeSectionsLoaded)
@@ -263,9 +268,11 @@ private struct CachedPage: Codable, Sendable {
 
 @MainActor
 @Observable
-public final class LibraryViewModel {
+public final class LibraryViewModel: ViewContentProviding {
     public private(set) var state: LoadState<[MediaItem]> = .idle
     public private(set) var totalCount: Int?
+
+    public var hasContent: Bool { state.value?.isEmpty == false }
 
     @ObservationIgnored private let library: any LibraryService
     @ObservationIgnored private let userData: UserDataStore
@@ -295,16 +302,18 @@ public final class LibraryViewModel {
     }
 
     public func reload(libraryID: String, query: ItemQuery = ItemQuery()) async {
+        app.currentView = self
         guard ItemID(libraryID) != nil else {
             state = .failed(.internalInvariant, previous: state.value)
             log.warning("Non-fatal invariant failure")
             return
         }
+        let previous = self.libraryID == libraryID && self.query == query ? state.value : nil
         self.libraryID = libraryID
         self.query = query
         nextIndex = 0
         totalCount = nil
-        state = .loading(previous: nil)
+        state = .loading(previous: previous)
         await loadPage(reset: true)
     }
 
@@ -358,9 +367,13 @@ public final class LibraryViewModel {
 
 @MainActor
 @Observable
-public final class SeriesViewModel {
+public final class SeriesViewModel: ViewContentProviding {
     public private(set) var seasons: LoadState<[MediaItem]> = .idle
     public private(set) var episodes: LoadState<[MediaItem]> = .idle
+
+    public var hasContent: Bool {
+        seasons.value?.isEmpty == false || episodes.value?.isEmpty == false
+    }
 
     @ObservationIgnored private let library: any LibraryService
     @ObservationIgnored private let userData: UserDataStore
@@ -378,6 +391,7 @@ public final class SeriesViewModel {
     }
 
     public func load(seriesID: String) async {
+        app.currentView = self
         guard ItemID(seriesID) != nil else {
             seasons = .failed(.internalInvariant, previous: seasons.value)
             log.warning("Non-fatal invariant failure")
@@ -421,10 +435,15 @@ public final class SeriesViewModel {
 
 @MainActor
 @Observable
-public final class PlayerViewModel {
+public final class PlayerViewModel: ViewContentProviding {
     public private(set) var state: LoadState<PlaybackSource> = .idle
-    public var stallMessageKey: AuthCopy.Key? { stallMessage == nil ? nil : .buffering }
-    public private(set) var stallMessage: String?
+    public private(set) var stallMessageKey: String?
+
+    public var hasContent: Bool { state.value != nil }
+
+    public var stallMessage: String? {
+        stallMessageKey.map(AppErrorMessage.localized)
+    }
     public private(set) var method: PlayMethod?
 
     @ObservationIgnored private let playback: any PlaybackInfoService
@@ -452,6 +471,7 @@ public final class PlayerViewModel {
     }
 
     public func load(itemID: String, maxBitrate: Int = 120_000_000) async {
+        app.currentView = self
         guard ItemID(itemID) != nil else {
             state = .failed(.internalInvariant, previous: state.value)
             log.warning("Non-fatal invariant failure")
@@ -488,9 +508,9 @@ public final class PlayerViewModel {
 
     public func noteBuffering(elapsed: Duration) {
         if elapsed > NetworkThresholds.stallMessageAfter {
-            stallMessage = AppErrorMessage.buffering
+            stallMessageKey = AppErrorMessage.bufferingKey
         } else {
-            stallMessage = nil
+            stallMessageKey = nil
         }
     }
 

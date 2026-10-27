@@ -5,16 +5,26 @@ final class DesignSystemFocusTests: XCTestCase {
     func testT05_22_demoIdentifiersExist() async {
         let app = launch("-uitest-design-system")
         for identifier in [
+            "design.shell.root",
             "design.root",
+            "design.hero.root",
+            "design.hero.title",
+            "design.hero.meta",
             "design.hero.play",
+            "design.hero.watched",
+            "design.hero.favorite",
             "design.hero.more",
             "design.hero.overview.collapsed",
             "design.banner.offline",
+            "design.banner.offline.icon",
             "design.row.primary",
+            "design.row.primary.item.0",
             "design.row.posters",
+            "design.row.posters.item.0",
             "design.playback.target",
         ] {
             require(element(app, identifier))
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: identifier).count, 1, identifier)
         }
     }
 
@@ -27,7 +37,10 @@ final class DesignSystemFocusTests: XCTestCase {
             remote(.down)
             waitUntilFocused(card)
             remote(.select, forDuration: 1.5)
-            require(element(app, "design.context.play"), timeout: 8)
+            // tvOS exposes the native menu action as an identified Other inside a focused Cell.
+            let play = app.cells.containing(.any, identifier: "design.context.play").firstMatch
+            require(play, timeout: 8)
+            waitUntilFocused(play)
         }
 
         @MainActor
@@ -126,6 +139,8 @@ final class DesignSystemFocusTests: XCTestCase {
             waitUntilFocused(retry)
             let attempts = element(app, "design.error.attempts")
             require(attempts)
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "design.error.root").count, 1)
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "design.error.attempts").count, 1)
             XCTAssertEqual(attempts.value as? String, "0")
             remote(.select)
             let updated = XCTNSPredicateExpectation(
@@ -161,11 +176,15 @@ final class DesignSystemFocusTests: XCTestCase {
             let app = launch("-uitest-design-system-nav")
             let detail = element(app, "design.nav.detail")
             require(detail)
+            waitUntilFocused(detail)
             remote(.menu)
-            require(element(app, "design.nav.library"))
+            let library = element(app, "design.nav.library")
+            require(library)
+            waitUntilFocused(library)
             remote(.menu)
             let root = element(app, "design.nav.root")
             require(root)
+            waitUntilFocused(root)
             remote(.menu)
             let tab = element(app, "design.tab.home")
             waitUntilFocused(tab)

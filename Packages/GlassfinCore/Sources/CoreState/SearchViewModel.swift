@@ -6,7 +6,7 @@ import Observation
 
 @MainActor
 @Observable
-public final class SearchViewModel {
+public final class SearchViewModel: ViewContentProviding {
     public private(set) var term = ""
     public private(set) var state: LoadState<[MediaItem]> = .idle
     public private(set) var groups: [SearchGroup] = []
@@ -57,14 +57,15 @@ public final class SearchViewModel {
         if case .loaded(let items) = state { return items.isEmpty }
         return false
     }
-    public var blockingErrorKey: AuthCopy.Key? {
+    public var blockingErrorKey: String? {
         guard !hasContent else { return nil }
-        return state.presentedError.flatMap { AppErrorMessage.key(for: $0) }
+        return state.presentedError.flatMap { AppErrorMessage.messageKey(for: $0) }
     }
-    public var bannerKey: AuthCopy.Key? { app.bannerKey }
+    public var bannerKey: String? { app.bannerKey }
     public var isOffline: Bool { app.connectivity == .offline }
 
     public func setTerm(_ newTerm: String) {
+        app.currentView = self
         let bounded = String(newTerm.prefix(SearchPolicy.maximumQueryCharacters))
         guard bounded != term else { return }
         term = bounded
@@ -96,6 +97,7 @@ public final class SearchViewModel {
     }
 
     public func onAppear() {
+        app.currentView = self
         visible = true
         loadRecents()
         let recovered =

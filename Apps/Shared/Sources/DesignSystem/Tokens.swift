@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum SpacingToken {
     static let xxs = 4.0
@@ -70,6 +71,7 @@ enum MotionPolicy {
 }
 
 enum ContentPaint {
+    static let heroText = Color.primary
     static let scrim = Color.black
     static let subtitleBacking = Color.black.opacity(0.6)
     static let progressFill = Color.white
@@ -132,17 +134,41 @@ struct RGB: Equatable, Sendable {
     }
 }
 
+extension RGB {
+    @MainActor
+    init(resolving color: Color, in traits: UITraitCollection) {
+        let resolved = UIColor(color).resolvedColor(with: traits)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        precondition(resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+        precondition(abs(alpha - 1) < 0.001, "Contrast fixtures require opaque text and scrim color tokens")
+        self.init(r: Double(red), g: Double(green), b: Double(blue))
+    }
+}
+
+@MainActor
 enum ContrastFixture {
-    static let text = RGB(r: 1, g: 1, b: 1)
-    static let scrim = RGB(r: 0, g: 0, b: 0)
+    static var text: RGB {
+        RGB(resolving: ContentPaint.heroText, in: UITraitCollection(userInterfaceStyle: .dark))
+    }
+
+    static var scrim: RGB {
+        RGB(resolving: ContentPaint.scrim, in: UITraitCollection(userInterfaceStyle: .dark))
+    }
+
     static let bright = RGB(r: 1, g: 1, b: 1)
     static let dark = RGB(r: 0.05, g: 0.05, b: 0.05)
     static let colorful = RGB(r: 0.95, g: 0.15, b: 0.45)
     static let bodyMinimum = 4.5
     static let largeMinimum = 3.0
 
-    static func scrimmed(_ background: RGB, gradient: ScrimGradient = ScrimGradient()) -> RGB {
-        scrim.composited(over: background, alpha: gradient.endOpacity)
+    static func scrimmed(_ background: RGB, at heightFraction: Double, gradient: ScrimGradient = ScrimGradient()) -> RGB
+    {
+        // HeroHeader's title and overview have only BackdropScrim behind them: no material or blur layer.
+        // The separate glass action controls need rendered measurements under Q5-03.
+        scrim.composited(over: background, alpha: gradient.opacity(at: heightFraction))
     }
 }
 
