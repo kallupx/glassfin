@@ -23,13 +23,12 @@ final class T04AuthUITests: XCTestCase {
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        field.tap()
-        field.typeText("media.example")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("media.example", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         let quick = app.descendants(matching: .any)["login.quickConnect"]
         XCTAssertTrue(quick.waitForExistence(timeout: 10))
         save(app.screenshot(), name: "login-method")
-        quick.tap()
+        activate(quick, in: app)
         let code = app.descendants(matching: .any)["quickconnect.code"]
         XCTAssertTrue(code.waitForExistence(timeout: 10))
         XCTAssertTrue(code.label.contains("482913") || (code.value as? String)?.contains("482913") == true)
@@ -42,9 +41,8 @@ final class T04AuthUITests: XCTestCase {
         let app = launch()
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
-        field.tap()
-        field.typeText("http://203.0.113.5:8096")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("http://203.0.113.5:8096", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         let error = app.descendants(matching: .any)["address.error"]
         XCTAssertTrue(error.waitForExistence(timeout: 10))
         XCTAssertEqual(error.value as? String, publicHTTPSKey)
@@ -55,11 +53,10 @@ final class T04AuthUITests: XCTestCase {
         let app = launch()
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
-        field.tap()
-        field.typeText("http://192.168.1.10:8096")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("http://192.168.1.10:8096", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["cleartext.cancel"].waitForExistence(timeout: 10))
-        app.descendants(matching: .any)["cleartext.accept"].tap()
+        activate(app.descendants(matching: .any)["cleartext.accept"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
     }
 
@@ -76,14 +73,13 @@ final class T04AuthUITests: XCTestCase {
         let app = launch()
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
-        field.tap()
-        field.typeText("media.example")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("media.example", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         let quick = app.descendants(matching: .any)["login.quickConnect"]
         XCTAssertTrue(quick.waitForExistence(timeout: 10))
-        quick.tap()
+        activate(quick, in: app)
         XCTAssertTrue(app.descendants(matching: .any)["quickconnect.code"].waitForExistence(timeout: 10))
-        app.descendants(matching: .any)["navigation.back"].tap()
+        activate(app.descendants(matching: .any)["navigation.back"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
     }
 
@@ -91,13 +87,12 @@ final class T04AuthUITests: XCTestCase {
         let app = launch(arguments: ["-uitest-qc-disabled"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
-        field.tap()
-        field.typeText("example.com")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("example.com", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["credentials.root"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.descendants(matching: .any)["login.root"].exists)
         save(app.screenshot(), name: "password-quick-connect-disabled")
-        app.descendants(matching: .any)["navigation.back"].tap()
+        activate(app.descendants(matching: .any)["navigation.back"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["address.root"].waitForExistence(timeout: 10))
     }
 
@@ -105,12 +100,11 @@ final class T04AuthUITests: XCTestCase {
         let app = launch(arguments: ["-uitest-qc-expired"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
-        field.tap()
-        field.typeText("example.com")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("example.com", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         let quick = app.descendants(matching: .any)["login.quickConnect"]
         XCTAssertTrue(quick.waitForExistence(timeout: 10))
-        quick.tap()
+        activate(quick, in: app)
         let renew = app.descendants(matching: .any)["quickconnect.newCode"]
         XCTAssertTrue(renew.waitForExistence(timeout: 10))
         #if os(tvOS)
@@ -118,7 +112,7 @@ final class T04AuthUITests: XCTestCase {
         #endif
         XCTAssertEqual(app.descendants(matching: .any)["address.error"].value as? String, "The code expired")
         save(app.screenshot(), name: "quick-connect-expired")
-        renew.tap()
+        activate(renew, in: app)
         XCTAssertTrue(app.descendants(matching: .any)["quickconnect.root"].waitForExistence(timeout: 10))
     }
 
@@ -126,32 +120,30 @@ final class T04AuthUITests: XCTestCase {
         let app = launch()
         openPassword(app)
         let username = app.descendants(matching: .any)["credentials.username"]
-        username.tap()
-        username.typeText("Ada")
+        typeText("Ada", into: username, in: app)
         let password = app.secureTextFields["credentials.password"]
-        password.tap()
-        password.typeText("sample")
-        app.descendants(matching: .any)["credentials.signIn"].tap()
+        typeText("sample", into: password, in: app)
+        activate(app.descendants(matching: .any)["credentials.signIn"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
         // Settings is a catalog key used for the tab label on both platforms.
-        app.descendants(matching: .any).matching(identifier: "Settings").firstMatch.tap()
+        activate(app.descendants(matching: .any).matching(identifier: "Settings").firstMatch, in: app)
         let signOut = app.descendants(matching: .any)["settings.signOut"]
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["settings.version"].exists)
         save(app.screenshot(), name: "settings")
-        signOut.tap()
+        activate(signOut, in: app)
         let cancel = app.descendants(matching: .any)["logout.cancel"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 10))
         #if os(tvOS)
             XCTAssertTrue(cancel.hasFocus)
         #endif
         save(app.screenshot(), name: "sign-out-confirmation")
-        cancel.tap()
+        activate(cancel, in: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
-        app.descendants(matching: .any).matching(identifier: "Settings").firstMatch.tap()
+        activate(app.descendants(matching: .any).matching(identifier: "Settings").firstMatch, in: app)
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
-        signOut.tap()
-        app.descendants(matching: .any)["logout.confirm"].tap()
+        activate(signOut, in: app)
+        activate(app.descendants(matching: .any)["logout.confirm"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["login.serverName"].exists)
     }
@@ -165,19 +157,18 @@ final class T04AuthUITests: XCTestCase {
 
     private func openAddress(_ app: XCUIApplication) {
         XCTAssertTrue(app.descendants(matching: .any)["welcome.connect"].waitForExistence(timeout: 20))
-        app.descendants(matching: .any)["welcome.connect"].tap()
+        activate(app.descendants(matching: .any)["welcome.connect"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["address.field"].waitForExistence(timeout: 10))
     }
 
     private func openPassword(_ app: XCUIApplication) {
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
-        field.tap()
-        field.typeText("media.example")
-        app.descendants(matching: .any)["address.continue"].tap()
+        typeText("media.example", into: field, in: app)
+        activate(app.descendants(matching: .any)["address.continue"], in: app)
         let password = app.descendants(matching: .any)["login.password"]
         XCTAssertTrue(password.waitForExistence(timeout: 10))
-        password.tap()
+        activate(password, in: app)
     }
 
     private func save(_ shot: XCUIScreenshot, name: String) {
