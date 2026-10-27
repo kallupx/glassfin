@@ -129,8 +129,11 @@ public final class HomeViewModel {
 
     /// Discover libraries concurrently with the two personal rows.
     public func load() async {
+        let interval = signposter.begin(.homeSectionsLoaded)
+        defer { signposter.end(interval) }
         restoreSnapshot()
-        async let personal: Void = reload(libraryIDs: [], coldStart: lastFetch == nil, refreshLatest: false)
+        async let personal: Void = reload(
+            libraryIDs: [], coldStart: lastFetch == nil, refreshLatest: false, measureSections: false)
         await discoverLibraries()
         await reloadLatest()
         await personal
@@ -212,14 +215,16 @@ public final class HomeViewModel {
         await reload(libraryIDs: [], refreshLatest: false)
     }
 
-    public func reload(libraryIDs: [String], coldStart: Bool = false, refreshLatest: Bool = true) async {
+    public func reload(
+        libraryIDs: [String], coldStart: Bool = false, refreshLatest: Bool = true, measureSections: Bool = true
+    ) async {
         revision += 1
         let current = revision
         let generation = app.requestGeneration
         var cold = coldStart ? signposter.begin(.coldStartHomeFirstRow) : nil
-        let interval = signposter.begin(.homeSectionsLoaded)
+        let interval = measureSections ? signposter.begin(.homeSectionsLoaded) : nil
         defer {
-            signposter.end(interval)
+            if let interval { signposter.end(interval) }
             if let cold { signposter.end(cold) }
         }
         restoreSnapshot()

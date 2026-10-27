@@ -21,7 +21,7 @@ All tests use mock metadata and credentials. UI tests find accessibility identif
 | T06-13 | Server failure keeps content + banner, session remains signed in | `T06HomeTests.testT06_13_serverDownRetainsVisibleContentAndBanner`; `T06HomeUITests.testT06_13_cachedServerDownKeepsCardsAndNonFocusableBanner` |
 | T06-14 | No content → existing server-down key, retry; shell/Settings usable | `T06HomeTests.testT06_14_noContentUsesExistingServerDownTitleKey`; `T06HomeUITests.testT06_14_serverDownStillAllowsSettingsAndSignOut` |
 | T06-15 | Existing 10 s ping recovers without discarding content | `T06HomeTests.testT06_15_pingRecoversAndKeepsCachedContent`, `testT06_15_automaticPingRunsAtTenSecondsAndRecovers`; existing `T02BehaviorTests.testT02_26_serverRestartDoesNotLogOutAndInvalidatesCaches` and M02 ping tests |
-| T06-16 | Any API/image 401 cancels siblings, signs in once, no retry | `T06HomeTests.testT06_16_latest401EndsSessionOnceEvenWhenOtherRowsSucceed`; `T06SessionTests.testT06_16_image401CancelsOtherRequestsAndDoesNotRetry`; existing `T02BehaviorTests.testT02_07_authenticated401LogsOutOnce` |
+| T06-16 | Any API/image 401 cancels siblings, signs in once, no retry | `T06HomeTests.testT06_16_latest401EndsSessionOnceEvenWhenOtherRowsSucceed`; `T06SessionTests.testT06_16_image401CancelsOtherRequestsAndDoesNotRetry`; `T06SocketTests.testT06_16_socket401StopsWithoutReconnect`; existing `T02BehaviorTests.testT02_07_authenticated401LogsOutOnce` |
 | T06-17 | Played/favorite/reset actions, optimistic rollback, context menu | `T06HomeTests.testT06_17_actionsCommitAndFailedEditsRestoreTheRow`; `T06HomeUITests.testT06_17_longPressShowsContextActions`; `LiveServerTests.testT06_01_homeEndpointsAndResetPosition` also tagged T06-17 |
 | T06-18 | Menu chain and tab reachability | Back/Settings portions covered by T06-09/T06-14 UI tests. Manual: full library → detail → root → tab → exit chain requires M07. |
 | T06-19 | 1080p/4K default and Reduce Transparency; screenshot artifacts | `T06HomeSnapshotTests.testT06_19_homeDefaultAndOpaqueBannerAt1080And4K`; `T06HomeUITests.testT06_19_accessibilityScreenshots`. Snapshot content/banner at both scales; XCUITest captures real tab chrome. Execution blocked on Xcode and the separate M05 compile fixes. |
@@ -59,3 +59,11 @@ On a Mac, after integrating the separate M05 compile fixes: `bash scripts/macos-
 DEBUG direct launch: `-uitest-mock-server -uitest-reset -uitest-home`. Optional scenarios: `-uitest-home-empty`, `-uitest-home-partial`, `-uitest-home-next-only`, `-uitest-home-down`, `-uitest-home-cached-down`, `-uitest-home-refresh`, `-uitest-home-reduce-transparency`, `-uitest-home-reduce-motion`. These switches are stripped from Release builds.
 
 Disposable live matrix: `bash scripts/docker-integration.sh` (requires Docker + ffmpeg; covers the existing live suite plus the T06 Home endpoint/reset test). Never use a personal server for these tests.
+
+## Local verification result (2026-10-27)
+
+- Swift 6.4.1 on Linux: `swift build` passed; `swift test` passed **263 tests**, with **3 live integration tests skipped** and zero failures. This includes **36 passing M06 logic/security tests**.
+- CI's native-driver `scripts/coverage-gate.sh` passed: **90.44%** line coverage (5,838/6,455; minimum 80%).
+- Exact required recursive strict swift-format command passed with zero findings.
+- Design-system, string-catalog, source-grep, DEBUG-only-string (including self-test), license, and entitlement scripts passed. `git diff --check` passed.
+- Apple-only downsampling, XCUITests, snapshot rendering, real Jellyfin/Docker execution, and hardware performance were not executed here. Xcode and Docker are absent. This is recorded as pending evidence, not a successful platform build or visual review.

@@ -48,11 +48,25 @@ private final class HeaderEventSocket: RealtimeSocket, @unchecked Sendable {
         self.onUnauthorized = onUnauthorized
     }
 
-    func connect() async throws { socket.resume() }
+    deinit {
+        socket.cancel(with: .goingAway, reason: nil)
+        session.invalidateAndCancel()
+    }
+
+    func connect() async throws {
+        try Task.checkCancellation()
+        socket.resume()
+    }
 
     func receive() async throws -> Data {
         do {
-            switch try await socket.receive() {
+            let message = try await withTaskCancellationHandler {
+                try await socket.receive()
+            } onCancel: {
+                socket.cancel(with: .goingAway, reason: nil)
+                session.invalidateAndCancel()
+            }
+            switch message {
             case .data(let data): return data
             case .string(let text): return Data(text.utf8)
             @unknown default: throw APIError.decoding
