@@ -66,13 +66,13 @@ final class T02FoundationTests: XCTestCase {
         for (error, context, offline, expected) in cases {
             let mapped = AppErrorMapping.map(error, context: context, deviceOffline: offline)
             XCTAssertEqual(mapped, expected)
-            XCTAssertEqual(SessionTermination.shouldEndSession(mapped), mapped == .unauthorized)
+            XCTAssertEqual(CoreModels.SessionTermination.shouldEndSession(mapped), mapped == .unauthorized)
         }
         XCTAssertTrue(AppErrorMapping.isConnectivity(.offline))
         XCTAssertTrue(AppErrorMapping.isConnectivity(.serverUnreachable))
         XCTAssertFalse(AppErrorMapping.isConnectivity(.forbidden))
-        XCTAssertFalse(SessionTermination.shouldEndSession(.serverError(status: 500)))
-        XCTAssertFalse(SessionTermination.shouldEndSession(.serverUnreachable))
+        XCTAssertFalse(CoreModels.SessionTermination.shouldEndSession(.serverError(status: 500)))
+        XCTAssertFalse(CoreModels.SessionTermination.shouldEndSession(.serverUnreachable))
     }
 
     func testT02_09_userFacingCopyAndDiagnosticsOmitTokens() {

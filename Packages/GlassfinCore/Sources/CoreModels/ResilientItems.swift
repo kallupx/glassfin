@@ -58,8 +58,11 @@ public enum ResilientItemDecoder {
             guard let id = hint.ItemId ?? hint.Id else { continue }
             items.append(
                 MediaItem(
-                    id: id, kind: MediaKind.from(serverType: hint.`Type` ?? ""),
-                    name: MetadataSanitizer.plainText(hint.Name ?? "")))
+                    id: id,
+                    kind: MediaKind.from(serverType: hint.`Type` ?? ""),
+                    name: MetadataSanitizer.plainText(hint.Name ?? "")
+                )
+            )
         }
         return items
     }

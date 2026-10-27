@@ -53,8 +53,7 @@ public struct SessionEndResult: Sendable, Equatable {
     }
 
     public var userMessage: String? {
-        guard userMessageKey != nil else { return nil }
-        return SessionEndCopy.serverSessionMayRemain
+        serverSessionMayRemain ? SessionEndCopy.serverSessionMayRemain : nil
     }
 }
 
