@@ -70,7 +70,7 @@ final class T04AuthUITests: XCTestCase {
     }
 
     func testT04_49_backFromQuickConnectReturnsToTheMethodScreen() {
-        let app = launch()
+        let app = launch(arguments: ["-uitest-qc-pending"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
         typeText("media.example", into: field, in: app)
