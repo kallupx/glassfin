@@ -190,7 +190,9 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
 
     func makeURLRequest(_ request: APIRequest) throws -> URLRequest {
         let url = try Self.url(server: server, path: request.path, query: request.query)
-        if RedirectPolicy.containsCredentialQuery(url) {
+        let hasTokenQuery = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .contains { $0.name.lowercased() == "token" }
+        if RedirectPolicy.containsCredentialQuery(url) || hasTokenQuery {
             throw APIError.invalidURL
         }
         var urlRequest = URLRequest(url: url)

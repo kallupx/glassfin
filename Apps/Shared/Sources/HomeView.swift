@@ -12,8 +12,12 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
     @State private var focusedItem: MediaItem?
-    @State private var backdropItem: MediaItem?
+    @State private var backdropSelection = HomeBackdropModel()
+    @State private var backdropID: String?
     @State private var backdrop: Image?
+    #if DEBUG
+        @State private var testRefreshFinished = false
+    #endif
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -22,6 +26,8 @@ struct HomeView: View {
                 backdrop.resizable().scaledToFill().ignoresSafeArea()
                     .backgroundExtensionEffect()
                     .overlay(ContentPaint.subtitleBacking)
+                    .overlay(BackdropScrim())
+                    .id(backdropID)
                     .accessibilityHidden(true)
                     .transition(.opacity)
             }
@@ -36,17 +42,29 @@ struct HomeView: View {
             }
         }
         .clipped()
+        #if DEBUG
+            .overlay(alignment: .bottomTrailing) {
+                if testRefreshFinished {
+                    Text(verbatim: "1").frame(width: 1, height: 1)
+                    .accessibilityIdentifier("home.test.refreshed")
+                }
+            }
+            .task {
+                guard ProcessInfo.processInfo.arguments.contains("-uitest-home-refresh") else { return }
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                await model.load()
+                testRefreshFinished = true
+            }
+        #endif
         .accessibilityIdentifier("home.root")
         .task { model.start() }
         .task { await model.observePlayback() }
-        .task(id: focusedItem?.id) {
-            let item = focusedItem
-            do { try await Task.sleep(for: HomePolicy.backdropDebounce) } catch { return }
-            guard !Task.isCancelled else { return }
-            backdropItem = item
+        .onChange(of: focusedItem?.id) { _, _ in backdropSelection.focus(focusedItem) }
+        .task(id: backdropSelection.item?.id) { await loadBackdrop() }
+        .onDisappear {
+            model.onDisappear()
+            backdropSelection.cancel()
         }
-        .task(id: backdropItem?.id) { await loadBackdrop() }
-        .onDisappear { model.onDisappear() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.foreground() }
             if phase == .background { model.onDisappear() }
@@ -54,7 +72,7 @@ struct HomeView: View {
         .onChange(of: app.connectivity) { old, new in
             if new == .online && (old == .serverUnreachable || old == .offline) { model.reconnect() }
         }
-        .onChange(of: app.userDataGeneration) { _, _ in Task { await model.userDataDidChange() } }
+        .onChange(of: app.userDataGeneration) { _, _ in model.perform { await $0.userDataDidChange() } }
         .onChange(of: app.libraryGeneration) { _, _ in model.libraryDidChange() }
     }
 
@@ -64,9 +82,9 @@ struct HomeView: View {
             ErrorStateView(
                 messageOverride: AuthCopy.localized(key), failure: .serverUnreachable, attempts: 0,
                 onRetry: {
-                    Task {
+                    model.perform { home in
                         await app.retryNow()
-                        model.start()
+                        home.start()
                     }
                 }, onSwitchServer: { app.beginServerSwitch() }
             )
@@ -124,7 +142,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private func row(id: String, title: String, state: LoadState<[MediaItem]>, style: CardStyle) -> some View {
-        if state.showsSkeleton || (state.value == nil && state.presentedError == nil) {
+        if state.showsSkeleton || isIdle(state) {
             SkeletonRow(style: style, count: 3, phase: 0, identifier: "home.\(id).skeleton")
         } else if !(state.value ?? []).isEmpty || state.presentedError != nil {
             VStack(alignment: .leading, spacing: SpacingToken.s) {
@@ -133,7 +151,7 @@ struct HomeView: View {
                     HStack(spacing: SpacingToken.m) {
                         Text(verbatim: AuthCopy.localized(key)).accessibilityValue(key.rawValue)
                         Button {
-                            Task { await model.retry(rowID: id) }
+                            model.perform { await $0.retry(rowID: id) }
                         } label: {
                             Copy.text(.actionRetry)
                         }
@@ -147,12 +165,17 @@ struct HomeView: View {
                     session: session, imageLoader: imageLoader,
                     onFocus: { focusedItem = $0 }, onDetail: onDetail,
                     onPlay: { play($0) },
-                    onPlayed: { item in Task { await model.setPlayed(item, played: !item.userData.played) } },
-                    onFavorite: { item in Task { await model.setFavorite(item) } },
-                    onRemove: { item in Task { await model.removeFromResume(item) } })
+                    onPlayed: { item in model.perform { await $0.setPlayed(item, played: !item.userData.played) } },
+                    onFavorite: { item in model.perform { await $0.setFavorite(item) } },
+                    onRemove: { item in model.perform { await $0.removeFromResume(item) } })
             }
             .accessibilityIdentifier("home.\(id)")
         }
+    }
+
+    private func isIdle(_ state: LoadState<[MediaItem]>) -> Bool {
+        if case .idle = state { return true }
+        return false
     }
 
     private func play(_ item: MediaItem) {
@@ -161,7 +184,7 @@ struct HomeView: View {
     }
 
     private func loadBackdrop() async {
-        guard let item = backdropItem, let tag = item.images.backdropTags.first else { return }
+        guard let item = backdropSelection.item, let tag = item.images.backdropTags.first else { return }
         let resource = ImageResource(
             serverID: session.server.id, itemID: item.id, type: .backdrop, tag: tag,
             width: Int(1920 * displayScale), height: Int(1080 * displayScale))
@@ -170,6 +193,7 @@ struct HomeView: View {
             let decoded = try await HomeImageDecoder.downsample(data, width: resource.width, height: resource.height)
             guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : .easeInOut(duration: HomePolicy.backdropFade)) {
+                backdropID = item.id
                 backdrop = Image(decorative: decoded, scale: displayScale)
             }
         } catch {
@@ -214,17 +238,20 @@ private struct HomeMediaRow: View {
                         } label: {
                             Copy.text(.actionPlay)
                         }
+                        .accessibilityIdentifier("home.context.play")
                         Button {
                             onPlayed(item)
                         } label: {
                             Copy.text(item.userData.played ? .actionMarkUnplayed : .actionMarkPlayed)
                         }
+                        .accessibilityIdentifier("home.context.played")
                         if rowID == "resume" {
                             Button {
                                 onRemove(item)
                             } label: {
                                 Copy.text(.homeRemoveResume)
                             }
+                            .accessibilityIdentifier("home.context.removeResume")
                         }
                         if let seriesID = item.seriesID {
                             Button {
@@ -232,12 +259,14 @@ private struct HomeMediaRow: View {
                             } label: {
                                 Copy.text(.homeGoToSeries)
                             }
+                            .accessibilityIdentifier("home.context.series")
                         }
                         Button {
                             onFavorite(item)
                         } label: {
                             Copy.text(item.userData.isFavorite ? .actionRemoveFavorite : .actionAddFavorite)
                         }
+                        .accessibilityIdentifier("home.context.favorite")
                     }
                 }
             }
@@ -253,7 +282,7 @@ private struct HomeMediaRow: View {
             rememberedID = value
             onFocus(item)
         }
-        .onChange(of: items.map(\.id)) { old, new in
+        .onChange(of: items.map(\.id)) { _, new in
             if let focus, !new.contains(focus) { self.focus = rememberedID ?? new.first }
         }
     }
@@ -267,6 +296,7 @@ private struct HomeCard: View {
     let loader: any HomeImageLoading
     var onSelect: () -> Void
     @State private var image: Image?
+    @State private var placeholderImage: Image?
     @Environment(\.displayScale) private var displayScale
 
     private var resource: ImageResource? {
@@ -282,18 +312,24 @@ private struct HomeCard: View {
     var body: some View {
         Button(action: onSelect) {
             PosterFace(
-                image: image,
+                image: image, placeholderImage: placeholderImage,
                 content: PosterContent(
                     id: item.id, title: item.name,
                     progress: PlaybackProgress.measure(position: item.userData.playbackPosition, runtime: item.runtime),
                     isWatched: item.userData.played, unplayedCount: item.userData.unplayedCount,
-                    blurHash: item.images.primaryBlurHash),
+                    blurHash: nil),
                 style: style, isFocused: focused)
         }
         .posterButtonStyle()
         .accessibilityLabel(Text(verbatim: item.name))
         .task(id: resource) {
             image = nil
+            let hash = item.images.primaryBlurHash
+            let decodedPlaceholder = await Task.detached(priority: .utility) {
+                hash.flatMap { BlurHash.image(from: $0, width: 32, height: 32) }
+            }.value
+            guard !Task.isCancelled else { return }
+            placeholderImage = decodedPlaceholder.map { Image(decorative: $0, scale: 1) }
             guard let resource else { return }
             do {
                 let data = try await loader.data(for: resource)

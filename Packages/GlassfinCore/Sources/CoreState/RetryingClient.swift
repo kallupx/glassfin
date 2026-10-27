@@ -58,8 +58,7 @@ public final class RequestScope: @unchecked Sendable {
     public init() {}
 
     @discardableResult
-    public func track<T: Sendable, E: Error>(_ task: Task<T, E>) -> UUID {
-        let id = UUID()
+    public func track<T: Sendable, E: Error>(_ task: Task<T, E>, id: UUID = UUID()) -> UUID {
         lock.lock()
         tasks[id] = { task.cancel() }
         lock.unlock()

@@ -21,6 +21,7 @@ struct GlassBanner: View {
         .ownGlassSurface(in: Capsule())
         .focusable(false)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(messageOverride ?? Copy.string(message))
         .accessibilityIdentifier(identifier)
     }
 }

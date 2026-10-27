@@ -10,6 +10,7 @@ public enum HomePolicy {
     public static let libraryDebounce: Duration = .seconds(2)
     public static let backdropDebounce: Duration = .milliseconds(250)
     public static let backdropFade = 0.3
+    public static func backdropFade(reduceMotion: Bool) -> Double { reduceMotion ? 0 : backdropFade }
 }
 
 public struct HomeLibraryRow: Identifiable, Sendable {
@@ -30,6 +31,12 @@ public enum HomeMetadata {
         return item
     }
 
+    public static func items(_ sources: [MediaItem]) -> [MediaItem] {
+        var seen: Set<String> = []
+        return sources.filter { ItemID($0.id) != nil && seen.insert($0.id).inserted }
+            .prefix(HomePolicy.rowLimit).map(item)
+    }
+
     public static func library(_ source: Library) -> Library {
         var library = source
         library.name = MetadataPolicy.clean(library.name, limit: MetadataPolicy.nameMax)
@@ -38,7 +45,7 @@ public enum HomeMetadata {
 
     public static func isVideoLibrary(_ library: Library) -> Bool {
         switch library.collectionType?.lowercased() {
-        case nil, "", "movies", "tvshows", "homevideos", "boxsets", "mixed": true
+        case nil, "", "movies", "tvshows", "homevideos", "boxsets", "mixed", "musicvideos", "trailers": true
         default: false
         }
     }
@@ -73,7 +80,8 @@ public final class HomeViewModel {
         resume.isLoading || nextUp.isLoading || libraries.isLoading || latestRows.contains { $0.state.isLoading }
     }
     public var isEmpty: Bool {
-        resume.value != nil && nextUp.value != nil && !hasContent && !isLoading && resume.presentedError == nil
+        (lastFetch != nil || (resume.value != nil && nextUp.value != nil)) && !hasContent && !isLoading
+            && resume.presentedError == nil
             && nextUp.presentedError == nil
             && libraries.presentedError == nil && latestRows.allSatisfy { $0.state.presentedError == nil }
     }
@@ -94,10 +102,12 @@ public final class HomeViewModel {
     @ObservationIgnored private let scope: RequestScope
     @ObservationIgnored private let log: any GlassfinLog
     @ObservationIgnored private let requireSnapshotOwner: Bool
+    @ObservationIgnored private var actions: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var libraryTask: Task<Void, Never>?
     @ObservationIgnored private var revision = 0
     @ObservationIgnored private var restoredSnapshot = false
+    @ObservationIgnored private var resetResumeIDs: Set<String> = []
 
     public init(
         library: any LibraryService, userData: UserDataStore, snapshots: HomeSnapshotStore,
@@ -120,7 +130,7 @@ public final class HomeViewModel {
     /// Discover libraries concurrently with the two personal rows.
     public func load() async {
         restoreSnapshot()
-        async let personal: Void = reload(libraryIDs: [], refreshLatest: false)
+        async let personal: Void = reload(libraryIDs: [], coldStart: lastFetch == nil, refreshLatest: false)
         await discoverLibraries()
         await reloadLatest()
         await personal
@@ -129,17 +139,35 @@ public final class HomeViewModel {
 
     public func start(libraryIDs: [String], coldStart: Bool = false) {
         task?.cancel()
-        task = Task { await reload(libraryIDs: libraryIDs, coldStart: coldStart) }
-        if let task { scope.track(task) }
+        let id = UUID()
+        task = Task {
+            defer { scope.untrack(id) }
+            await reload(libraryIDs: libraryIDs, coldStart: coldStart)
+        }
+        if let task { scope.track(task, id: id) }
     }
 
     public func start() {
         task?.cancel()
-        task = Task { await load() }
-        if let task { scope.track(task) }
+        let id = UUID()
+        task = Task {
+            defer { scope.untrack(id) }
+            await load()
+        }
+        if let task { scope.track(task, id: id) }
+    }
+
+    public func perform(_ work: @escaping @MainActor @Sendable (HomeViewModel) async -> Void) {
+        let id = UUID()
+        actions[id] = Task {
+            defer { actions[id] = nil }
+            await work(self)
+        }
     }
 
     public func onDisappear() {
+        for action in actions.values { action.cancel() }
+        actions.removeAll()
         revision += 1
         task?.cancel()
         libraryTask?.cancel()
@@ -161,17 +189,24 @@ public final class HomeViewModel {
 
     public func libraryDidChange() {
         libraryTask?.cancel()
+        let id = UUID()
         libraryTask = Task {
+            defer { scope.untrack(id) }
             do { try await clock.sleep(for: HomePolicy.libraryDebounce) } catch { return }
             guard !Task.isCancelled else { return }
             await discoverLibraries()
             await reloadLatest()
             saveSnapshot()
         }
-        if let libraryTask { scope.track(libraryTask) }
+        if let libraryTask { scope.track(libraryTask, id: id) }
     }
 
     public func userDataDidChange() async {
+        for id in resetResumeIDs {
+            if let state = await userData.state(for: id), state.playbackPosition > .zero {
+                resetResumeIDs.remove(id)
+            }
+        }
         await refreshFromStore()
         await responses.invalidateAll()
         await reload(libraryIDs: [], refreshLatest: false)
@@ -225,6 +260,10 @@ public final class HomeViewModel {
                     continue
                 }
                 await apply(result, id: id)
+                if hasContent, let token = cold {
+                    signposter.end(token)
+                    cold = nil
+                }
             }
         }
         guard !Task.isCancelled, current == revision, generation == app.requestGeneration else { return }
@@ -254,7 +293,7 @@ public final class HomeViewModel {
         defer { signposter.end(interval) }
         if let items = resume.value {
             let projected = await userData.project(items)
-            replace(.success(projected.filter { !$0.userData.played }), id: "resume")
+            replace(.success(projected.filter { !$0.userData.played && !resetResumeIDs.contains($0.id) }), id: "resume")
         }
         if let items = nextUp.value { replace(.success(await userData.project(items)), id: "nextUp") }
         for row in latestRows {
@@ -278,6 +317,7 @@ public final class HomeViewModel {
 
     public func removeFromResume(_ item: MediaItem) async {
         // TODO(Q6-01): verify reset-position semantics against all three Jellyfin versions.
+        resetResumeIDs.insert(item.id)
         await edit(
             item,
             update: {
@@ -286,6 +326,7 @@ public final class HomeViewModel {
             },
             send: { try await self.library.updateUserData(id: item.id, position: .zero, played: false) }
         )
+        if actionError != nil { resetResumeIDs.remove(item.id) }
         await userDataDidChange()
     }
 
@@ -295,6 +336,9 @@ public final class HomeViewModel {
         guard ItemID(item.id) != nil else { return }
         var state = item.userData
         update(&state)
+        let previousResume = resume
+        let previousNext = nextUp
+        let previousLatest = latestRows
         let previous = await userData.applyOptimistic(id: item.id, next: state)
         await refreshFromStore()
         do {
@@ -303,6 +347,9 @@ public final class HomeViewModel {
             actionError = nil
         } catch {
             await userData.rollback(id: item.id, to: previous)
+            resume = previousResume
+            nextUp = previousNext
+            latestRows = previousLatest
             let mapped = (error as? APIError).map { map($0) } ?? .serverUnreachable
             actionError = mapped
             app.handle(mapped)
@@ -329,6 +376,7 @@ public final class HomeViewModel {
             let mapped = map(error)
             guard mapped != .cancelled, !Task.isCancelled else { return }
             libraries = .failed(mapped, previous: libraries.value)
+            AppErrorMessage.report(mapped, log: log)
             app.handle(mapped)
         }
     }
@@ -359,20 +407,23 @@ public final class HomeViewModel {
 
     private static func fetch(_ load: @Sendable () async throws -> [MediaItem]) async -> Result<[MediaItem], APIError> {
         do {
-            var seen: Set<String> = []
-            let items = try await load().filter { ItemID($0.id) != nil && seen.insert($0.id).inserted }
-            return .success(Array(items.prefix(HomePolicy.rowLimit)).map(HomeMetadata.item))
+            return .success(HomeMetadata.items(try await load()))
         } catch { return .failure(error as? APIError ?? .network) }
     }
 
     private func apply(_ result: Result<[MediaItem], APIError>, id: String) async {
         switch result {
         case .success(let items):
-            replace(.success(await userData.project(items)), id: id)
+            for item in items { await userData.replaceFromServer(id: item.id, item.userData) }
+            let projected = await userData.project(items)
+            let visible =
+                id == "resume" ? projected.filter { !$0.userData.played && !resetResumeIDs.contains($0.id) } : projected
+            replace(.success(visible), id: id)
         case .failure(let error):
             let mapped = map(error)
             guard mapped != .cancelled else { return }
             replace(.failure(mapped), id: id)
+            AppErrorMessage.report(mapped, log: log)
             app.handle(mapped)
         }
     }
@@ -425,15 +476,15 @@ public final class HomeViewModel {
                 guard saved.serverID == session.server.id, saved.userID == session.userID else { return }
             }
         }
-        resume = .loaded(saved.resume.map(HomeMetadata.item))
-        nextUp = .loaded(saved.nextUp.map(HomeMetadata.item))
-        latest = .loaded(saved.latest.map(HomeMetadata.item))
+        resume = .loaded(HomeMetadata.items(saved.resume))
+        nextUp = .loaded(HomeMetadata.items(saved.nextUp))
+        latest = .loaded(HomeMetadata.items(saved.latest))
         let views = saved.libraries ?? []
         libraries = .loaded(views.map(HomeMetadata.library))
         latestRows = views.map {
             HomeLibraryRow(
                 library: HomeMetadata.library($0),
-                state: .loaded((saved.latestByLibrary?[$0.id] ?? []).map(HomeMetadata.item)))
+                state: .loaded(HomeMetadata.items(saved.latestByLibrary?[$0.id] ?? [])))
         }
     }
 

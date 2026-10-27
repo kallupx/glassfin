@@ -126,7 +126,7 @@ final class T04AuthUITests: XCTestCase {
         activate(app.descendants(matching: .any)["credentials.signIn"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
         // Settings is a catalog key used for the tab label on both platforms.
-        activate(app.descendants(matching: .any).matching(identifier: "Settings").firstMatch, in: app)
+        activate(app.descendants(matching: .any).matching(identifier: "design.tab.settings").firstMatch, in: app)
         let signOut = app.descendants(matching: .any)["settings.signOut"]
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["settings.version"].exists)
@@ -140,7 +140,7 @@ final class T04AuthUITests: XCTestCase {
         save(app.screenshot(), name: "sign-out-confirmation")
         activate(cancel, in: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
-        activate(app.descendants(matching: .any).matching(identifier: "Settings").firstMatch, in: app)
+        activate(app.descendants(matching: .any).matching(identifier: "design.tab.settings").firstMatch, in: app)
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
         activate(signOut, in: app)
         activate(app.descendants(matching: .any)["logout.confirm"], in: app)

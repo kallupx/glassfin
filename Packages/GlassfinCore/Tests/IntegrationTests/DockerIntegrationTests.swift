@@ -94,6 +94,31 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
+    /// T06-01, T06-17. Home endpoints and reset-position semantics on the disposable server.
+    func testT06_01_homeEndpointsAndResetPosition() async throws {
+        let target = try liveTarget()
+        let auth = try await signIn(target)
+        let identity = ClientIdentity(
+            deviceName: "Glassfin CI", deviceID: "glassfin-home-integration", version: "0.1.0", token: auth.accessToken)
+        let service = JellyfinLibraryService(client: HTTPJellyfinClient(server: target.url, identity: identity))
+        async let resume = service.resume(limit: 20)
+        async let next = service.nextUp(limit: 20)
+        let libraries = try await service.userViews()
+        XCTAssertFalse(libraries.isEmpty)
+        var item: MediaItem?
+        for library in libraries {
+            let latest = try await service.latest(in: library.id, limit: 20)
+            XCTAssertLessThanOrEqual(latest.count, 20)
+            if item == nil { item = latest.first }
+        }
+        _ = try await (resume, next)
+        let found = try XCTUnwrap(item)
+        try await service.updateUserData(id: found.id, position: .zero, played: false)
+        let state = try await service.userData(id: found.id)
+        XCTAssertEqual(state.playbackPosition, .zero)
+        XCTAssertFalse(state.played)
+    }
+
     private func signIn(_ target: Target) async throws -> AuthenticatedSession {
         let anonymous = ClientIdentity(
             deviceName: "Glassfin CI", deviceID: "glassfin-integration", version: "0.1.0")

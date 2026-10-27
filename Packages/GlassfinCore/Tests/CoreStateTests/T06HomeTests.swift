@@ -77,6 +77,34 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(h.library.nextCallCount(), calls)
     }
 
+    func testT06_04_latestFailureIsIsolatedToItsLibrary() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        h.library.latestByID[Sample.library] = .failure(.server(status: 500))
+        h.library.latestByID[Sample.other] = .success([Sample.movie()])
+        let home = h.home()
+        await home.reload(libraryIDs: [Sample.library, Sample.other])
+        XCTAssertEqual(home.latestRows[0].state.presentedError, .serverError(status: 500))
+        XCTAssertEqual(home.latestRows[1].state.value?.first?.id, Sample.movie)
+        XCTAssertTrue(home.hasContent)
+        h.library.latestByID[Sample.library] = .success([Sample.movie(id: Sample.season)])
+        await home.retry(rowID: Sample.library)
+        XCTAssertNil(home.latestRows[0].state.presentedError)
+        XCTAssertEqual(home.latestRows[1].state.value?.first?.id, Sample.movie)
+    }
+
+    func testT06_03_decodeFailureFinishesWithoutAnEndlessSkeleton() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        h.library.resumeError = .decoding
+        let home = h.home()
+        await home.load()
+        XCTAssertFalse(home.isLoading)
+        XCTAssertTrue(home.isEmpty)
+    }
+
     func testT06_05_playbackStopProjectsImmediatelyAndRefetchesPersonalRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -180,6 +208,21 @@ final class T06HomeTests: XCTestCase {
         XCTAssertNil(home.resume.value)
     }
 
+    func testT06_11_disappearanceAlsoCancelsSectionRetry() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        let home = h.home()
+        h.library.gate = ResumeGate()
+        h.library.resumeItems = [Sample.movie()]
+        home.perform { await $0.retry(rowID: "resume") }
+        await waitUntil { h.library.gate?.waiting() == 1 }
+        home.onDisappear()
+        h.library.gate?.releaseAll()
+        await waitUntil { h.library.didFinishResume() }
+        XCTAssertNil(home.resume.value)
+    }
+
     func testT06_12_snapshotPreservesLibraryGroupingAndRejectsOtherUser() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -247,6 +290,18 @@ final class T06HomeTests: XCTestCase {
         XCTAssertTrue(home.hasContent)
     }
 
+    func testT06_15_automaticPingRunsAtTenSecondsAndRecovers() async throws {
+        let h = Harness.make(automaticPing: true, suspendingClock: true)
+        defer { h.cleanup() }
+        try h.signIn()
+        h.app.handle(.serverUnreachable)
+        await h.suspending?.waitForSleeps(1)
+        XCTAssertEqual(h.suspending?.sleeps().first, NetworkThresholds.serverPingInterval)
+        h.suspending?.resumeAll()
+        await waitUntil { h.app.connectivity == .online }
+        XCTAssertEqual(h.pinger.calls(), 1)
+    }
+
     func testT06_16_latest401EndsSessionOnceEvenWhenOtherRowsSucceed() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -256,6 +311,40 @@ final class T06HomeTests: XCTestCase {
         await h.home().reload(libraryIDs: [Sample.library, Sample.other])
         XCTAssertEqual(h.app.sessionNoticeKey, .sessionExpired)
         XCTAssertEqual(h.secure.removed().count, 1)
+    }
+
+    func testT06_17_actionsCommitAndFailedEditsRestoreTheRow() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        let item = Sample.movie()
+        h.library.resumeItems = [item]
+        let home = h.home()
+        await home.reload(libraryIDs: [])
+        await home.setFavorite(item)
+        XCTAssertEqual(h.library.favorites().first?.1, true)
+        h.library.error = .forbidden
+        await home.setPlayed(item, played: true)
+        XCTAssertEqual(home.actionError, .forbidden)
+        XCTAssertEqual(home.resume.value?.first?.id, item.id)
+        h.library.error = nil
+        await home.removeFromResume(item)
+        XCTAssertEqual(h.library.userDataWrites().first?.1, .zero)
+        XCTAssertEqual(h.library.userDataWrites().first?.2, false)
+        XCTAssertEqual(home.resume.value, [])
+    }
+
+    func testT06_05_playedItemStaysRemovedDuringAStaleServerResponse() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        let item = Sample.movie()
+        h.library.resumeItems = [item]
+        let home = h.home()
+        await home.reload(libraryIDs: [])
+        await h.app.userData.recordPlayback(id: item.id, position: .seconds(3600), played: true, log: h.log)
+        await home.userDataDidChange()
+        XCTAssertEqual(home.resume.value, [])
     }
 
     func testT06_23_metadataIsCleanedThroughLiveAndCachedViewModels() async throws {
@@ -275,6 +364,9 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(visible.overview?.count, MetadataPolicy.overviewMax)
         XCTAssertFalse(visible.name.contains("\u{202e}"))
         XCTAssertFalse(visible.name.contains("\u{0007}"))
+        var poisoned = try XCTUnwrap(h.app.snapshots.load())
+        poisoned.resume = [item]
+        h.app.snapshots.save(poisoned)
         h.library.gate = ResumeGate()
         let restored = h.home()
         restored.start(libraryIDs: [])
@@ -282,6 +374,26 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(restored.resume.value?.first, visible)
         restored.onDisappear()
         h.library.gate?.releaseAll()
+    }
+
+    func testT06_26_backdropDebouncePublishesOnlyTheLastFocusAndCancels() async {
+        let clock = SuspendingClock()
+        let backdrop = HomeBackdropModel(clock: clock)
+        backdrop.focus(Sample.movie())
+        await clock.waitForSleeps(1)
+        backdrop.focus(Sample.movie(id: Sample.other))
+        await clock.waitForSleeps(2)
+        XCTAssertNil(backdrop.item)
+        XCTAssertEqual(clock.sleeps(), [HomePolicy.backdropDebounce, HomePolicy.backdropDebounce])
+        clock.resumeAll()
+        await waitUntil { backdrop.item?.id == Sample.other }
+        backdrop.focus(Sample.movie(id: Sample.season))
+        await clock.waitForSleeps(3)
+        backdrop.cancel()
+        clock.resumeAll()
+        XCTAssertEqual(backdrop.item?.id, Sample.other)
+        XCTAssertEqual(HomePolicy.backdropFade(reduceMotion: true), 0)
+        XCTAssertEqual(HomePolicy.backdropFade(reduceMotion: false), HomePolicy.backdropFade)
     }
 
     func testT06_25_rowsAreBoundedAndDuplicateIDsAreRemoved() async throws {

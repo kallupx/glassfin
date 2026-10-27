@@ -432,6 +432,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         }
 
         func currentUser(on server: ServerInfo, token: String) async throws(APIError) -> UserSession {
+            if ProcessInfo.processInfo.arguments.contains("-uitest-home-cached-down") { throw .network }
             _ = token
             return UserSession(server: server, userID: Self.user, userName: "Ada", isAdministrator: false)
         }

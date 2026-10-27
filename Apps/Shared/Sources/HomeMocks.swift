@@ -17,13 +17,22 @@ import SwiftUI
                 server: server, userID: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", userName: "1", isAdministrator: false)
             try? app.didSignIn(session, token: "uitest-token")
             app.snapshots.purge()
+            if ProcessInfo.processInfo.arguments.contains("-uitest-home-cached-down") {
+                var snapshot = HomeSnapshot(
+                    resume: [HomeMockLibrary.item(0, resume: true)], nextUp: [HomeMockLibrary.item(20)], latest: [])
+                snapshot.serverID = session.server.id
+                snapshot.userID = session.userID
+                snapshot.libraries = [Library(id: HomeMockLibrary.libraryID, name: "1", collectionType: "movies")]
+                snapshot.latestByLibrary = [HomeMockLibrary.libraryID: [HomeMockLibrary.item(40)]]
+                app.snapshots.save(snapshot)
+            }
         }
 
         static var mode: String {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-uitest-home-empty") { return "empty" }
             if args.contains("-uitest-home-partial") { return "partial" }
-            if args.contains("-uitest-home-down") { return "down" }
+            if args.contains("-uitest-home-down") || args.contains("-uitest-home-cached-down") { return "down" }
             if args.contains("-uitest-home-next-only") { return "nextOnly" }
             return "all"
         }

@@ -19,6 +19,9 @@ struct HomeRootView: View {
                 ProgressView().accessibilityIdentifier("home.loading")
             }
         }
+        #if DEBUG
+            .modifier(HomeAccessibilityOverrides())
+        #endif
         .task {
             guard context == nil, case .signedIn(let session) = flow.appPhase else { return }
             context = HomeContext(flow: flow, session: session)
@@ -147,3 +150,20 @@ private final class HomeContext {
 private struct HomeUnavailableClient: JellyfinAPIClient {
     func send(_ request: APIRequest) async throws(APIError) -> Data { throw .network }
 }
+
+#if DEBUG
+    private struct HomeAccessibilityOverrides: ViewModifier {
+        @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        func body(content: Content) -> some View {
+            let args = ProcessInfo.processInfo.arguments
+            content
+                .environment(
+                    \.accessibilityReduceTransparency,
+                    reduceTransparency || args.contains("-uitest-home-reduce-transparency")
+                )
+                .environment(\.accessibilityReduceMotion, reduceMotion || args.contains("-uitest-home-reduce-motion"))
+        }
+    }
+#endif

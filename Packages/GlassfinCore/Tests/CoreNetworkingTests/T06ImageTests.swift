@@ -27,6 +27,16 @@ final class T06ImageTests: XCTestCase {
         XCTAssertEqual(client.session.configuration.urlCache, nil)
     }
 
+    func testT06_20_inheritedCredentialQueriesAreRejected() throws {
+        for name in ["token", "Token", "ApiKey", "api" + "_key"] {
+            let server = try XCTUnwrap(URL(string: "https://media.example?\(name)=secret"))
+            let client = HTTPJellyfinClient(
+                server: server, identity: ClientIdentity(deviceName: "TV", deviceID: "d", version: "1", token: "secret")
+            )
+            XCTAssertThrowsError(try client.makeURLRequest(resource.request()))
+        }
+    }
+
     func testT06_21_imageCacheKeyIsStableSHA256OfIdentityTuple() {
         let expected = CertificateFingerprint.sha256Hex(
             Data("6:server32:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7:Primary5:a&b?#3:2503:375".utf8))
