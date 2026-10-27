@@ -93,6 +93,7 @@ targets:
     type: bundle.ui-testing
     platform: tvOS
     sources:
+      # Includes T07 library/detail focus and navigation tests with DEBUG fixtures.
       - path: Apps/Shared/UITests
     dependencies:
       - target: Glassfin-tvOS
@@ -106,6 +107,7 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     sources:
+      # Includes T07 library/detail focus and navigation tests with DEBUG fixtures.
       - path: Apps/Shared/UITests
     dependencies:
       - target: Glassfin-iOS

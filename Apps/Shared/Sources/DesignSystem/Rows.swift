@@ -96,6 +96,7 @@ struct ErrorStateView: View {
     var attempts: Int
     var onRetry: () -> Void
     var onSwitchServer: () -> Void
+    var messageOverride: String? = nil
 
     private var actions: [GlassAction] {
         guard case .blocking(_, let retry, let switchServer) = failure.screen else {
@@ -135,7 +136,9 @@ struct ErrorStateView: View {
                 GlassIcon(systemName: iconName, label: message)
                     .font(.largeTitle)
                 Group {
-                    if case .unsupported(let required) = failure, message == .errorUnsupported {
+                    if let messageOverride {
+                        Text(verbatim: messageOverride)
+                    } else if case .unsupported(let required) = failure, message == .errorUnsupported {
                         Text(verbatim: Copy.format(.errorUnsupported, text: required))
                     } else {
                         Copy.text(message)

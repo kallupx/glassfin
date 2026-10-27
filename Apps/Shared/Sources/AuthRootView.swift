@@ -6,12 +6,13 @@ struct AuthRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
+    @State private var librarySession: LibrarySession?
 
     var body: some View {
         ZStack {
             ContentPaint.scrim.ignoresSafeArea()
             panel
-                .padding(48)
+                .padding(flow.screen == .home ? 0 : 48)
         }
         .onAppear { focused = flow.focus }
         .onChange(of: flow.focus) { _, focus in
@@ -28,7 +29,8 @@ struct AuthRootView: View {
             if phase == .background { flow.sceneBecameBackground() }
             if phase == .active { Task { await flow.sceneBecameActive() } }
         }
-        .onChange(of: flow.appPhase) { _, _ in
+        .onChange(of: flow.appPhase) { _, phase in
+            if case .signedIn = phase {} else { librarySession = nil }
             Task { await flow.synchronizeSession() }
         }
     }
@@ -289,6 +291,20 @@ struct AuthRootView: View {
                 }
                 .defaultFocus($focused, flow.focus)
             }
+            if let librarySession {
+                ForEach(librarySession.directLibraries) { library in
+                    Tab {
+                        LibraryNavigationRoot(library: library, session: librarySession)
+                    } label: {
+                        Text(verbatim: library.name)
+                    }
+                }
+                if !librarySession.overflowLibraries.isEmpty {
+                    Tab(Copy.string(.tabLibraries), systemImage: "books.vertical") {
+                        LibraryOverflowView(session: librarySession)
+                    }
+                }
+            }
             Tab(AuthCopy.localized(.settings), systemImage: "gear") {
                 VStack(spacing: 16) {
                     Text(verbatim: flow.displayedName)
@@ -303,6 +319,16 @@ struct AuthRootView: View {
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("settings.root")
+            }
+        }
+        .task {
+            do {
+                if librarySession == nil { librarySession = try LibraryFeatureAssembly.make(flow: flow) }
+                await librarySession?.load()
+            } catch let error as APIError {
+                flow.featureApp.handle(AppErrorMapping.map(error, context: .authenticated, deviceOffline: false))
+            } catch {
+                flow.featureApp.handle(.internalInvariant)
             }
         }
     }

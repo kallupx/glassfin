@@ -26,6 +26,18 @@ final class T07ImageTests: XCTestCase {
         XCTAssertEqual(url.path, "/jellyfin/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary")
     }
 
+    func testT07_22_imageRequestsRejectCredentialParametersIncludingBaseURLAndRedirects() throws {
+        for name in ["ApiKey", "api" + "_key", "token", "TOKEN"] {
+            let url = try XCTUnwrap(URL(string: "https://media.example?\(name)=secret"))
+            let client = HTTPJellyfinClient(
+                server: url, identity: ClientIdentity(deviceName: "TV", deviceID: "d", version: "1"))
+            XCTAssertThrowsError(
+                try client.makeURLRequest(
+                    APIRequest(method: "GET", path: "/image", maximumResponseBytes: MetadataPolicy.imageMaxBytes)))
+            XCTAssertTrue(BoundedResponseDownload.hasCredentialQuery(url))
+        }
+    }
+
     func testT07_23_cacheKeyIsStableSHA256OfTheWholeTuple() throws {
         let item = try XCTUnwrap(ItemID("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
         let request = LibraryImageRequest(

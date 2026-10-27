@@ -45,7 +45,7 @@ final class T07MetadataTests: XCTestCase {
         let dto = try JSONDecoder().decode(
             BaseItemDTO.self,
             from: Data(
-                #"{"Id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","Name":"Film","MediaStreams":[{"Index":0,"Type":"Video","Width":3840,"Height":2160,"VideoRangeType":"HDR10","DvProfile":8},{"Index":1,"Type":"Audio","Codec":"DTS-HD MA","Channels":8},{"Index":2,"Type":"Subtitle","Language":"fin"}]}"#
+                #"{"Id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","Name":"Film","MediaStreams":[{"Index":0,"Type":"Video","Width":3840,"Height":2160,"VideoRangeType":"HDR10","DvProfile":8},{"Index":1,"Type":"Audio","Codec":"dts","Profile":"DTS-HD MA","Channels":8},{"Index":2,"Type":"Subtitle","Language":"fin"}]}"#
                     .utf8))
         let item = try XCTUnwrap(DTOMapper.mediaItem(dto, log: SilentLog()))
         XCTAssertEqual(

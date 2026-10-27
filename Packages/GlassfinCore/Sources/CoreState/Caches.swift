@@ -177,7 +177,10 @@ public actor DiskImageCache {
         let url = directory.appendingPathComponent("index.json")
         guard let data = try? Data(contentsOf: url), let decoded = try? JSONDecoder().decode([Entry].self, from: data)
         else { return }
-        entries = decoded
+        entries = decoded.filter {
+            $0.name.count == 64 && $0.name.allSatisfy { $0.isHexDigit && !$0.isUppercase }
+                && $0.bytes >= 0 && $0.bytes <= MetadataPolicy.imageMaxBytes
+        }
         clock = entries.map(\.access).max() ?? 0
     }
 

@@ -27,6 +27,8 @@ public final class SeriesViewModel {
     @ObservationIgnored private let app: AppState
     @ObservationIgnored private let clock: any GlassfinClock
     @ObservationIgnored private var seriesID = ""
+    @ObservationIgnored private var lastEpisodes: [MediaItem]?
+    @ObservationIgnored private var lastSeasonID: String?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var selectionGeneration = 0
     @ObservationIgnored private var selectionTask: Task<Void, Never>?
@@ -43,8 +45,7 @@ public final class SeriesViewModel {
 
     public var preferredEpisodeID: String? {
         let items = episodes.value ?? []
-        return items.first(where: { $0.userData.playbackPosition > .zero && !$0.userData.played })?.id
-            ?? items.first(where: { !$0.userData.played })?.id ?? items.first?.id
+        return items.first(where: { !$0.userData.played })?.id ?? items.first?.id
     }
 
     public var selectedOverview: String {
@@ -86,7 +87,8 @@ public final class SeriesViewModel {
                 ?? chronological.first { !$0.userData.played } ?? chronological.first
             let targetSeason = seasonID ?? playTarget?.seasonID ?? projected.first?.id
             if let targetSeason { await select(seasonID: targetSeason) } else { episodes = .loaded([]) }
-            initialEpisodeID = preferredEpisodeID
+            initialEpisodeID = playTarget?.seasonID == selectedSeasonID ? playTarget?.id : preferredEpisodeID
+            focusedEpisodeID = initialEpisodeID
             focus = .play
         } catch {
             guard expected == generation, sessionGeneration == app.requestGeneration, !Task.isCancelled else { return }
@@ -101,9 +103,9 @@ public final class SeriesViewModel {
     public func focusSeason(_ id: String) {
         guard ItemID(id) != nil else { return }
         focus = .season(id)
-        guard id != selectedSeasonID else { return }
         selectionTask?.cancel()
         selectionGeneration += 1
+        guard id != selectedSeasonID else { return }
         let expected = selectionGeneration
         let task = Task { @MainActor in
             do { try await clock.sleep(for: Self.seasonDebounce) } catch { return }
@@ -122,8 +124,8 @@ public final class SeriesViewModel {
         selectionGeneration += 1
         let expected = selectionGeneration
         let sessionGeneration = app.requestGeneration
-        let previous = episodes.value
-        let previousSeasonID = selectedSeasonID
+        let previous = episodes.value ?? lastEpisodes
+        let previousSeasonID = episodes.value == nil ? lastSeasonID : selectedSeasonID
         selectedSeasonID = seasonID
         episodes = .loading(previous: nil)
         do {
@@ -131,7 +133,10 @@ public final class SeriesViewModel {
             guard expected == selectionGeneration, sessionGeneration == app.requestGeneration, !Task.isCancelled else {
                 return
             }
-            episodes = .loaded(items.map { $0.cleanedForDisplay() })
+            let cleaned = items.map { $0.cleanedForDisplay() }
+            episodes = .loaded(cleaned)
+            lastEpisodes = cleaned
+            lastSeasonID = seasonID
             focusedEpisodeID = preferredEpisodeID
         } catch {
             guard expected == selectionGeneration, sessionGeneration == app.requestGeneration, !Task.isCancelled else {
@@ -173,6 +178,11 @@ public final class SeriesViewModel {
             target = itemID
         }
         if let target { focusEpisode(target) }
+    }
+
+    public func refreshFromStore() async {
+        if let values = episodes.value { episodes = .loaded(await userData.project(values)) }
+        if let target = playTarget { playTarget = await userData.project([target]).first }
     }
 
     public func onDisappear() {

@@ -11,13 +11,20 @@ struct HeroHeader: View {
     var onWatched: () -> Void
     var onFavorite: () -> Void
     var onMore: () -> Void
+    // Optional feature content keeps the default demo behavior intact.
+    var backdropContent: AnyView? = nil
+    var logoContent: AnyView? = nil
+    var actionContent: AnyView? = nil
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            backdrop
-                .backgroundExtensionEffect()
-                .overlay(BackdropScrim())
+            Group {
+                if let backdropContent { backdropContent } else { backdrop }
+            }
+            .backgroundExtensionEffect()
+            .overlay(BackdropScrim())
             VStack(alignment: .leading, spacing: SpacingToken.s) {
+                if let logoContent { logoContent }
                 Text(verbatim: title)
                     .font(.largeTitle)
                     .foregroundStyle(.primary)
@@ -33,16 +40,20 @@ struct HeroHeader: View {
                     .lineLimit(expanded ? TruncationPolicy.errorMessageLineLimit : 2)
                     .focusable(false)
                     .accessibilityIdentifier(overviewIdentifier)
-                GlassActionBar(actions: Self.actions(canResume: canResume), prominentID: "play") { id in
-                    switch id {
-                    case "play":
-                        onPlay()
-                    case "watched":
-                        onWatched()
-                    case "favorite":
-                        onFavorite()
-                    default:
-                        onMore()
+                if let actionContent {
+                    actionContent
+                } else {
+                    GlassActionBar(actions: Self.actions(canResume: canResume), prominentID: "play") { id in
+                        switch id {
+                        case "play":
+                            onPlay()
+                        case "watched":
+                            onWatched()
+                        case "favorite":
+                            onFavorite()
+                        default:
+                            onMore()
+                        }
                     }
                 }
             }

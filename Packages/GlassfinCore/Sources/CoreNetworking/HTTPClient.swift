@@ -203,7 +203,9 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
 
     func makeURLRequest(_ request: APIRequest) throws -> URLRequest {
         let url = try Self.url(server: server, path: request.path, query: request.query)
-        if RedirectPolicy.containsCredentialQuery(url) {
+        if RedirectPolicy.containsCredentialQuery(url)
+            || (request.maximumResponseBytes != nil && BoundedResponseDownload.hasCredentialQuery(url))
+        {
             throw APIError.invalidURL
         }
         var urlRequest = URLRequest(url: url)

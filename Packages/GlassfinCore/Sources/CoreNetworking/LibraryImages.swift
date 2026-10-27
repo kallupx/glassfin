@@ -94,7 +94,12 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
         _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
         completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
     ) {
-        if response.expectedContentLength > Int64(limit) {
+        if let http = response as? HTTPURLResponse, http.statusCode >= 400,
+            let failure = HTTPStatusMapper.failure(for: http.statusCode)
+        {
+            completionHandler(.cancel)
+            finish(.failure(failure))
+        } else if response.expectedContentLength > Int64(limit) {
             completionHandler(.cancel)
             finish(.failure(APIError.decoding))
         } else {
@@ -134,9 +139,19 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
         _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
         newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void
     ) {
+        if let url = request.url, Self.hasCredentialQuery(url) {
+            completionHandler(nil)
+            finish(.failure(APIError.invalidURL))
+            return
+        }
         redirects.urlSession(
             session, task: task, willPerformHTTPRedirection: response, newRequest: request,
             completionHandler: completionHandler)
+    }
+
+    static func hasCredentialQuery(_ url: URL) -> Bool {
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        return query.contains { RedirectPolicy.isCredentialQueryName($0.name) || $0.name.lowercased() == "token" }
     }
 
     private func finish(_ result: Result<(Data, URLResponse, Int?), any Error>) {

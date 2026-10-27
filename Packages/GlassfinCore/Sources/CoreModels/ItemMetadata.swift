@@ -16,6 +16,7 @@ public struct ItemStream: Sendable, Hashable, Codable, Identifiable {
     public var title: String?
     public var language: String?
     public var codec: String?
+    public var profile: String?
     public var channels: Int?
     public var width: Int?
     public var height: Int?
@@ -24,6 +25,7 @@ public struct ItemStream: Sendable, Hashable, Codable, Identifiable {
 
     public init(
         id: Int, kind: String, title: String? = nil, language: String? = nil, codec: String? = nil,
+        profile: String? = nil,
         channels: Int? = nil, width: Int? = nil, height: Int? = nil, videoRange: String? = nil,
         dolbyVisionProfile: Int? = nil
     ) {
@@ -32,6 +34,7 @@ public struct ItemStream: Sendable, Hashable, Codable, Identifiable {
         self.title = title.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
         self.language = language.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
         self.codec = codec.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        self.profile = profile.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
         self.channels = channels
         self.width = width
         self.height = height
@@ -45,7 +48,14 @@ public struct ItemStream: Sendable, Hashable, Codable, Identifiable {
         if let width, let height, width > 0, height > 0 { parts.append("\(width) × \(height)") }
         if let videoRange { parts.append(videoRange) }
         if let dolbyVisionProfile { parts.append("DV P\(dolbyVisionProfile)") }
-        if let codec { parts.append(codec.uppercased()) }
+        if let codec {
+            if let profile, profile.uppercased().hasPrefix(codec.uppercased()) {
+                parts.append(MetadataPolicy.clean(profile.uppercased(), limit: MetadataPolicy.nameMax))
+            } else {
+                parts.append(MetadataPolicy.clean(codec.uppercased(), limit: MetadataPolicy.nameMax))
+                if let profile { parts.append(profile) }
+            }
+        }
         if let channels, channels > 0 {
             parts.append(channels == 8 ? "7.1" : channels == 6 ? "5.1" : String(channels))
         }
@@ -75,7 +85,7 @@ public struct ItemMetadata: Sendable, Hashable, Codable {
         self.studios = studios.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
         self.streams = streams.map {
             ItemStream(
-                id: $0.id, kind: $0.kind, title: $0.title, language: $0.language, codec: $0.codec,
+                id: $0.id, kind: $0.kind, title: $0.title, language: $0.language, codec: $0.codec, profile: $0.profile,
                 channels: $0.channels, width: $0.width, height: $0.height, videoRange: $0.videoRange,
                 dolbyVisionProfile: $0.dolbyVisionProfile)
         }

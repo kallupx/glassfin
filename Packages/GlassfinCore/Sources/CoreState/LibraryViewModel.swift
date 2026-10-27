@@ -36,6 +36,7 @@ public final class LibraryViewModel {
     @ObservationIgnored private var exhausted = false
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var pageInFlight = false
+    @ObservationIgnored private var pageTask: Task<Result<Page<MediaItem>, APIError>, Never>?
 
     public init(
         library: any LibraryService, userData: UserDataStore, responses: ResponseCache,
@@ -83,9 +84,11 @@ public final class LibraryViewModel {
             return
         }
         let sameQuery = self.libraryID == libraryID && self.query == query
-        let previous = sameQuery ? state.value : nil
+        // TODO(Q7-19): keep the previous query visible on failure while showing the shared banner.
+        let previous = self.libraryID == libraryID ? state.value : nil
         self.libraryID = libraryID
         self.query = query
+        pageTask?.cancel()
         generation += 1
         pageInFlight = false
         nextIndex = 0
@@ -107,6 +110,7 @@ public final class LibraryViewModel {
     }
 
     public func onDisappear() {
+        pageTask?.cancel()
         generation += 1
         pageInFlight = false
     }
@@ -127,7 +131,9 @@ public final class LibraryViewModel {
         do {
             let fetched = try await library.filters(in: libraryID)
             guard expected == generation, !Task.isCancelled else { return }
-            filters = fetched
+            filters = ItemFilterSet(
+                genres: fetched.genres.map { MetadataPolicy.clean($0, limit: MetadataPolicy.genreMax) },
+                years: fetched.years)
             filterError = nil
         } catch {
             guard expected == generation, !Task.isCancelled else { return }
@@ -162,8 +168,23 @@ public final class LibraryViewModel {
             {
                 payload = cached
             } else {
-                let page = try await library.items(
-                    in: libraryID, query: query, page: PageRequest(startIndex: start, limit: ListPaging.pageSize))
+                let service = library
+                let id = libraryID
+                let query = query
+                let child = Task { () -> Result<Page<MediaItem>, APIError> in
+                    do {
+                        return .success(
+                            try await service.items(
+                                in: id, query: query, page: PageRequest(startIndex: start, limit: ListPaging.pageSize)))
+                    } catch let error as APIError { return .failure(error) } catch { return .failure(.network) }
+                }
+                pageTask = child
+                let result = await withTaskCancellationHandler {
+                    await child.value
+                } onCancel: {
+                    child.cancel()
+                }
+                let page = try result.get()
                 let consumed = max(0, page.consumedCount ?? page.items.count)
                 let end = start + consumed
                 payload = LibraryCachedPage(

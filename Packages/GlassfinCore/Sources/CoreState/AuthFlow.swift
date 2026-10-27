@@ -31,8 +31,9 @@ public final class AuthFlow {
         let fingerprint = try? pins.fingerprint(for: session.server.id)
         let pin = fingerprint.map { OriginCertificatePin(url: session.server.url, sha256: $0) }
         let deviceID: String
-        do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) }
-        catch { throw .headerRejected }
+        do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
+            throw .headerRejected
+        }
         let identity = ClientIdentity(
             deviceName: "Apple TV", deviceID: deviceID,
             version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0",

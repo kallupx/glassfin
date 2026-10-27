@@ -4,6 +4,12 @@ import Foundation
 import GlassfinServices
 import Observation
 
+public struct LibraryPlaybackReturn: Sendable, Equatable {
+    public let itemID: String
+    public let finished: Bool
+    public let sequence: Int
+}
+
 @MainActor
 @Observable
 public final class LibrarySession {
@@ -15,6 +21,14 @@ public final class LibrarySession {
     public let preferences: LibraryChoicesStore
     public static let directTabCount = 5
     public private(set) var playbackIntent: LibraryPlaybackIntent?
+    public private(set) var playbackReturn: LibraryPlaybackReturn?
+
+    /// M08 commits user data before notifying the browsing view of dismissal.
+    public func playbackDidEnd(itemID: String, finished: Bool) {
+        guard ItemID(itemID) != nil else { return }
+        playbackReturn = LibraryPlaybackReturn(
+            itemID: itemID, finished: finished, sequence: (playbackReturn?.sequence ?? 0) + 1)
+    }
     @ObservationIgnored public var onPlayback: (@MainActor (LibraryPlaybackIntent) -> Void)?
 
     public func requestPlayback(_ intent: LibraryPlaybackIntent) {

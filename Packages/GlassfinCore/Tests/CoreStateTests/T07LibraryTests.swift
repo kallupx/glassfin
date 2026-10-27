@@ -169,7 +169,7 @@ final class T07LibraryTests: XCTestCase {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
-        let client = MockAPIClient { _ in throw APIError.network }
+        let client = MockAPIClient { _ async throws(APIError) -> Data in throw APIError.network }
         let model = make(rig, service: JellyfinLibraryService(client: client))
         await model.reload(libraryID: Sample.library)
         XCTAssertFalse(model.hasContent)

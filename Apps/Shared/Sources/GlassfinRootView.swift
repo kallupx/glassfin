@@ -6,20 +6,24 @@ struct GlassfinRootView: View {
 
     var body: some View {
         #if DEBUG
-            switch DesignSystemLaunch.screen {
-            case .welcome:
-                AuthRootView(flow: flow)
-            case .focus:
-                DesignSystemFocusDemo()
-            case .error:
-                DesignSystemErrorDemo()
-            case .tabs(let count):
-                LibraryTabShell(
-                    libraries: (0..<count).map { LibraryTabItem(id: "\($0)", title: "\($0 + 1)") },
-                    home: AnyView(Copy.text(.tabHome).accessibilityIdentifier("design.home.root"))
-                )
-            case .navigation:
-                NavigationPrototype()
+            if let scenario = LaunchConfiguration(arguments: ProcessInfo.processInfo.arguments).libraryScenario {
+                LibraryDebugHost(scenario: scenario)
+            } else {
+                switch DesignSystemLaunch.screen {
+                case .welcome:
+                    AuthRootView(flow: flow)
+                case .focus:
+                    DesignSystemFocusDemo()
+                case .error:
+                    DesignSystemErrorDemo()
+                case .tabs(let count):
+                    LibraryTabShell(
+                        libraries: (0..<count).map { LibraryTabItem(id: "\($0)", title: "\($0 + 1)") },
+                        home: AnyView(Copy.text(.tabHome).accessibilityIdentifier("design.home.root"))
+                    )
+                case .navigation:
+                    NavigationPrototype()
+                }
             }
         #else
             AuthRootView(flow: flow)

@@ -17,7 +17,7 @@ final class T07SecurityStateTests: XCTestCase {
             do {
                 _ = try await client.send(APIRequest(method: "GET", path: "/slow"))
                 return nil
-            } catch { return error }
+            } catch let error as APIError { return error } catch { return .network }
         }
         await inner.waitUntilStarted()
         do {
@@ -43,7 +43,7 @@ final class T07SecurityStateTests: XCTestCase {
             let rig = Harness.make()
             defer { rig.cleanup() }
             try rig.signIn()
-            let inner = MockAPIClient { _ in throw error }
+            let inner = MockAPIClient { _ async throws(APIError) -> Data in throw error }
             let client = SessionFeatureClient(inner: inner, app: rig.app)
             do {
                 _ = try await client.send(APIRequest(method: "GET", path: "/Items"))

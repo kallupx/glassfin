@@ -101,6 +101,7 @@ public struct MediaStreamDTO: Decodable, Sendable {
     public var DisplayTitle: String?
     public var Language: String?
     public var Codec: String?
+    public var Profile: String?
     public var Channels: Int?
     public var Width: Int?
     public var Height: Int?
