@@ -146,6 +146,7 @@ struct AuthRootView: View {
                     .accessibilityIdentifier("address.serverVersion")
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("address.root")
     }
 
@@ -185,6 +186,7 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("certificate.cancel")
                 .focused($focused, equals: .cancel)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("certificate.root")
     }
 
@@ -212,6 +214,7 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("login.password")
                 .focused($focused, equals: .usePassword)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("login.root")
     }
 
@@ -228,6 +231,7 @@ struct AuthRootView: View {
                     .focused($focused, equals: .newCode)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("quickconnect.root")
         .focused($focused, equals: .quickConnectCode)
     }
@@ -245,6 +249,7 @@ struct AuthRootView: View {
                 .focused($focused, equals: index == 0 ? .continueButton : nil)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("users.root")
     }
 
@@ -266,6 +271,7 @@ struct AuthRootView: View {
             .accessibilityIdentifier("credentials.signIn")
             .focused($focused, equals: .signIn)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("credentials.root")
     }
 
@@ -302,6 +308,7 @@ struct AuthRootView: View {
                     )
                     .accessibilityIdentifier("settings.version")
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("settings.root")
             }
         }
