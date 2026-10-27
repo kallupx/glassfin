@@ -66,13 +66,13 @@ final class T02FoundationTests: XCTestCase {
         for (error, context, offline, expected) in cases {
             let mapped = AppErrorMapping.map(error, context: context, deviceOffline: offline)
             XCTAssertEqual(mapped, expected)
-            XCTAssertEqual(SessionTermination.shouldEndSession(mapped), mapped == .unauthorized)
+            XCTAssertEqual(CoreModels.SessionTermination.shouldEndSession(mapped), mapped == .unauthorized)
         }
         XCTAssertTrue(AppErrorMapping.isConnectivity(.offline))
         XCTAssertTrue(AppErrorMapping.isConnectivity(.serverUnreachable))
         XCTAssertFalse(AppErrorMapping.isConnectivity(.forbidden))
-        XCTAssertFalse(SessionTermination.shouldEndSession(.serverError(status: 500)))
-        XCTAssertFalse(SessionTermination.shouldEndSession(.serverUnreachable))
+        XCTAssertFalse(CoreModels.SessionTermination.shouldEndSession(.serverError(status: 500)))
+        XCTAssertFalse(CoreModels.SessionTermination.shouldEndSession(.serverUnreachable))
     }
 
     func testT02_09_userFacingCopyAndDiagnosticsOmitTokens() {
@@ -112,33 +112,6 @@ final class T02FoundationTests: XCTestCase {
             ServerVersionGate.failure(for: SemVer(major: 10, minor: 9, patch: 11)),
             .unsupportedServer(version: "10.9.11")
         )
-    }
-
-    func testAppErrorMessageKeysCoverEveryCase() {
-        let cases: [(AppError, String?)] = [
-            (.offline, AppErrorMessage.offlineKey),
-            (.serverUnreachable, AppErrorMessage.serverDownKey),
-            (.tlsUntrusted(.unavailable), AppErrorMessage.tlsUntrustedKey),
-            (.unauthorized, AppErrorMessage.sessionEndedKey),
-            (.invalidCredentials, AppErrorMessage.invalidCredentialsKey),
-            (.insecureRedirect, AppErrorMessage.insecureRedirectKey),
-            (.forbidden, AppErrorMessage.forbiddenKey),
-            (.notFound, AppErrorMessage.notFoundKey),
-            (.serverError(status: 500), AppErrorMessage.serverErrorKey),
-            (.unsupportedServer(version: "10.9.11"), AppErrorMessage.unsupportedServerKey),
-            (.playback(.itemFailed(code: "NoCompatibleStream")), AppErrorMessage.playbackFailedKey),
-            (.playback(.itemFailed(code: nil)), AppErrorMessage.playbackFailedKey),
-            (.playback(.stalled), AppErrorMessage.playbackFailedKey),
-            (.playback(.fallbackExhausted), AppErrorMessage.playbackFailedKey),
-            (.decoding, nil),
-            (.cancelled, nil),
-            (.internalInvariant, nil),
-        ]
-        for (error, expectedKey) in cases {
-            let key = AppErrorMessage.messageKey(for: error)
-            XCTAssertEqual(key, expectedKey, "\(error)")
-            XCTAssertEqual(AppErrorMessage.userFacing(error) != nil, key != nil, "\(error)")
-        }
     }
 
     func testT02_11_oneBrokenItemIsSkippedWithoutLoggingThePayload() throws {

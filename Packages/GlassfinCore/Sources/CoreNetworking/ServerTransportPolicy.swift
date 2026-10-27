@@ -35,18 +35,6 @@ public enum ServerTransportPolicy {
         evaluate(url) == .unencryptedLocal
     }
 
-    /// Catalog key for the verdict's message, or nil when no message should be shown.
-    public static func messageKey(for verdict: Verdict) -> String? {
-        switch verdict {
-        case .unencryptedLocal:
-            return unencryptedWarningKey
-        case .publicHTTPRejected:
-            return publicAddressRequiresHTTPSKey
-        case .secure, .invalid:
-            return nil
-        }
-    }
-
     public static func message(for verdict: Verdict) -> String? {
         switch verdict {
         case .unencryptedLocal:
@@ -61,10 +49,7 @@ public enum ServerTransportPolicy {
     public static func badge(for url: URL) -> ServerSecurityBadge {
         let verdict = evaluate(url)
         return ServerSecurityBadge(
-            showsUnencryptedMark: verdict == .unencryptedLocal,
-            message: message(for: verdict),
-            messageKey: messageKey(for: verdict)
-        )
+            showsUnencryptedMark: verdict == .unencryptedLocal, messageKey: messageKey(for: verdict))
     }
 
     enum HostClass: Sendable, Equatable {
@@ -253,13 +238,12 @@ public enum ServerTransportPolicy {
 
 public struct ServerSecurityBadge: Sendable, Equatable {
     public var showsUnencryptedMark: Bool
-    public var message: String?
-    /// Catalog key for `message`, or nil when no catalog message is associated with the badge.
-    public var messageKey: String?
+    public var messageKey: AuthCopy.Key?
 
-    public init(showsUnencryptedMark: Bool, message: String?, messageKey: String? = nil) {
+    public var message: String? { messageKey.map(AuthCopy.localized) }
+
+    public init(showsUnencryptedMark: Bool, messageKey: AuthCopy.Key?) {
         self.showsUnencryptedMark = showsUnencryptedMark
-        self.message = message
         self.messageKey = messageKey
     }
 }

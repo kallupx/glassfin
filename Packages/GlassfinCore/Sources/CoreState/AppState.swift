@@ -133,16 +133,8 @@ public final class AppState {
     public private(set) var phase: Phase = .launching
     public private(set) var connectivity: Connectivity = .online
     public private(set) var activeServer: ServerInfo?
-    public private(set) var bannerKey: String?
-    public private(set) var sessionNoticeKey: String?
-
-    public var banner: String? {
-        bannerKey != nil ? AppErrorMessage.offline : nil
-    }
-
-    public var sessionNotice: String? {
-        sessionNoticeKey != nil ? AppErrorMessage.sessionEnded : nil
-    }
+    public private(set) var banner: String?
+    public private(set) var sessionNotice: String?
     /// Set when the saved server is below the minimum. The phase enum has no blocked case.
     public private(set) var blockingError: AppError?
     public private(set) var securityNotice: AppError?
@@ -190,25 +182,11 @@ public final class AppState {
         }
     }
     public var showsServerDown: Bool { connectivity == .serverUnreachable }
-    public var serverDownTitleKey: String { AppErrorMessage.serverDownKey }
     public var serverDownTitle: String { AppErrorMessage.serverDown }
-    public var retryTitleKey: String { AppErrorMessage.retryKey }
     public var retryTitle: String { AppErrorMessage.retry }
-    public var switchServerTitleKey: String { AppErrorMessage.switchServerKey }
     public var switchServerTitle: String { AppErrorMessage.switchServer }
     public var scheduledPingDelay: Duration { NetworkThresholds.serverPingInterval }
     public var playbackBlocked: Bool { connectivity == .offline || connectivity == .serverUnreachable }
-
-    public var playbackBlockedMessageKey: String? {
-        switch connectivity {
-        case .offline:
-            AppErrorMessage.playbackOfflineKey
-        case .serverUnreachable:
-            AppErrorMessage.playbackUnreachableKey
-        case .online, .degraded:
-            nil
-        }
-    }
 
     public var playbackBlockedMessage: String? {
         switch connectivity {
@@ -253,7 +231,7 @@ public final class AppState {
         self.scope = RequestScope()
         if !path.isOnline {
             self.connectivity = .offline
-            self.bannerKey = AppErrorMessage.offlineKey
+            self.banner = AppErrorMessage.offline
         }
     }
 
@@ -344,7 +322,7 @@ public final class AppState {
             logoutStarted = true
             phase = .needsServer
             activeServer = nil
-            sessionNoticeKey = nil
+            sessionNotice = nil
         } else if activeServer?.id == id {
             phase = .needsServer
             activeServer = nil
@@ -442,7 +420,7 @@ public final class AppState {
         case .ok:
             recoverFromServerDown()
         case .failed(let error):
-            if SessionTermination.shouldEndSession(error) || AppErrorMapping.isConnectivity(error) {
+            if CoreModels.SessionTermination.shouldEndSession(error) || AppErrorMapping.isConnectivity(error) {
                 handle(error)
             } else if case .tlsUntrusted = error {
                 handle(error)
@@ -471,7 +449,7 @@ public final class AppState {
 
     private func enterOffline() {
         connectivity = .offline
-        bannerKey = AppErrorMessage.offlineKey
+        banner = AppErrorMessage.offline
         pingArmed = false
         pingTask?.cancel()
     }
@@ -489,7 +467,7 @@ public final class AppState {
 
     private func recoverFromServerDown() {
         pingArmed = false
-        bannerKey = nil
+        banner = nil
         if connectivity == .serverUnreachable || connectivity == .offline {
             connectivity = .online
             onReconnect?()
@@ -503,7 +481,7 @@ public final class AppState {
             return
         }
         guard connectivity == .offline else { return }
-        bannerKey = nil
+        banner = nil
         connectivity = .online
         onReconnect?()
         scheduleProbe()
