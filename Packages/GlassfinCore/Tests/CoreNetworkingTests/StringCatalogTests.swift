@@ -148,6 +148,7 @@ final class StringCatalogTests: XCTestCase {
 private enum StringCatalogLint {
     /// Every `*.xcstrings` under `root` (Packages, Apps, and the rest of the repo).
     static func catalogs(at root: URL) -> [URL] {
+        let root = root.standardizedFileURL.resolvingSymlinksInPath()
         guard
             let enumerator = FileManager.default.enumerator(
                 at: root,
@@ -249,11 +250,13 @@ private enum StringCatalogLint {
     }
 
     static func relative(_ url: URL, root: URL) -> String {
-        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        if url.path.hasPrefix(prefix) {
-            return String(url.path.dropFirst(prefix.count))
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().path
+        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        if path.hasPrefix(prefix) {
+            return String(path.dropFirst(prefix.count))
         }
-        return url.path
+        return path
     }
 }
 

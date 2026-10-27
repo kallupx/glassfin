@@ -1,6 +1,6 @@
 # Contributing
 
-All code, comments and documentation are in English.
+All repository content (code, identifiers, comments, logs, tests, commit messages, pull requests, ADRs, README, specs and test plans) must be in English. User-facing strings must use String Catalogs (`.xcstrings`) with English (`en`) as the development language and Finnish (`fi`) translations, never hardcoded text. Tests compare keys or error types, never displayed text. Every key in every `.xcstrings` must have `translated` `en` and `fi` entries, enforced by `StringCatalogTests`.
 
 ## Dependency pull requests
 
