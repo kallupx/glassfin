@@ -34,7 +34,10 @@ public struct CredentialVault: Sendable {
     public var accessGroup: String
     private static let indexAccount = "token-index"
 
-    public init(secureStore: any SecureStore, settings: any SettingsStore, accessGroup: String) {
+    public init(
+        secureStore: any SecureStore, settings: any SettingsStore,
+        accessGroup: String = KeychainAttributes.production.accessGroup
+    ) {
         self.secureStore = secureStore
         self.settings = settings
         self.accessGroup = accessGroup

@@ -1,13 +1,6 @@
 import CoreNetworking
 import Foundation
 
-public enum SessionCredential {
-    /// Keychain account for one server and user. S1.4. The token bytes are not part of the account name.
-    public static func account(serverID: String, userID: String) -> String {
-        "session-token/\(serverID)/\(userID)"
-    }
-}
-
 public struct StoredServer: Codable, Sendable, Equatable, Identifiable {
     public var id: String
     public var name: String
@@ -114,8 +107,8 @@ public struct AppPreferences: Codable, Sendable, Equatable {
     /// Drops the server and its users. Returned strings are keychain accounts to delete.
     public func removing(serverID: String) -> (AppPreferences, [String]) {
         var copy = self
-        let accounts = users.filter { $0.serverID == serverID }.map {
-            SessionCredential.account(serverID: $0.serverID, userID: $0.userID)
+        let accounts = users.filter { $0.serverID == serverID }.compactMap {
+            try? CredentialVault.tokenAccount(serverID: $0.serverID, userID: $0.userID)
         }
         copy.servers.removeAll { $0.id == serverID }
         copy.users.removeAll { $0.serverID == serverID }

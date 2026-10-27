@@ -10,6 +10,7 @@ public struct LiveAuthBackend: AuthBackend {
     public var log: any GlassfinLog
     public var probeClient: any ServerCandidateClient
     public var clock: any GlassfinClock
+    public var pins: (any CertificatePinStore)?
     private let clientOverride: (any JellyfinAPIClient)?
 
     public init(
@@ -17,17 +18,19 @@ public struct LiveAuthBackend: AuthBackend {
         log: any GlassfinLog = SilentLog(),
         probeClient: any ServerCandidateClient = URLSessionPublicInfoClient(),
         clock: any GlassfinClock = SystemGlassfinClock(),
-        client: (any JellyfinAPIClient)? = nil
+        client: (any JellyfinAPIClient)? = nil,
+        pins: (any CertificatePinStore)? = nil
     ) {
         self.secureStore = secureStore
         self.log = log
         self.probeClient = probeClient
         self.clock = clock
         self.clientOverride = client
+        self.pins = pins
     }
 
-    public func probe(_ address: String) async -> ServerProbeOutcome {
-        await ServerProbe(client: probeClient, clock: clock).run(address: address)
+    public func probe(_ address: String, certificatePin: OriginCertificatePin? = nil) async -> ServerProbeOutcome {
+        await ServerProbe(client: probeClient, clock: clock).run(address: address, certificatePin: certificatePin)
     }
 
     public func quickConnectEnabled(on server: ServerInfo) async throws(APIError) -> Bool {
@@ -83,6 +86,12 @@ public struct LiveAuthBackend: AuthBackend {
     }
 
     private func service(for server: ServerInfo, token: String?) throws(APIError) -> JellyfinAuthenticationService {
+        let client = try makeClient(for: server, token: token)
+        return JellyfinAuthenticationService(
+            client: client, server: server.url, serverName: server.name, knownServer: server)
+    }
+
+    func makeClient(for server: ServerInfo, token: String?) throws(APIError) -> any JellyfinAPIClient {
         let deviceID: String
         do {
             deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: secureStore, reset: false)
@@ -91,9 +100,11 @@ public struct LiveAuthBackend: AuthBackend {
         }
         let identity = ClientIdentity(
             deviceName: "Apple TV", deviceID: deviceID, version: "0.1.0", token: token)
-        let client: any JellyfinAPIClient =
-            clientOverride ?? HTTPJellyfinClient(server: server.url, identity: identity, log: log)
-        return JellyfinAuthenticationService(
-            client: client, server: server.url, serverName: server.name, knownServer: server)
+        return clientOverride
+            ?? HTTPJellyfinClient(
+                server: server.url, identity: identity, log: log,
+                certificatePin: (try? pins?.fingerprint(for: server.id)).map {
+                    OriginCertificatePin(url: server.url, sha256: $0)
+                })
     }
 }

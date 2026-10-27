@@ -1,8 +1,9 @@
 import CoreModels
 import CoreNetworking
-import CoreState
 import Foundation
 import XCTest
+
+@testable import CoreState
 
 final class T04LiveAuthTests: XCTestCase {
     func testT04_52_productionCapabilitiesUseTheFinalPayload() async throws {
@@ -43,6 +44,24 @@ final class T04LiveAuthTests: XCTestCase {
             XCTAssertEqual(error, .timeout)
         }
         XCTAssertEqual(client.requests.map(\.path), ["/Users/Me"])
+    }
+
+    func testS44_productionSessionUsesTheSavedServerPin() throws {
+        let settings = InMemorySettingsStore()
+        let pins = SettingsCertificatePinStore(settings: settings)
+        let fingerprint = String(repeating: "ab", count: 32)
+        try pins.save(fingerprint: fingerprint, serverID: server().id)
+        let backend = LiveAuthBackend(secureStore: InMemorySecureStore(), pins: pins)
+        let client = try XCTUnwrap(backend.makeClient(for: server(), token: nil) as? HTTPJellyfinClient)
+        defer { client.session.invalidateAndCancel() }
+        XCTAssertEqual(client.certificatePin?.fingerprint(for: server().url), fingerprint)
+        XCTAssertNil(client.certificatePin?.fingerprint(for: URL(string: "https://other.example")!))
+        var second = server()
+        second.id = "cccccccccccccccccccccccccccccccc"
+        second.url = URL(string: "https://other.example")!
+        let secondClient = try XCTUnwrap(backend.makeClient(for: second, token: nil) as? HTTPJellyfinClient)
+        defer { secondClient.session.invalidateAndCancel() }
+        XCTAssertNil(secondClient.certificatePin)
     }
 
     private func server() -> ServerInfo {
