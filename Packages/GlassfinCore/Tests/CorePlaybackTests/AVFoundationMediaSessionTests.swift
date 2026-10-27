@@ -8,7 +8,9 @@
     @testable import CorePlayback
 
     final class AVFoundationMediaSessionTests: XCTestCase {
-        /// T08-2-39. A mocked HTTP 401 reaches complete(), lastFailure and onFailure as unauthorized.
+        /// T08-2-39 (loader-level partial coverage). A mocked HTTP 401 reaches complete(), lastFailure
+        /// and onFailure as unauthorized. M08a covers the /Users/Me check and T08-2-49 sign-out flow.
+        // TODO(M08a): T08-2-39 /Users/Me check and T08-2-49 end-to-end via MediaUnauthorizedPolicy production caller.
         func testHTTP401CompletionPreservesUnauthorized() async throws {
             let origin = UnauthorizedOrigin()
             let callbacks = FailureRecorder()
@@ -28,7 +30,9 @@
             XCTAssertEqual(fetched, [request])
         }
 
-        /// T08-2-39, T08-2-40. Cancelling another request cannot erase an earlier media 401.
+        /// T08-2-39 (loader-level partial coverage), T08-2-40. Cancelling another request cannot erase
+        /// an earlier media 401. M08a covers the /Users/Me check and T08-2-49 sign-out flow.
+        // TODO(M08a): T08-2-39 /Users/Me check and T08-2-49 end-to-end via MediaUnauthorizedPolicy production caller.
         func testCancellationAfterUnauthorizedPreservesLastFailure() async throws {
             let origin = UnauthorizedOrigin()
             let callbacks = FailureRecorder()
