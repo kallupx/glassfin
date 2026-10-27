@@ -182,6 +182,7 @@ private struct SearchResultRow: View {
                                 focused: focus == item.id,
                                 onSelect: {
                                     rememberedID = item.id
+                                    feature.model.focusedKind = group.id
                                     onSelect(item)
                                 }
                             )
@@ -231,13 +232,13 @@ private struct SearchResultCard: View {
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: SpacingToken.xs) {
-                AsyncPoster(blurHash: item.images.primaryBlurHash, image: image, failed: false, size: size)
-                Text(verbatim: item.name)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .frame(width: size.width, height: CardMetrics.titleHeight, alignment: .topLeading)
-            }
+            PosterFace(
+                content: PosterContent(
+                    id: item.id, title: item.name,
+                    progress: PlaybackProgress.measure(position: item.userData.playbackPosition, runtime: item.runtime),
+                    isWatched: item.userData.played, unplayedCount: item.userData.unplayedCount,
+                    blurHash: item.images.primaryBlurHash),
+                style: style, isFocused: focused, image: image)
         }
         .posterButtonStyle()
         .accessibilityIdentifier("search.item.\(item.id)")

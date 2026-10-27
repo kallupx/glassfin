@@ -4,6 +4,7 @@ struct PosterFace: View {
     var content: PosterContent
     var style: CardStyle
     var isFocused: Bool
+    var image: Image? = nil
 
     private var size: CGSize {
         CardMetrics.size(for: style)
@@ -14,7 +15,7 @@ struct PosterFace: View {
             ZStack(alignment: .bottom) {
                 AsyncPoster(
                     blurHash: content.blurHash,
-                    image: nil,
+                    image: image,
                     failed: false,
                     size: size
                 )
