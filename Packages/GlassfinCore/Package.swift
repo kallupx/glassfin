@@ -96,8 +96,12 @@ let package = Package(
             dependencies: ["GlassfinServices", "CoreNetworking", "CoreModels", "CoreTestSupport", "CorePlayback"]
         ),
         .testTarget(
+            name: "CorePlaybackTests",
+            dependencies: ["CorePlayback", "CoreModels", "CoreNetworking"]
+        ),
+        .testTarget(
             name: "IntegrationTests",
-            dependencies: ["CoreNetworking", "GlassfinServices", "CoreModels"]
+            dependencies: ["CoreNetworking", "GlassfinServices", "CoreModels", "CorePlayback"]
         ),
     ]
 )
