@@ -65,7 +65,7 @@ enum MotionPolicy {
     /// Cards use the system card style for parallax. Custom parallax is never added.
     static func allowsCustomParallax(_ reduceMotion: Bool) -> Bool {
         _ = reduceMotion
-        false
+        return false
     }
 }
 
@@ -74,6 +74,13 @@ enum ContentPaint {
     static let subtitleBacking = Color.black.opacity(0.6)
     static let progressFill = Color.white
     static let progressTrack = Color.black.opacity(0.55)
+}
+
+/// Q5-05: an opaque surface in either appearance, using colors available on both platforms.
+enum ReduceTransparencyFallback {
+    static func color(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.black : Color.white
+    }
 }
 
 /// Bottom scrim: transparent until 60% of the height, then black at 60% opacity.

@@ -22,7 +22,7 @@ Unresolved. Play, error, and code text use a nil line limit. The largest content
 
 ## Q5-05 Reduce Transparency color
 
-Unresolved as a spec confirmation. The code uses one token, `ReduceTransparencyFallback.color`, set to `Color(.secondarySystemBackground)`. Changing the semantic color does not require call-site edits.
+Unresolved as a spec confirmation. `ReduceTransparencyFallback.color(for:)` in `Tokens.swift` uses opaque black in dark appearance and opaque white in light appearance. UIKit's system background colors are unavailable on tvOS. The token is shared by both platforms and can change without call-site edits.
 
 ## Q5-06 Which warnings belong in this ADR
 
