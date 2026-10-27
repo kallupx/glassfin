@@ -103,7 +103,7 @@
 | ID | Scenario | Expected result | Reference | Run |
 |---|---|---|---|---|
 | T04-57 | Force quit and relaunch, `/Users/Me` 200 | Home view without the sign-in view | 04 HK UC-A3, 04 TL1 | U |
-| T04-58 | `/Users/Me` 401 | A3 with the message "Session expired" (fi: "Istunto päättyi") (text differs from 02: Q4-11). The token is removed from the Keychain, and the sign-in view is shown only once (no duplicates) | 04 TL1, 02 §3, S2.2 | X, U |
+| T04-58 | `/Users/Me` 401 | A3 with the message "Session expired, please sign in again" (fi: "Istunto päättyi, kirjaudu uudelleen") (Q4-11; same key as 02 §3). The token is removed from the Keychain, and the sign-in view is shown only once (no duplicates) | 04 TL1, 02 §3, S2.2 | X, U |
 | T04-59 | Server down at launch (connection refused) | Home from cache and the offline banner. The sign-in view is not shown, and the token is kept | 04 HK UC-A3, SPEC K10 | U |
 | T04-60 | At launch `/Users/Me` answers with a 6 s delay (injected `Clock`) | 5 s timeout, no retries (mock: exactly 1 `/Users/Me` call) → home from cache in offline mode | 04 TL1, 04 T1.3.3/Q4-09 | X |
 | T04-61 | 🔒 `/Users/Me` returns 403, 500, 502, 503, 504 or a TLS error | No sign-out, and the token is kept. What the UI shows on 403 and 500 is open (Q4-10) | S2.2, 02 v1.3.2 | X |

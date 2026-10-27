@@ -25,7 +25,7 @@
   - CR/LF or any other control character in the raw value → the value is rejected (fallback `"Apple TV"` for the device name).
 - **Legacy headers (`X-Emby-Token`, `X-Emby-Authorization`, `X-MediaBrowser-Token`) or an `api_key` query are never used.** Verified: Jellyfin 12.0 removed them. The only remaining query parameter is `ApiKey`, which Jellyfin calls a last resort.
 - **API calls:** always a header; `ApiKey` is forbidden.
-- **Images:** the endpoint does not require a token, so a token is not added.
+- **Images (S6.6, AGREED with Security 27.10.2026):** requests go through `CoreNetworking` with the `Authorization` header, like API calls. A token (`ApiKey`/`api_key`) is never put in an image URL. Images are cached only in `DiskImageCache` under hashed keys (S6.6).
 - **Media (AVPlayer):** primarily a header (`AVAssetResourceLoaderDelegate`, or the undocumented `AVURLAssetHTTPHeaderFieldsKey` ⚠️, ADR M08-2). The fallback is an `ApiKey` query **only in media URLs**, and it is built in a single `MediaURLBuilder` with mandatory S5 redaction (03-security.md S1.5). Rule: never both a header and a query on the same request.
 - `DeviceId` is generated once (UUID) and stored in the Keychain (`ThisDeviceOnly`). The token is bound to the DeviceId on the server.
 
@@ -55,7 +55,7 @@ Source: `https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json` (version
 | Episodes | `GET /Shows/{seriesId}/Episodes` | ✔ | `seasonId`, `startItemId`, `adjacentTo`, `fields` |
 | Similar | `GET /Items/{itemId}/Similar` | ✔ | |
 | Filters | `GET /Items/Filters2` | ✔ | Genre and year filters for the library view |
-| Images | `GET /Items/{itemId}/Images/{imageType}` | – | `maxWidth, maxHeight, quality, tag, format, fillWidth, fillHeight`. The server does not upscale from 12.0 onward. |
+| Images | `GET /Items/{itemId}/Images/{imageType}` | ✔ (header, S6.6) | `maxWidth, maxHeight, quality, tag, format, fillWidth, fillHeight`. The server does not upscale from 12.0 onward. |
 | Played / unplayed | `POST` and `DELETE /UserPlayedItems/{itemId}` | ✔ | |
 | Favorite | `POST` and `DELETE /UserFavoriteItems/{itemId}` | ✔ | |
 | User data | `GET` and `POST /UserItems/{itemId}/UserData` | ✔ | |
