@@ -115,6 +115,33 @@ The Coder runs several agents at the same time. One agent per queue, its own bra
 
 **MVP (P0) is done when:** M00–M10 are accepted (each file's acceptance criteria are checked off, the Tester's report says "acceptable", and Security's review is done) and performance targets P1–P15 have been measured on device.
 
+## 3a. PoC tier (P0-PoC, decided 27.10.2026)
+
+The PoC is the first build the user tries by hand. It is a strict subset of P0 (MVP).
+
+**In scope:** M02, M04, M05 as specified; M06 Home (Continue watching, Next Up, Recently added); M07 library grid + detail (series per season, Q7-25); M08a-PoC (below); M10 minimal placeholder (Sign out + app version, Q4-12).
+
+**Out of scope:** video transcoding, the runtime DeviceProfile, audio/subtitle track selection, subtitles, trickplay, media segments, the next-up timer, M09 Search (developed in parallel, not required), device measurements P1–P15.
+
+### M08a-PoC playback (overrides 08-playback.md for the PoC only)
+- **DirectPlay:** MP4/MOV/M4V and HLS with H.264 or HEVC video and AAC/AC3/EAC3 audio, via `AVPlayerViewController` and the ADR M08-2 token model.
+- **DirectStream:** other containers (e.g. MKV) with H.264/HEVC video are requested as an HLS remux (fMP4 segments, video copied). Unsupported audio (e.g. DTS, TrueHD) is transcoded by the server to AAC or EAC3; video is never transcoded.
+- **DeviceProfile:** a static, hard-coded profile (08's runtime profile is M08a full).
+- **Unsupported video detection (Q8P-05):** before requesting a stream, the client checks the default video stream's codec in `MediaSources[].MediaStreams`; anything other than h264/hevc is unsupported. Note: `EnableTranscoding=false` cannot be used, because the DTS case (F4) needs audio-only transcoding; the server would then return `NoCompatibleStream` for F4. As a second check, `POST /Items/{id}/PlaybackInfo` is called with `EnableTranscoding=true` (audio only, e.g. F4 DTS), `AllowVideoStreamCopy=true`, the static profile and a high `MaxStreamingBitrate`; video is never transcoded; if the chosen source would transcode video (any video-related `TranscodeReasons`, see "Video transcode reason check" below), the stream is not requested. No transcoding job is ever started for an unsupported file.
+- **Unsupported video message:** "This video format isn't supported yet" (fi: "Tätä videomuotoa ei vielä tueta"), with "OK" (default focus) returning to detail. No automatic fallback to transcoding in the PoC. Other playback failures keep 08's "This file could not be played".
+- **Self-signed (pinned) server:** DirectPlay works through the resource loader; remux is blocked by design (`hlsSegmentsBypassPinnedTrust`) and shows "This video can't be played yet from a server with a self-signed certificate." (fi: "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne.") (Security, Q8P-13).
+- **Reporting:** `Playing`, `Progress` (every 10 s and on pause/seek), `Stopped` through `CoreNetworking`, so resume and Continue watching work.
+- **Security:** as stated by Security 27.10.2026 (header via resource loader, `MediaLogRedactor`, 401 -> `/Users/Me` -> "Session expired, please sign in again", no retry loop).
+  - **Remux (ADR M08-2 D4):** the master playlist is fetched through the resource loader with the `Authorization` header. `ApiKey` in server-produced segment URLs is an accepted risk, but every segment URL must match the server origin (`MediaOrigin.matches`); any other origin or an HTTPS -> HTTP downgrade is rejected. In Release builds the app never adds `ApiKey` to any URL it builds.
+  - **`TranscodeReasons`:** `TranscodingUrl` contains a token, so the parser reads only that one query parameter, and the URL is never written unredacted to a log or an error message.
+  - **Acceptance runs:** token-related rows run on a Release build. `poc-acceptance` generates random admin and test-user passwords on every run and fails if any artifact (including recordings and xcresult logs) contains an `ApiKey=` or `Token=` value or a password.
+
+### PoC acceptance
+All PoC PRs merged with the usual approvals, and the path sign-in -> Home -> detail -> playback passes in the simulator against Jellyfin 10.10.7, 10.11.11 and 12.2 servers (run natively on the macOS CI runner; Docker is used only for the API-level matrix on Linux) per TESTPLAN-PoC-ACCEPTANCE.md, using seed files F1–F5 (F6 optional).
+
+#### Video transcode reason check (Q8P-05, locked)
+`MediaSourceInfo.TranscodeReasons` is `[JsonIgnore]` on 10.10.7, 10.11.11 and 12.2, so the client parses the `TranscodeReasons` query parameter (comma-separated) of `TranscodingUrl`. Playback is refused with "This video format isn't supported yet" if any of these is present: `VideoCodecNotSupported`, `VideoProfileNotSupported`, `VideoRangeTypeNotSupported`, `VideoCodecTagNotSupported`, `VideoLevelNotSupported`, `VideoResolutionNotSupported`, `VideoBitDepthNotSupported`, `VideoFramerateNotSupported`, `RefFramesNotSupported`, `AnamorphicVideoNotSupported`, `InterlacedVideoNotSupported`, `VideoBitrateNotSupported`, `UnknownVideoStreamInfo`, `VideoRotationNotSupported` (12.2 only). All other values (container, audio, subtitle, `SecondaryAudioNotSupported`, `DirectPlayError`, `StreamCountExceedsLimit`) and unknown values are ignored. The parser is a pure function with unit tests per value.
+
 ## 4. Pain points → requirement → acceptance criterion
 Source: the Researcher's report, part 2 (Reddit, the Jellyfin forum, Swiftfin #1743) and part 3.
 | # | Pain point | Requirement | Acceptance criterion (summarized) | Module / priority |
