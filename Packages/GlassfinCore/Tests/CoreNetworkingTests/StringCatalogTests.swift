@@ -1,3 +1,4 @@
+import CoreNetworking
 import Foundation
 import XCTest
 
@@ -19,6 +20,47 @@ final class StringCatalogTests: XCTestCase {
         )
         let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
         XCTAssertEqual(issues, [], issues.joined(separator: "\n"))
+    }
+
+    func testNetworkingCatalogKeysAndLocalizedAccessors() throws {
+        let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
+        let catalogURL = root.appendingPathComponent(
+            "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings"
+        )
+        let data = try Data(contentsOf: catalogURL)
+        let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let entries: [(key: String, localized: String)] = [
+            (ServerTransportPolicy.unencryptedWarningKey, ServerTransportPolicy.unencryptedWarning),
+            (ServerTransportPolicy.publicAddressRequiresHTTPSKey, ServerTransportPolicy.publicAddressRequiresHTTPS),
+            (SessionEndCopy.serverSessionMayRemainKey, SessionEndCopy.serverSessionMayRemain),
+        ]
+
+        for (key, localized) in entries {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], "Missing catalog key: \(key)")
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], "\(key): missing localizations")
+            for locale in ["en", "fi"] {
+                let translation = try XCTUnwrap(
+                    localizations[locale] as? [String: Any],
+                    "\(key): missing \(locale)"
+                )
+                let unit = try XCTUnwrap(
+                    translation["stringUnit"] as? [String: Any],
+                    "\(key): missing \(locale) string unit"
+                )
+                XCTAssertEqual(unit["state"] as? String, "translated", "\(key): \(locale) must be translated")
+                let value = try XCTUnwrap(unit["value"] as? String, "\(key): missing \(locale) value")
+                XCTAssertFalse(
+                    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    "\(key): \(locale) value must not be empty"
+                )
+            }
+            #if os(Linux)
+                XCTAssertEqual(localized, key)
+            #else
+                XCTAssertFalse(localized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, key)
+            #endif
+        }
     }
 
     func testScannerChecksCatalogsOutsideCoreNetworking() throws {
