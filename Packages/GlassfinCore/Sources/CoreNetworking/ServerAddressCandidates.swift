@@ -44,16 +44,24 @@ public enum ServerAddressCandidates {
 
     private static let forbiddenSchemes: Set<String> = ["ftp", "file", "javascript", "glassfin-media"]
 
+    public static func containsUserinfo(_ raw: String) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate = text.contains("://") ? text : "https://" + text
+        guard let components = URLComponents(string: candidate) else { return false }
+        return components.user != nil || components.password != nil
+    }
+
     public static func expand(_ raw: String) -> ServerAddressPlan {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .invalid }
+        guard !trimmed.isEmpty, !containsUserinfo(trimmed) else { return .invalid }
         if let scheme = scheme(in: trimmed) {
             if forbiddenSchemes.contains(scheme) || (scheme != "http" && scheme != "https") {
                 return .invalid
             }
             return expandSchemed(trimmed, scheme: scheme)
         }
-        return expandSchemeless(trimmed)
+        let address = String(trimmed.prefix { $0 != "?" && $0 != "#" })
+        return expandSchemeless(address)
     }
 
     /// Joins an API path onto a server URL, keeping a reverse-proxy subpath.

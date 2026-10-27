@@ -221,7 +221,7 @@ final class MapperTests: XCTestCase {
             ServerVersionGate.failure(for: try XCTUnwrap(SemVer(parsing: "10.9.11"))),
             .unsupportedServer(version: "10.9.11")
         )
-        for raw in ["10", "abc", "", "not-a-version"] {
+        for raw in ["10", "abc", "", "not-a-version", "10.ten", "10.10.x", "10.10.0.beta"] {
             XCTAssertNil(SemVer(parsing: raw), raw)
         }
     }

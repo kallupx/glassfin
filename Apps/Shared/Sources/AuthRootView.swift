@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AuthRootView: View {
     @Bindable var flow: AuthFlow
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
@@ -20,9 +21,17 @@ struct AuthRootView: View {
         .onChange(of: flow.inlineError) { _, error in
             if error == .invalidCredentials {
                 password = ""
+                focused = .password
             }
         }
         .task { await flow.restoreSession() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { flow.sceneBecameBackground() }
+            if phase == .active { Task { await flow.sceneBecameActive() } }
+        }
+        .onChange(of: flow.appPhase) { _, _ in
+            Task { await flow.synchronizeSession() }
+        }
     }
 
     @ViewBuilder
@@ -30,6 +39,8 @@ struct AuthRootView: View {
         switch flow.screen {
         case .welcome:
             welcome
+        case .home:
+            home
         default:
             Group {
                 if reduceTransparency {
@@ -46,7 +57,7 @@ struct AuthRootView: View {
     @ViewBuilder
     private var content: some View {
         VStack(spacing: 24) {
-            if flow.screen != .welcome {
+            if flow.screen != .welcome && flow.screen != .home {
                 backButton
             }
             switch flow.screen {
@@ -77,6 +88,11 @@ struct AuthRootView: View {
             case .logoutConfirm:
                 logoutConfirm
             }
+            if let notice = flow.noticeKey {
+                Text(AuthCopy.localized(notice))
+                    .accessibilityIdentifier("auth.notice")
+                    .accessibilityValue(notice.rawValue)
+            }
             if let error = flow.inlineError {
                 Text(AuthCopy.localized(error))
                     .accessibilityIdentifier("address.error")
@@ -88,10 +104,13 @@ struct AuthRootView: View {
             }
         }
         .padding(32)
-        .onExitCommand {
-            guard flow.screen != .welcome else { return }
-            flow.goBack()
-        }
+        .defaultFocus($focused, flow.focus)
+        #if os(tvOS)
+            .onExitCommand {
+                guard flow.screen != .welcome else { return }
+                flow.goBack()
+            }
+        #endif
     }
 
     private var welcome: some View {
@@ -134,7 +153,7 @@ struct AuthRootView: View {
         VStack(spacing: 16) {
             Text(AuthCopy.localized(.connectionNotEncrypted))
                 .accessibilityIdentifier("cleartext.root")
-            Button(AuthCopy.localized(.accept)) { Task { await flow.acceptCleartext() } }
+            Button(AuthCopy.localized(.continueUnencrypted)) { Task { await flow.acceptCleartext() } }
                 .accessibilityIdentifier("cleartext.accept")
             Button(AuthCopy.localized(.cancel)) { flow.rejectCleartext() }
                 .accessibilityIdentifier("cleartext.cancel")
@@ -198,6 +217,11 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("quickconnect.code")
             Text(AuthCopy.localized(.quickConnectInstruction))
                 .accessibilityIdentifier("quickconnect.instruction")
+            if flow.quickConnectExpired || flow.inlineError != nil {
+                Button(AuthCopy.localized(.getNewCode)) { Task { await flow.getNewQuickConnectCode() } }
+                    .accessibilityIdentifier("quickconnect.newCode")
+                    .focused($focused, equals: .newCode)
+            }
         }
         .accessibilityIdentifier("quickconnect.root")
         .focused($focused, equals: .quickConnectCode)
@@ -205,9 +229,11 @@ struct AuthRootView: View {
 
     private var userPicker: some View {
         VStack(spacing: 12) {
-            ForEach(flow.publicUsers, id: \.id) { user in
+            Text(flow.displayedName)
+            ForEach(Array(flow.publicUsers.enumerated()), id: \.element.id) { index, user in
                 Button(user.name) { flow.selectUser(user) }
                     .accessibilityIdentifier("users.\(user.id)")
+                    .focused($focused, equals: index == 0 ? .continueButton : nil)
             }
         }
         .accessibilityIdentifier("users.root")
@@ -235,11 +261,35 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        VStack(spacing: 16) {
-            Text(AuthCopy.localized(.home))
-                .accessibilityIdentifier("home.root")
-            Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
-                .accessibilityIdentifier("home.signOut")
+        TabView {
+            Tab(AuthCopy.localized(.home), systemImage: "house") {
+                VStack(spacing: 16) {
+                    Text(AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
+                    if let key = flow.bannerKey {
+                        Text(AuthCopy.localized(key)).accessibilityIdentifier("home.banner")
+                    }
+                    if let key = flow.homeErrorKey {
+                        Text(AuthCopy.localized(key)).accessibilityIdentifier("home.error")
+                        Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryHome() } }
+                            .accessibilityIdentifier("home.retry")
+                            .focused($focused, equals: .tryAgain)
+                    } else if let snapshot = flow.cachedHome {
+                        ForEach(snapshot.resume + snapshot.nextUp + snapshot.latest, id: \.id) { item in
+                            Text(item.name)
+                        }
+                    }
+                }
+                .defaultFocus($focused, flow.focus)
+            }
+            Tab(AuthCopy.localized(.settings), systemImage: "gear") {
+                VStack(spacing: 16) {
+                    Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
+                        .accessibilityIdentifier("settings.signOut")
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                        .accessibilityIdentifier("settings.version")
+                }
+                .accessibilityIdentifier("settings.root")
+            }
         }
     }
 
@@ -251,6 +301,7 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("logout.confirm")
             Button(AuthCopy.localized(.cancel)) { flow.cancelLogout() }
                 .accessibilityIdentifier("logout.cancel")
+                .focused($focused, equals: .cancel)
         }
     }
 
@@ -275,7 +326,8 @@ enum AuthAssembly {
             let configuration = LaunchConfiguration(arguments: arguments)
             if configuration.useMockServer || configuration.resetState {
                 return assemble(
-                    backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore())
+                    backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
+                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock())
             }
         #else
             _ = arguments
@@ -287,17 +339,17 @@ enum AuthAssembly {
 
     @MainActor
     private static func assemble(
-        backend: any AuthBackend, secure: any SecureStore, settings: any SettingsStore
+        backend: any AuthBackend, secure: any SecureStore, settings: any SettingsStore,
+        clock: any GlassfinClock = SystemGlassfinClock()
     ) -> AuthFlow {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "glassfin-ui-\(UUID().uuidString)", isDirectory: true)
+        let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Glassfin", isDirectory: true)
         let app = AppState(
             secureStore: secure,
             settings: settings,
-            path: StaticConnectivityPath(online: true),
-            pinger: AuthAssemblyPinger(),
-            cacheRoot: root,
-            automaticPing: false
+            path: SystemPathMonitor(),
+            pinger: AuthAssemblyPinger(backend: backend, settings: settings, secure: secure),
+            cacheRoot: root
         )
         let vault = CredentialVault(secureStore: secure, settings: settings, accessGroup: "")
         return AuthFlow(
@@ -305,16 +357,46 @@ enum AuthAssembly {
             backend: backend,
             pins: SettingsCertificatePinStore(settings: settings),
             vault: vault,
-            clock: SystemGlassfinClock()
+            clock: clock
         )
     }
 }
 
 private struct AuthAssemblyPinger: ReachabilityPinging {
-    func ping() async -> PingOutcome { .ok }
+    var backend: any AuthBackend
+    var settings: any SettingsStore
+    var secure: any SecureStore
+
+    func ping() async -> PingOutcome {
+        let prefs = PreferencesRepository(store: settings).load()
+        guard let stored = prefs.activeServer(), let user = prefs.activeUser(),
+            let version = SemVer(parsing: stored.version)
+        else { return .failed(.serverUnreachable) }
+        let vault = CredentialVault(secureStore: secure, settings: settings, accessGroup: "")
+        let legacy = try? secure.data(for: SessionCredential.account(serverID: stored.id, userID: user.userID))
+        let token =
+            (try? vault.loadToken(serverID: stored.id, userID: user.userID))
+            ?? legacy.map { String(decoding: $0, as: UTF8.self) }
+        guard let token else { return .failed(.serverUnreachable) }
+        let server = ServerInfo(id: stored.id, name: stored.name, url: stored.url, version: version)
+        do {
+            _ = try await backend.currentUser(on: server, token: token)
+            return .ok
+        } catch {
+            return .failed(error == .unauthorized ? .unauthorized : .serverUnreachable)
+        }
+    }
 }
 
 #if DEBUG
+    private struct UITestExpiryClock: GlassfinClock {
+        private let origin = ContinuousClock.now
+        func now() -> Duration { origin.duration(to: .now) * 3_000 }
+        func sleep(for duration: Duration) async throws {
+            try await Task.sleep(for: duration / 3_000)
+        }
+    }
+
     struct UITestAuthBackend: AuthBackend {
         func probe(_ address: String) async -> ServerProbeOutcome {
             let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -332,7 +414,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
 
         func quickConnectEnabled(on server: ServerInfo) async throws(APIError) -> Bool {
             _ = server
-            return true
+            return !ProcessInfo.processInfo.arguments.contains("-uitest-qc-disabled")
         }
 
         func beginQuickConnect(on server: ServerInfo) async throws(APIError) -> QuickConnectChallenge {
@@ -343,6 +425,8 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         func pollQuickConnect(on server: ServerInfo, secret: QuickConnectSecret) async throws(APIError) -> Bool {
             _ = server
             _ = secret
+            if ProcessInfo.processInfo.arguments.contains("-uitest-qc-expired") { return false }
+            do { try await Task.sleep(for: .seconds(2)) } catch { throw APIError.cancelled }
             return true
         }
 

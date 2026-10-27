@@ -370,11 +370,15 @@ final class MediaAndSocketTests: XCTestCase {
         )
     }
 
-    func testServerURLDropsUserinfo() throws {
-        let normalized = try ServerURLNormalizer.normalize(URL(string: "https://user:secret@media.example/jellyfin")!)
+    func testT04_10_serverURLRejectsUserinfo() throws {
+        XCTAssertThrowsError(
+            try ServerURLNormalizer.normalize(URL(string: "https://user:secret@example.com/jellyfin")!))
+        let normalized = try ServerURLNormalizer.normalize(URL(string: "https://example.com/jellyfin?x=1#fragment")!)
         XCTAssertNil(normalized.user)
         XCTAssertNil(normalized.password)
         XCTAssertEqual(normalized.path, "/jellyfin")
+        XCTAssertNil(normalized.query)
+        XCTAssertNil(normalized.fragment)
         XCTAssertThrowsError(try ServerURLNormalizer.normalize(URL(string: "ftp://media.example")!))
     }
 }

@@ -89,8 +89,8 @@ final class T02FoundationTests: XCTestCase {
             AppErrorMessage.messageKey(for: .playback(.itemFailed(code: "NoCompatibleStream"))),
             AppErrorMessage.playbackFailedKey)
         XCTAssertEqual(
-            AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")),
-            "Palvelinversio 10.9.11 ei ole tuettu. Vaaditaan vähintään 10.10.0."
+            AppErrorMessage.messageKey(for: .unsupportedServer(version: "10.9.11")),
+            AppErrorMessage.unsupportedServerKey
         )
         XCTAssertNil(AppErrorMessage.userFacing(.cancelled))
         XCTAssertNil(AppErrorMessage.userFacing(.decoding))
@@ -196,7 +196,7 @@ final class T02FoundationTests: XCTestCase {
         XCTAssertThrowsError(try ResilientItemDecoder.searchHints(from: Data("[]".utf8), log: log))
     }
 
-    func testT02_12_preferencesStayUnderBudgetAndDropUserinfo() throws {
+    func testT02_12_preferencesStayUnderBudgetAndRejectUserinfo() throws {
         var preferences = AppPreferences.empty
         for index in 0..<10 {
             let server = StoredServer(
@@ -251,10 +251,14 @@ final class T02FoundationTests: XCTestCase {
             url: Sample.url("https://alice:secret@media.example/jellyfin"),
             version: "10.11.0"
         )
-        let normalized = try AppPreferences.empty.upserting(server: dirty).servers[0].url
-        XCTAssertEqual(normalized.absoluteString, "https://media.example/jellyfin")
-        XCTAssertFalse(normalized.absoluteString.contains("alice"))
-        XCTAssertFalse(normalized.absoluteString.contains("secret"))
+        XCTAssertThrowsError(try AppPreferences.empty.upserting(server: dirty)) { error in
+            XCTAssertEqual(error as? PreferencesError, .invalidServerURL)
+        }
+        let clean = StoredServer(
+            id: "s", name: "Home", url: Sample.url("https://example.com/jellyfin?x=1#fragment"),
+            version: "10.11.0")
+        let normalized = try AppPreferences.empty.upserting(server: clean).servers[0].url
+        XCTAssertEqual(normalized.absoluteString, "https://example.com/jellyfin")
         XCTAssertThrowsError(
             try AppPreferences.empty.upserting(
                 server: StoredServer(id: "s", name: "n", url: Sample.url("ftp://example.com"), version: "1.0.0"))

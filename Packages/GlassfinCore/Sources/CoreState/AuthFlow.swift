@@ -16,6 +16,25 @@ public final class AuthFlow {
     public private(set) var isProbing = false
     public private(set) var isPolling = false
     public private(set) var quickConnectCode: String?
+    public private(set) var quickConnectExpired = false
+    public private(set) var quickConnectRenewals = 0
+    public private(set) var cachedHome: HomeSnapshot?
+    public var appPhase: AppState.Phase { app.phase }
+    public var connectivity: Connectivity { app.connectivity }
+    public var homeErrorKey: AuthCopy.Key? {
+        guard cachedHome == nil else { return nil }
+        switch app.connectivity {
+        case .offline, .serverUnreachable: return .serverUnreachable
+        case .online, .degraded: return nil
+        }
+    }
+    public var bannerKey: AuthCopy.Key? {
+        switch app.connectivity {
+        case .offline: .noNetworkConnection
+        case .serverUnreachable: .serverUnreachable
+        case .online, .degraded: nil
+        }
+    }
     public private(set) var displayedName = ""
     public private(set) var displayedVersion = ""
     public private(set) var certificate: CertificatePresentation?
@@ -40,7 +59,10 @@ public final class AuthFlow {
     @ObservationIgnored private var quickConnectSecret: QuickConnectSecret?
     @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
-    @ObservationIgnored private var acceptedFingerprint: String?
+    @ObservationIgnored private var quickConnectIssuedAt: Duration?
+    @ObservationIgnored private var pollGeneration = UUID()
+    @ObservationIgnored private var isBackground = false
+    @ObservationIgnored private var capabilitiesRetryInFlight = false
 
     public init(
         app: AppState,
@@ -56,6 +78,7 @@ public final class AuthFlow {
         self.vault = vault
         self.clock = clock
         self.log = log
+        app.startPathUpdates()
     }
 
     public func connect() {
@@ -109,7 +132,6 @@ public final class AuthFlow {
         )
         switch outcome.decision {
         case .usePinnedCredential:
-            acceptedFingerprint = outcome.pinToStore ?? userAcceptedFingerprint
             screen = .address
             submitAddress()
         case .cancelPinMismatch(let previous, let presented):
@@ -133,6 +155,7 @@ public final class AuthFlow {
         screen = .address
         setupAddress = nil
         focus = AuthFocusPolicy.address(fieldIsEmpty: addressText.isEmpty)
+        submitAddress()
     }
 
     public func selectUser(_ user: PublicUser) {
@@ -141,11 +164,17 @@ public final class AuthFlow {
     }
 
     public func chooseQuickConnect() async {
-        await beginQuickConnectIfNeeded()
-        guard quickConnectCode != nil else { return }
+        guard quickConnectEnabled else { return }
         screen = .quickConnect
         focus = .quickConnectCode
-        startPolling()
+        inlineError = nil
+        if await beginQuickConnectIfNeeded() { startPolling() }
+    }
+
+    public func getNewQuickConnectCode() async {
+        stopPolling()
+        quickConnectRenewals = 0
+        await chooseQuickConnect()
     }
 
     public func choosePassword() {
@@ -169,7 +198,7 @@ public final class AuthFlow {
             handleLogin(error)
         } catch {
             passwordCleared = field.isEmpty
-            inlineError = AuthOpenQuestions.loginTransportFailureKey
+            inlineError = .loginTransportFailure
         }
     }
 
@@ -178,14 +207,25 @@ public final class AuthFlow {
         app.bootstrap()
         guard case .signedIn(let session) = app.phase else {
             if stillAtWelcome {
-                screen = app.phase == .needsServer ? .welcome : .address
-                if screen == .address {
-                    focus = AuthFocusPolicy.address(fieldIsEmpty: addressText.isEmpty)
+                if case .needsLogin(let saved) = app.phase {
+                    addressText = saved.url.absoluteString
+                    if app.blockingError != nil {
+                        server = saved
+                        unsupportedVersion = ServerVersionGate.dotted(saved.version)
+                        screen = .unsupported
+                        focus = .back
+                    } else {
+                        await showLogin(for: saved)
+                    }
+                } else {
+                    screen = .welcome
                 }
             }
             return
         }
         server = session.server
+        addressText = session.server.url.absoluteString
+        cachedHome = app.snapshots.load()
         displayedName = AuthServerName.display(session.server.name)
         displayedVersion = ServerVersionGate.dotted(session.server.version)
         guard let token = loadToken(serverID: session.server.id, userID: session.userID) else {
@@ -200,27 +240,35 @@ public final class AuthFlow {
         }
         switch result {
         case .success:
+            app.sessionRestored()
             screen = .home
             noticeKey = nil
+            inlineError = nil
+            await retryCapabilitiesIfNeeded()
         case .failure(let error):
             let mapped = AppErrorMapping.map(error, context: .authenticated, deviceOffline: false)
             if CoreModels.SessionTermination.shouldEndSession(mapped) {
+                screen = .signedOut
                 app.handle(mapped)
-                noticeKey = AuthOpenQuestions.sessionEndedNoticeKey
-                screen = .loginMethod
-                focus = .usePassword
+                noticeKey = .sessionExpired
+                await showLogin(for: session.server, includePublicUsers: false)
                 return
             }
+            if mapped == .cancelled { return }
             app.handle(mapped)
-            inlineError = AuthOpenQuestions.sessionRestoreFailureKey
+            app.handle(.serverUnreachable)
+            inlineError = nil
             screen = .home
+            focus = .tryAgain
+            await retryCapabilitiesIfNeeded()
         }
     }
 
     public func requestLogout() {
         guard case .signedIn = app.phase else { return }
         screen = .logoutConfirm
-        confirmFocus = AuthOpenQuestions.logoutConfirmDefaultFocus
+        confirmFocus = .cancel
+        focus = .cancel
     }
 
     public func confirmLogout() async {
@@ -234,14 +282,31 @@ public final class AuthFlow {
                 serverFailed = true
             }
         }
+        screen = .signedOut
         app.signOutLocally(notice: nil)
+        stopPolling()
         noticeKey = serverFailed ? .serverSessionMayRemain : nil
-        applyPostLogout()
+        server = session.server
+        addressText = session.server.url.absoluteString
+        quickConnectEnabled = (try? await backend.quickConnectEnabled(on: session.server)) ?? false
+        let others = app.preferencesSnapshot().users.filter {
+            $0.serverID == session.server.id && $0.userID != session.userID
+        }
+        publicUsers = others.map { PublicUser(id: $0.userID, name: $0.userName) }
+        username = ""
+        inlineError = nil
+        if !publicUsers.isEmpty {
+            screen = .userPicker
+            focus = .continueButton
+        } else {
+            enterMethod()
+        }
     }
 
     public func cancelLogout() {
         screen = .home
         confirmFocus = nil
+        focus = homeErrorKey == nil ? .connect : .tryAgain
     }
 
     public func removeCurrentServer() {
@@ -258,9 +323,32 @@ public final class AuthFlow {
     }
 
     public func sceneBecameBackground() {
-        guard isPolling else { return }
-        if !AuthOpenQuestions.continueQuickConnectInBackground {
-            stopPolling()
+        isBackground = true
+        pausePolling()
+    }
+
+    public func sceneBecameActive() async {
+        isBackground = false
+        if screen == .quickConnect, let issued = quickConnectIssuedAt, !quickConnectExpired {
+            if clock.now() - issued >= QuickConnectSecurity.timeout {
+                await renewExpiredCode()
+            } else {
+                // The monitor checks once immediately before sleeping for its next poll.
+                startPolling()
+            }
+        }
+        await retryCapabilitiesIfNeeded()
+    }
+
+    public func retryHome() async {
+        await restoreSession()
+    }
+
+    public func synchronizeSession() async {
+        if case .needsLogin(let saved) = app.phase, screen == .home || screen == .logoutConfirm {
+            screen = .signedOut
+            noticeKey = .sessionExpired
+            await showLogin(for: saved, includePublicUsers: false)
         }
     }
 
@@ -327,6 +415,9 @@ public final class AuthFlow {
             setupAddress = address
             screen = .setupIncomplete
             focus = .tryAgain
+        case .userinfoRejected:
+            inlineError = .userinfoRejected
+            screen = .address
         case .invalidAddress:
             inlineError = .invalidAddress
             screen = .address
@@ -356,12 +447,13 @@ public final class AuthFlow {
         focus = AuthFocusPolicy.cleartextAndCertificate
     }
 
-    private func showLogin(for info: ServerInfo) async {
+    private func showLogin(for info: ServerInfo, includePublicUsers: Bool = true) async {
         server = info
         displayedName = AuthServerName.display(info.name)
         displayedVersion = ServerVersionGate.dotted(info.version)
         quickConnectEnabled = (try? await backend.quickConnectEnabled(on: info)) ?? false
-        publicUsers = (try? await backend.publicUsers(on: info)) ?? []
+        let savedUsers = app.preferencesSnapshot().users.filter { $0.serverID == info.id }
+        publicUsers = includePublicUsers ? savedUsers.map { PublicUser(id: $0.userID, name: $0.userName) } : []
         if publicUsers.count > 1 {
             screen = .userPicker
             focus = .continueButton
@@ -374,112 +466,158 @@ public final class AuthFlow {
     }
 
     private func enterMethod() {
+        inlineError = nil
         if quickConnectEnabled {
             screen = .loginMethod
             focus = .quickConnect
-            if AuthOpenQuestions.initiateQuickConnectOnMethodEntry {
-                Task { await beginQuickConnectIfNeeded() }
-            }
-            return
-        }
-        switch AuthOpenQuestions.quickConnectDisabledPresentation {
-        case .passwordOnly:
-            screen = .credentials
-            focus = .password
-        case .methodScreen:
-            screen = .loginMethod
-            focus = .usePassword
+        } else {
+            choosePassword()
         }
     }
 
-    private func beginQuickConnectIfNeeded() async {
-        guard quickConnectSecret == nil, let server else { return }
+    private func beginQuickConnectIfNeeded() async -> Bool {
+        if quickConnectSecret != nil { return true }
+        guard let server, screen == .quickConnect, !isBackground else { return false }
+        let generation = pollGeneration
         do {
             let challenge = try await backend.beginQuickConnect(on: server)
+            guard generation == pollGeneration, screen == .quickConnect, !isBackground else { return false }
             quickConnectCode = challenge.code
             quickConnectSecret = QuickConnectSecret(challenge.secret)
+            quickConnectIssuedAt = clock.now()
+            quickConnectExpired = false
+            return true
         } catch {
-            inlineError = AuthOpenQuestions.loginTransportFailureKey
+            guard generation == pollGeneration else { return false }
+            inlineError = loginErrorKey(error, quickConnect: true)
+            focus = .newCode
+            return false
         }
     }
 
     private func startPolling() {
-        guard let secret = quickConnectSecret, let code = quickConnectCode, let server else { return }
-        pollTask?.cancel()
+        guard let secret = quickConnectSecret, let code = quickConnectCode, let server,
+            let issued = quickConnectIssuedAt, screen == .quickConnect, !isBackground
+        else { return }
+        pausePolling()
+        let generation = pollGeneration
         isPolling = true
         let backend = backend
         let clock = clock
         let log = log
+        let remaining = QuickConnectSecurity.timeout - (clock.now() - issued)
         pollTask = Task {
-            let monitor = QuickConnectMonitor(clock: clock)
+            let monitor = QuickConnectMonitor(clock: clock, timeout: max(.zero, remaining))
             let outcome = await monitor.run(secret: secret, code: code, log: log) { revealed in
                 if Task.isCancelled { return .pending }
                 do {
-                    let accepted = try await backend.pollQuickConnect(
-                        on: server, secret: QuickConnectSecret(revealed))
+                    let accepted = try await backend.pollQuickConnect(on: server, secret: QuickConnectSecret(revealed))
                     return accepted ? .authenticated : .pending
                 } catch {
                     return .pending
                 }
             }
-            if Task.isCancelled {
-                self.isPolling = false
-                return
-            }
-            await self.finishPoll(outcome, server: server, secret: secret)
+            guard !Task.isCancelled, generation == self.pollGeneration else { return }
+            await self.finishPoll(outcome, server: server, secret: secret, generation: generation)
         }
     }
 
-    private func finishPoll(_ outcome: QuickConnectOutcome, server: ServerInfo, secret: QuickConnectSecret) async {
+    private func finishPoll(
+        _ outcome: QuickConnectOutcome, server: ServerInfo, secret: QuickConnectSecret, generation: UUID
+    ) async {
         isPolling = false
         switch outcome {
         case .authenticated:
             do {
                 let session = try await backend.finishQuickConnect(on: server, secret: secret)
+                guard generation == pollGeneration, screen == .quickConnect, !isBackground else { return }
                 quickConnectSecret = nil
+                pollTask = nil
                 try await complete(session)
-            } catch let error as APIError {
-                if SessionFailurePolicy.effect(of: error, kind: .login) == .invalidCredentials {
-                    inlineError = AuthOpenQuestions.quickConnectUnauthorizedKey
-                } else {
-                    inlineError = AuthOpenQuestions.loginTransportFailureKey
-                }
             } catch {
-                inlineError = AuthOpenQuestions.loginTransportFailureKey
+                guard generation == pollGeneration else { return }
+                inlineError = loginErrorKey(error as? APIError ?? .network, quickConnect: true)
+                focus = .newCode
             }
         case .expired:
-            if AuthOpenQuestions.renewQuickConnectCodeAtTimeout {
-                quickConnectSecret = nil
-                quickConnectCode = nil
-                await beginQuickConnectIfNeeded()
-                startPolling()
-            }
+            pollTask = nil
+            await renewExpiredCode()
         case .cancelled:
             break
         }
     }
 
-    private func stopPolling() {
-        pollTask?.cancel()
-        isPolling = false
+    private func renewExpiredCode() async {
+        pausePolling()
         quickConnectSecret = nil
+        quickConnectCode = nil
+        guard quickConnectRenewals < 3 else {
+            quickConnectExpired = true
+            inlineError = .quickConnectExpired
+            focus = .newCode
+            return
+        }
+        quickConnectRenewals += 1
+        if await beginQuickConnectIfNeeded() { startPolling() }
+    }
+
+    private func pausePolling() {
+        pollGeneration = UUID()
+        pollTask?.cancel()
+        pollTask = nil
+        isPolling = false
+    }
+
+    private func stopPolling() {
+        pausePolling()
+        quickConnectSecret = nil
+        quickConnectCode = nil
+        quickConnectIssuedAt = nil
+        quickConnectRenewals = 0
+        quickConnectExpired = false
     }
 
     private func complete(_ session: AuthenticatedSession) async throws {
-        let blocks = AuthOpenQuestions.capabilitiesFailureBlocksSignIn
+        try persist(session)
+        app.setCapabilitiesRetryPending(true, serverID: session.session.server.id, userID: session.session.userID)
+        stopPolling()
+        screen = .home
+        inlineError = nil
+        noticeKey = nil
+        focus = .connect
+        capabilitiesRetryInFlight = true
+        defer { capabilitiesRetryInFlight = false }
         do {
             try await backend.postCapabilities(on: session.session.server, token: session.accessToken)
+            app.setCapabilitiesRetryPending(false, serverID: session.session.server.id, userID: session.session.userID)
         } catch {
-            if blocks {
-                inlineError = AuthOpenQuestions.loginTransportFailureKey
-                return
-            }
+            log.warning("Capabilities registration failed; one retry is pending.")
         }
-        try persist(session)
-        quickConnectSecret = nil
-        quickConnectCode = nil
-        screen = .home
-        focus = .connect
+    }
+
+    private func retryCapabilitiesIfNeeded() async {
+        guard !capabilitiesRetryInFlight, case .signedIn(let session) = app.phase,
+            app.preferencesSnapshot().activeUser()?.capabilitiesRetryPending == true,
+            let token = loadToken(serverID: session.server.id, userID: session.userID)
+        else { return }
+        capabilitiesRetryInFlight = true
+        defer { capabilitiesRetryInFlight = false }
+        // Consume before the request so a failed retry is not repeated on every foreground.
+        app.setCapabilitiesRetryPending(false, serverID: session.server.id, userID: session.userID)
+        do {
+            try await backend.postCapabilities(on: session.server, token: token)
+        } catch {
+            log.warning("Capabilities registration retry failed.")
+        }
+    }
+
+    private func loginErrorKey(_ error: APIError, quickConnect: Bool = false) -> AuthCopy.Key? {
+        switch error {
+        case .cancelled: nil
+        case .unauthorized: quickConnect ? .quickConnectUnauthorized : .invalidCredentials
+        case .server: .loginServerFailure
+        default: .loginTransportFailure
+        }
     }
 
     private func persist(_ session: AuthenticatedSession) throws(PreferencesError) {
@@ -506,13 +644,8 @@ public final class AuthFlow {
     }
 
     private func handleLogin(_ error: APIError) {
-        switch SessionFailurePolicy.effect(of: error, kind: .login) {
-        case .invalidCredentials:
-            inlineError = .invalidCredentials
-            focus = .password
-        case .endSession, .keepToken:
-            inlineError = AuthOpenQuestions.loginTransportFailureKey
-        }
+        inlineError = loginErrorKey(error)
+        if error == .unauthorized { focus = .password }
     }
 
     private func loadToken(serverID: String, userID: String) -> String? {
@@ -541,22 +674,6 @@ public final class AuthFlow {
         return nil
     }
 
-    private func applyPostLogout() {
-        switch AuthOpenQuestions.postLogoutScreen {
-        case .welcome:
-            screen = .welcome
-            focus = .connect
-        case .address:
-            screen = .address
-            focus = AuthFocusPolicy.address(fieldIsEmpty: addressText.isEmpty)
-        case .login:
-            screen = .loginMethod
-            focus = .usePassword
-        case nil:
-            screen = .signedOut
-            focus = .signIn
-        }
-    }
 }
 
 enum TimedCall {

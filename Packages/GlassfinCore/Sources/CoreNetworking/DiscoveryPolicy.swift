@@ -77,7 +77,7 @@ public enum DiscoveryPolicy {
         return stored
     }
 
-    static func displayName(_ raw: String) -> String {
+    public static func displayName(_ raw: String) -> String {
         MetadataSanitizer.displayText(MetadataSanitizer.plainText(raw), limit: maximumNameLength)
     }
 
