@@ -1,2 +1,0 @@
-This file is copied into the CoreNetworking bundle on Linux so SwiftPM generates Bundle.module.
-Apple builds process Localizable.xcstrings instead and exclude this marker.

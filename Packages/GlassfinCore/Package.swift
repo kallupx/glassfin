@@ -15,11 +15,9 @@ let externalDependencies: [Package.Dependency] = [
     let packageDependencies = externalDependencies
     let coreAPIExternal: [Target.Dependency] = []
     // The Linux toolchain has no xcstringstool. Exclude the catalog and copy a marker
-    // so SwiftPM still generates Bundle.module for String(localized:bundle: .module).
+    // so SwiftPM still generates Bundle.module for AuthCopy's NSLocalizedString lookups.
     let coreModelsExclude = ["Localizable.xcstrings"]
     let coreModelsResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
-    let coreNetworkingExclude = ["Localizable.xcstrings"]
-    let coreNetworkingResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
 #else
     let packageDependencies = externalDependencies
     let coreAPIExternal: [Target.Dependency] = [
@@ -30,8 +28,6 @@ let externalDependencies: [Package.Dependency] = [
     ]
     let coreModelsExclude = ["LinuxStringCatalogMarker.txt"]
     let coreModelsResources: [Resource] = [.process("Localizable.xcstrings")]
-    let coreNetworkingExclude = ["LinuxStringCatalogMarker.txt"]
-    let coreNetworkingResources: [Resource] = [.process("Localizable.xcstrings")]
 #endif
 
 let debugSettings: [SwiftSetting] = [
@@ -53,10 +49,15 @@ let package = Package(
     targets: [
         .target(
             name: "CoreModels",
-            resources: [.process("Localizable.xcstrings")],
+            exclude: coreModelsExclude,
+            resources: coreModelsResources,
             swiftSettings: debugSettings
         ),
-        .target(name: "CoreNetworking", dependencies: ["CoreModels"], swiftSettings: debugSettings),
+        .target(
+            name: "CoreNetworking",
+            dependencies: ["CoreModels"],
+            swiftSettings: debugSettings
+        ),
         // GlassfinServices, not CoreServices: that module name collides with the system
         // CoreServices framework Foundation imports, and `swift test` on macOS then
         // reports a Foundation -> CoreServices -> CoreModels cycle.

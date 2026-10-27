@@ -155,7 +155,7 @@ final class PlaybackPoCDecisionTests: XCTestCase {
     func testT08P_62_catalogKeysHaveBothTranslations() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
-        let url = root.appendingPathComponent("Sources/CoreNetworking/Localizable.xcstrings")
+        let url = root.appendingPathComponent("Sources/CoreModels/Localizable.xcstrings")
         let catalog = try jsonBody(Data(contentsOf: url))
         let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
         XCTAssertEqual(PlaybackCopy.unsupportedVideoKey, "playback.unsupportedVideoFormat")
@@ -203,7 +203,7 @@ final class PlaybackPoCDecisionTests: XCTestCase {
             .deletingLastPathComponent()
         let repository = package.deletingLastPathComponent().deletingLastPathComponent()
         for url in [
-            package.appendingPathComponent("Sources/CoreNetworking/Localizable.xcstrings"),
+            package.appendingPathComponent("Sources/CoreModels/Localizable.xcstrings"),
             repository.appendingPathComponent("Apps/Shared/Resources/Localizable.xcstrings"),
         ] {
             let strings = try XCTUnwrap(jsonBody(Data(contentsOf: url))["strings"] as? [String: Any])

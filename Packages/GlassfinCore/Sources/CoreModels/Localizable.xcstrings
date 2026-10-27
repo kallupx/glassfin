@@ -889,6 +889,91 @@
           }
         }
       }
+    },
+    "playback.selfSignedRemuxBlocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video can't be played yet from a server with a self-signed certificate."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne."
+          }
+        }
+      }
+    },
+    "playback.ok": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "playback.unsupportedVideoFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video format isn't supported yet"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä videomuotoa ei vielä tueta"
+          }
+        }
+      }
+    },
+    "playback.error.couldNotPlay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file could not be played"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä tiedostoa ei voitu toistaa"
+          }
+        }
+      }
+    },
+    "playback.error.insecureRedirect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server redirected playback to an unsafe address"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelin ohjasi toiston turvattomaan osoitteeseen"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
