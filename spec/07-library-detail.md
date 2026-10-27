@@ -42,7 +42,7 @@ One view with two `focusSection` regions:
   6. The episode overview is not focusable.
 - **Glass budget (G-1):** the series view has at most two glass containers visible at the same time (the HeroHeader button row and the season picker). Episode cards are content.
 - While episodes load, skeleton cards are shown (the same size), so that layout and focus do not jump.
-- P1: every season's episodes on one continuous row, with the season picker acting as a jump index (the Apple TV app's model). Which one is the default? The spec chooses the model above; ASSUMPTION.
+- P1: every season's episodes on one continuous row, with the season picker acting as a jump index (the Apple TV app's model). Which one is the default? **DECIDED (Q7-25, user 27.10.2026):** the default is the per-season model with the season picker described above.
 
 ## Acceptance criteria
 - [ ] UC-L1: the grid, sorting, and filtering work. In a library of 2,000 items, P3 (60 fps) is met, and paging works without empty gaps.

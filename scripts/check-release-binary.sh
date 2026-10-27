@@ -26,8 +26,8 @@ if [[ ! -f "$binary" ]]; then
 fi
 
 fail=0
-if strings "$binary" | grep -F -e 'uitest-' -e 'MockAPIClient'; then
-  echo "release-binary: $binary contains uitest- or MockAPIClient" >&2
+if strings "$binary" | grep -F -e 'uitest-' -e 'MockAPIClient' -e 'AVURLAssetHTTPHeaderFieldsKey'; then
+  echo "release-binary: $binary contains a test marker or the undocumented media header key" >&2
   fail=1
 fi
 if nm "$binary" 2>/dev/null | grep -F -e 'uitest-' -e 'MockAPIClient'; then
@@ -38,4 +38,4 @@ fi
 if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
-echo "release-binary: $binary has no uitest- or MockAPIClient strings"
+echo "release-binary: $binary has no test markers or undocumented media header key strings"

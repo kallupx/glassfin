@@ -19,7 +19,7 @@
 | 2 | Next Up (fi: "Seuraavat jaksot") | `GET /Shows/NextUp` | `limit=20, enableResumable=false, enableRewatching=false, fields=…` |
 | 3…n | Recently added (fi: "Viimeksi lisätyt") / library | `GET /Items/Latest` | `parentId=<library>, limit=20, groupItems=true`, one row per video library (`UserViews`) |
 | P1 | Favorites (fi: "Suosikit") | `GET /Items` | `isFavorite=true, recursive=true` |
-- **ASSUMPTION – requires user confirmation:** "Continue watching" (fi: "Jatka katsomista") and "Next Up" (fi: "Seuraavat jaksot") are shown as **separate rows**, as in Jellyfin web. The alternative is a combined "Up Next" row in the manner of the Apple TV app (a P1 setting).
+- **DECIDED (Q6-20, user 27.10.2026):** "Continue watching" (fi: "Jatka katsomista") and "Next Up" (fi: "Seuraavat jaksot") are shown as **separate rows**, as in Jellyfin web. The alternative is a combined "Up Next" row in the manner of the Apple TV app (a P1 setting).
 - All sections are fetched **in parallel** (`async let` or a TaskGroup). One failed section shows its own error state, and the rest of the view does not crash.
 - Empty rows are hidden. If all of them are empty, an empty state "Your library is empty" (fi: "Kirjastosi on tyhjä") is shown, plus guidance.
 - The home view's order and visible rows can be edited in settings (P1), at which point the server's `DisplayPreferences` are also taken into account (P2).
