@@ -99,7 +99,7 @@ private struct Fixture {
     let root: URL
     let disk: DiskImageCache
     let loader: HomeImageLoader
-    let resource: ImageResource
+    let resource: JellyfinImageResource
     let probe: StreamProbe
     let session: URLSession
 
@@ -109,7 +109,7 @@ private struct Fixture {
         ImageStreamProtocol.probes.insert(probe, key: tag)
         root = FileManager.default.temporaryDirectory.appendingPathComponent(tag)
         disk = DiskImageCache(directory: root, byteLimit: CacheBudget.imageDiskBytes)
-        resource = ImageResource(
+        resource = JellyfinImageResource(
             serverID: "s", itemID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", type: .primary, tag: tag, width: 250, height: 375
         )
         let configuration = URLSessionConfiguration.ephemeral

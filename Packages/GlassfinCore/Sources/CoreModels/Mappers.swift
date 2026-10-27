@@ -22,7 +22,7 @@ public enum DTOMapper {
         let session = UserSession(
             server: server,
             userID: userID,
-            userName: user.Name ?? "",
+            userName: MetadataSanitizer.displayText(user.Name ?? "", limit: MetadataPolicy.nameMax),
             isAdministrator: user.Policy?.IsAdministrator ?? false
         )
         return AuthenticatedSession(session: session, accessToken: token)
@@ -33,7 +33,7 @@ public enum DTOMapper {
         return UserSession(
             server: server,
             userID: id,
-            userName: user.Name ?? "",
+            userName: MetadataSanitizer.displayText(user.Name ?? "", limit: MetadataPolicy.nameMax),
             isAdministrator: user.Policy?.IsAdministrator ?? false
         )
     }
@@ -58,15 +58,15 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
-            overview: dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) },
+            name: MetadataSanitizer.displayText(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            overview: dto.Overview.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.overviewMax) },
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,
             parentIndexNumber: dto.ParentIndexNumber,
             runtime: Ticks.runtimeDuration(from: dto.RunTimeTicks),
             productionYear: dto.ProductionYear,
-            officialRating: dto.OfficialRating,
+            officialRating: dto.OfficialRating.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) },
             communityRating: dto.CommunityRating,
             images: images,
             userData: userData,
@@ -78,8 +78,8 @@ public enum DTOMapper {
     public static func library(_ dto: BaseItemDTO) -> Library? {
         guard let id = dto.Id else { return nil }
         return Library(
-            id: id, name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
-            collectionType: dto.CollectionType)
+            id: id, name: MetadataSanitizer.displayText(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            collectionType: dto.CollectionType.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) })
     }
 
     public static func page(_ dto: QueryResultDTO, log: any GlassfinLog) -> Page<MediaItem> {
@@ -114,7 +114,9 @@ public enum DTOMapper {
             url: url,
             audioTracks: tracks(streams, type: "Audio"),
             subtitleTracks: tracks(streams, type: "Subtitle"),
-            transcodeReasons: source.TranscodeReasons ?? []
+            transcodeReasons: (source.TranscodeReasons ?? []).map {
+                MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax)
+            }
         )
     }
 
@@ -144,9 +146,11 @@ public enum DTOMapper {
         streams.filter { $0.`Type` == type }.map { stream in
             Track(
                 id: stream.Index ?? 0,
-                displayTitle: stream.DisplayTitle.map(MetadataSanitizer.plainText),
-                language: stream.Language,
-                codec: stream.Codec
+                displayTitle: stream.DisplayTitle.map {
+                    MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax)
+                },
+                language: stream.Language.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) },
+                codec: stream.Codec.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
             )
         }
     }
@@ -154,7 +158,7 @@ public enum DTOMapper {
     private static func chapters(_ chapters: [ChapterDTO]?, log: any GlassfinLog) -> [ChapterMark] {
         (chapters ?? []).map { chapter in
             ChapterMark(
-                name: chapter.Name.map(MetadataSanitizer.plainText),
+                name: chapter.Name.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) },
                 start: Ticks.positionDuration(from: chapter.StartPositionTicks ?? 0, log: log)
             )
         }

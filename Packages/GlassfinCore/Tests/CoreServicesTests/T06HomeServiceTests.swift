@@ -6,6 +6,20 @@ import GlassfinServices
 import XCTest
 
 final class T06HomeServiceTests: XCTestCase {
+    // T06-73: canonical spec/TESTPLAN-M06.md.
+    func testT06_73_filterGenresUseLiteralTextAndPolicyLimits() async throws {
+        let literal = "<b>x</b>&amp;"
+        let long = String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)
+        let genres = [literal] + Array(repeating: "\u{0000}\u{202e}" + long, count: MetadataPolicy.genresMax + 1)
+        let payload = try JSONSerialization.data(withJSONObject: ["Genres": genres, "Years": [2024]])
+        let client = MockAPIClient { _ in payload }
+        let filters = try await JellyfinLibraryService(client: client).filters(in: "cccccccccccccccccccccccccccccccc")
+        XCTAssertEqual(filters.genres.count, MetadataPolicy.genresMax)
+        XCTAssertEqual(filters.genres.first, literal)
+        XCTAssertEqual(filters.genres.last, String(long.prefix(MetadataPolicy.genreMax)))
+        XCTAssertEqual(filters.years, [2024])
+    }
+
     // T06-06: Resume sends exactly the canonical video-row parameters.
     func testT06_06_resumeEndpointParametersMatchSpec() async throws {
         let client = MockAPIClient { _ in Data("[]".utf8) }

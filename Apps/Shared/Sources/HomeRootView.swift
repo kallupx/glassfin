@@ -153,17 +153,22 @@ private struct HomeUnavailableClient: JellyfinAPIClient {
 
 #if DEBUG
     private struct HomeAccessibilityOverrides: ViewModifier {
-        @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @DesignAccessibility private var accessibility
 
         func body(content: Content) -> some View {
             let args = ProcessInfo.processInfo.arguments
+            let reduceTransparency = args.contains("-uitest-home-reduce-transparency")
+            let reduceMotion = args.contains("-uitest-home-reduce-motion")
             content
                 .environment(
-                    \.accessibilityReduceTransparency,
-                    reduceTransparency || args.contains("-uitest-home-reduce-transparency")
+                    \.designAccessibilityOverride,
+                    reduceTransparency || reduceMotion
+                        ? DesignAccessibilityValues(
+                            reduceTransparency: accessibility.reduceTransparency || reduceTransparency,
+                            increaseContrast: accessibility.increaseContrast,
+                            reduceMotion: accessibility.reduceMotion || reduceMotion
+                        ) : nil
                 )
-                .environment(\.accessibilityReduceMotion, reduceMotion || args.contains("-uitest-home-reduce-motion"))
         }
     }
 #endif

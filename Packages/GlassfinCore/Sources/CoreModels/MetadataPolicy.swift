@@ -14,9 +14,6 @@ public enum MetadataPolicy {
 
     /// Clean before truncating by extended grapheme clusters. Markup stays literal.
     public static func clean(_ value: String, limit: Int) -> String {
-        let scalars = value.unicodeScalars.filter {
-            $0.properties.generalCategory != .control && !$0.properties.isBidiControl
-        }
-        return String(String(String.UnicodeScalarView(scalars)).prefix(max(0, limit)))
+        MetadataSanitizer.displayText(value, limit: limit)
     }
 }

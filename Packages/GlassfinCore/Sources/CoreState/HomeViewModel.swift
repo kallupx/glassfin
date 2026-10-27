@@ -28,11 +28,14 @@ public struct HomeLibraryRow: Identifiable, Sendable {
 public enum HomeMetadata {
     public static func item(_ source: MediaItem) -> MediaItem {
         var item = source
-        item.name = MetadataPolicy.clean(item.name, limit: MetadataPolicy.nameMax)
-        item.overview = item.overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) }
-        item.officialRating = item.officialRating.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }
+        item.name = MetadataSanitizer.displayText(item.name, limit: MetadataPolicy.nameMax)
+        item.overview = item.overview.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.overviewMax) }
+        item.officialRating = item.officialRating.map {
+            MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax)
+        }
         item.chapters = item.chapters.map {
-            ChapterMark(name: $0.name.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) }, start: $0.start)
+            ChapterMark(
+                name: $0.name.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }, start: $0.start)
         }
         return item
     }
@@ -45,7 +48,7 @@ public enum HomeMetadata {
 
     public static func library(_ source: Library) -> Library {
         var library = source
-        library.name = MetadataPolicy.clean(library.name, limit: MetadataPolicy.nameMax)
+        library.name = MetadataSanitizer.displayText(library.name, limit: MetadataPolicy.nameMax)
         return library
     }
 

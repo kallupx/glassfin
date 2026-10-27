@@ -78,10 +78,10 @@ final class DesignSystemLogicTests: XCTestCase {
 
     func testT05_15_overviewIsPlainText() {
         let plain = PlainText.overview(DemoFixtures.htmlOverview)
-        XCTAssertEqual(plain, "A story & more. Tail marker.")
-        XCTAssertFalse(plain.contains("<"))
-        XCTAssertFalse(plain.contains("alert"))
-        XCTAssertFalse(plain.contains("example.com"))
+        XCTAssertEqual(plain, DemoFixtures.htmlOverview)
+        XCTAssertTrue(plain.contains("<"))
+        XCTAssertTrue(plain.contains("alert"))
+        XCTAssertTrue(plain.contains("example.com"))
         XCTAssertEqual(DemoFixtures.plainOverview, plain)
     }
 

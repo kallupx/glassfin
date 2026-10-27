@@ -39,7 +39,7 @@ import SwiftUI
     }
 
     struct HomeMockImages: HomeImageLoading {
-        func data(for resource: ImageResource) async throws -> Data { throw ImageDataError.invalidImage }
+        func data(for resource: JellyfinImageResource) async throws -> Data { throw ImageDataError.invalidImage }
     }
 
     actor HomeMockLibrary: LibraryService {

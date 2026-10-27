@@ -18,7 +18,7 @@ final class T06SessionTests: XCTestCase {
         while !(await transport.started) && ContinuousClock.now < deadline { await Task.yield() }
         let started = await transport.started
         XCTAssertTrue(started)
-        let resource = ImageResource(
+        let resource = JellyfinImageResource(
             serverID: Sample.serverID, itemID: Sample.movie, type: .primary, tag: "t", width: 1, height: 1)
         do {
             _ = try await client.send(resource.request())

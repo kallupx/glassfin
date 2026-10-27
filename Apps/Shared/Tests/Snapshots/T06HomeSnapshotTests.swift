@@ -34,7 +34,9 @@ final class T06HomeSnapshotTests: XCTestCase {
                     model: model, app: app, session: session, imageLoader: HomeMockImages(),
                     onDetail: { _ in }, onPlay: { _ in }
                 )
-                .environment(\.accessibilityReduceTransparency, reduceTransparency)
+                .environment(
+                    \.designAccessibilityOverride,
+                    DesignAccessibilityValues(reduceTransparency: reduceTransparency))
                 let renderer = ImageRenderer(content: view.frame(width: 1920, height: 1080))
                 renderer.proposedSize = ProposedViewSize(width: 1920, height: 1080)
                 renderer.scale = scale

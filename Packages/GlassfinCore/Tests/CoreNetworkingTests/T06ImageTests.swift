@@ -9,7 +9,7 @@ import XCTest
 #endif
 
 final class T06ImageTests: XCTestCase {
-    private let resource = ImageResource(
+    private let resource = JellyfinImageResource(
         serverID: "server", itemID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", type: .primary,
         tag: "a&b?#", width: 250, height: 375)
 
@@ -29,7 +29,7 @@ final class T06ImageTests: XCTestCase {
         XCTAssertEqual(try resource.request().maximumResponseBytes, MetadataPolicy.imageMaxBytes)
         // T06-29: all image types request displayed dimensions, already multiplied by display scale.
         for type in [ItemImageType.primary, .thumb, .logo, .backdrop] {
-            let image = ImageResource(
+            let image = JellyfinImageResource(
                 serverID: resource.serverID, itemID: resource.itemID, type: type, tag: "t", width: 500, height: 750)
             let call = try image.request()
             XCTAssertEqual(call.query.first { $0.name == "maxWidth" }?.value, "500")
@@ -58,17 +58,17 @@ final class T06ImageTests: XCTestCase {
         XCTAssertEqual(resource.cacheKey, expected)
         XCTAssertEqual(resource.cacheKey.count, 64)
         XCTAssertEqual(resource.cacheKey, resource.cacheKey)
-        let other = ImageResource(
+        let other = JellyfinImageResource(
             serverID: "other", itemID: resource.itemID, type: .primary, tag: resource.tag, width: 250, height: 375)
         XCTAssertNotEqual(resource.cacheKey, other.cacheKey)
         for changed in [
-            ImageResource(
+            JellyfinImageResource(
                 serverID: resource.serverID, itemID: resource.itemID, type: .thumb, tag: resource.tag, width: 250,
                 height: 375),
-            ImageResource(
+            JellyfinImageResource(
                 serverID: resource.serverID, itemID: resource.itemID, type: .primary, tag: "new", width: 250,
                 height: 375),
-            ImageResource(
+            JellyfinImageResource(
                 serverID: resource.serverID, itemID: resource.itemID, type: .primary, tag: resource.tag, width: 500,
                 height: 750),
         ] {
@@ -82,7 +82,8 @@ final class T06ImageTests: XCTestCase {
         XCTAssertThrowsError(try ImageDataPolicy.validate(Data(count: MetadataPolicy.imageMaxBytes + 1))) {
             XCTAssertEqual($0 as? ImageDataError, .oversized)
         }
-        let invalid = ImageResource(serverID: "s", itemID: "../bad", type: .primary, tag: "", width: 1, height: 1)
+        let invalid = JellyfinImageResource(
+            serverID: "s", itemID: "../bad", type: .primary, tag: "", width: 1, height: 1)
         XCTAssertThrowsError(try invalid.request())
     }
 }

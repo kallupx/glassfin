@@ -9,7 +9,7 @@ public enum ItemImageType: String, Codable, Sendable {
 }
 
 /// Image identity contains no URL or credentials. Size is in displayed pixels.
-public struct ImageResource: Hashable, Sendable {
+public struct JellyfinImageResource: Hashable, Sendable {
     public let serverID: String
     public let itemID: String
     public let type: ItemImageType

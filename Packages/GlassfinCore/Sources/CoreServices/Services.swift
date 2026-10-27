@@ -289,7 +289,10 @@ public struct JellyfinLibraryService: LibraryService {
             APIRequest(method: "GET", path: "/Items/Filters2", query: [URLQueryItem(name: "parentId", value: library)]),
             as: QueryFiltersDTO.self
         )
-        return ItemFilterSet(genres: dto.Genres ?? [], years: dto.Years ?? [])
+        return ItemFilterSet(
+            genres: (dto.Genres ?? []).prefix(MetadataPolicy.genresMax).map {
+                MetadataSanitizer.displayText($0, limit: MetadataPolicy.genreMax)
+            }, years: dto.Years ?? [])
     }
 
     public func setPlayed(_ id: MediaItem.ID, _ played: Bool) async throws(APIError) {

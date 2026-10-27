@@ -50,7 +50,7 @@ The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied ve
 | T06-70 | `T06HomeUITests.testT06_70_accessibilityScreenshots`; `T06HomeSnapshotTests.testT06_70_homeDefaultAndOpaqueBannerAt1080And4K` |
 | T06-71 | `T06ImageTests.testT06_71_imageURLHasNoCredentialQueryAndRequestHasAuthorization`; `T06ImageTests.testT06_71_inheritedCredentialQueriesAreRejected` |
 | T06-72 | `T06ImageTests.testT06_72_imageCacheKeyIsStableSHA256OfIdentityTuple`; `T06ImageStoreTests.testT06_72_diskFilenameIsTheStableSHA256AndBytesRoundTrip` |
-| T06-73 | `T06MetadataTests.testT06_73_metadataPreservesLiteralMarkupAndEntities`; `T06MetadataTests.testT06_73_limitsCountCleanedGraphemeClusters`; `T06HomeTests.testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels` |
+| T06-73 | `T06MetadataTests.testT06_73_metadataPreservesLiteralMarkupAndEntities`; `T06MetadataTests.testT06_73_limitsCountCleanedGraphemeClusters`; `T06MetadataTests.testT06_73_displayTextCaps500GraphemesWithoutSplittingEmojiOrCombiningMarks`; `T06MetadataTests.testT06_73_displayTextStripsEveryControlAndBidiScalarBeforeCapping`; `T06MetadataTests.testT06_73_allMappedNamesAreCappedAndKeepLiteralMarkup`; `T06HomeServiceTests.testT06_73_filterGenresUseLiteralTextAndPolicyLimits`; `T06HomeTests.testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels`; `DesignSystemLogicTests.testT05_15_overviewIsPlainText` |
 | T06-74 | `scripts/ci-grep.sh`; existing M03 redactor tests |
 | T06-75 | `scripts/redact_artifacts.py --self-test` (redactor only; final artifacts pending) |
 | T06-76 | `T06ImageStreamTests.testT06_76_missingContentLengthAbortsDuringDownload`; `T06ImageStreamTests.testT06_76_exactByteLimitIsAcceptedAndCached` |
@@ -125,6 +125,8 @@ Each row identifies the missing part of the canonical scenario and why it remain
 - Continue Watching and Next Up are separate P0 rows (owner decision Q6-20), asserted with distinct in-progress and next episode fixtures in T06-10. Favorites and the combined-row preference remain disabled P1 switches.
 - Series detail uses one season at a time with a season picker (owner decision Q7-25). This branch supplies the M07 handoff, preserving the season ID/index (T06-38); it contains no alternative episode-list implementation.
 - `MetadataPolicy.swift` contains Overview 2,000; Taglines 3 x 200; Genres 10 x 64; other strings 200; server/public-user display names 64; recent searches 20; image bytes 20 x 1,024 x 1,024. Cleaning removes only control/bidi scalars before truncating graphemes, preserving tags, entities and Markdown literally (T06-73). M09 owns recent-search persistence.
+- `MetadataSanitizer.displayText(_:limit:)` is the shared capped display path. Mappers and Home's cache projection apply `MetadataPolicy.nameMax` to names, titles and other unbounded display text, including search hints, series/season/episode items, person/studio items, libraries, chapters and tracks. Fields not yet modeled (such as separate `SeriesName`, `SeasonName` and detail-page people/studio collections) are discarded rather than displayed; M07 must use the same sanitizer when introducing them. The design-system overview helper also preserves literal tags/entities and uses `overviewMax`.
+- `JellyfinImageResource` names the CoreNetworking image request/cache identity without colliding with Apple's image resource type. Home UI test flags and snapshot renders use the DEBUG-only writable `designAccessibilityOverride`; `DesignAccessibility` falls back to the system settings when no override is supplied, and Home backdrop animation reads the same values.
 - Image requests set a maximum response budget from `MetadataPolicy.imageMaxBytes`. The URLSession data delegate checks every chunk before appending and cancels immediately on overflow. Content-Length only permits early rejection. Overflow and cancellation cannot write a partial disk cache entry (T06-76 through T06-78, T06-82). The SDK adapter also routes bounded requests through CoreNetworking. Each capped download has independent redirect state and forwards certificate challenges to the existing trust policy; 401 takes precedence over size headers (T06-51).
 - The portable option dictionary is passed directly to ImageIO thumbnail creation in a detached utility task. ImageIO code is guarded by `canImport(ImageIO)`. The source check scans all Apps and package source Swift files for forbidden framework networking/full-bitmap APIs (T06-80, T06-81).
 - Loaded or cached content survives server failure with the existing `.serverUnreachable` banner. The existing full-screen title key is used only with no displayable content; failed server actions stay inline (T06-46, T06-49, T06-50, T06-56). Whole-body decode failures show a section retry instead of the empty-library guidance (T06-19).
@@ -134,8 +136,7 @@ Each row identifies the missing part of the canonical scenario and why it remain
 Run in `Packages/GlassfinCore` after exporting `LD_LIBRARY_PATH=~/.local/lib/swiftcompat` and sourcing `~/.local/share/swiftly/env.sh`:
 
 ```sh
-swift build
-swift test
+bash ../../scripts/coverage-gate.sh
 swift-format lint --recursive --strict Package.swift Sources Tests ../../Apps
 ```
 
@@ -143,9 +144,10 @@ From the root: design-system, string-catalog, DEBUG-only-string, image-pipeline 
 
 ## Linux verification result (2026-10-27)
 
-- `swift build`, `swift test`, and the exact recursive strict formatter command passed. The full suite executed 374 tests with six live integration skips and zero failures. M06 contributed 51 passing test cases across 37 canonical IDs; its live T06-37 test was skipped.
+- CI round 1: `bash scripts/coverage-gate.sh` (running `swift test --enable-code-coverage --build-system native`) and the exact recursive strict formatter command passed. The full suite executed 378 tests with six existing live integration skips and zero failures. Four new T06-73 test cases cover the capped display API, all control/bidi scalars, mapped names/titles and filter genres; its live T06-37 test still requires the server fixture.
 - Passing Linux test IDs: T06-04, T06-06 through T06-08, T06-10, T06-12 through T06-14, T06-16, T06-19, T06-24, T06-32, T06-33, T06-38, T06-41, T06-44, T06-46, T06-48 through T06-51, T06-56, T06-57, T06-60 through T06-63, T06-65, T06-66, T06-71 through T06-73, T06-76 through T06-78, T06-80 and T06-82. Additional catalog/design/logging/image source checks are mapped above.
-- The native coverage gate passed at 91.26% (7,021 / 7,693 lines; threshold 80%).
+- The native coverage gate passed at 91.36% (7,062 / 7,730 lines; threshold 80%).
+- Existing assertion changes are confined to `DesignSystemLogicTests.testT05_15_overviewIsPlainText`: the overview equals the original literal fixture, and `<`, `alert` and `example.com` remain present. These replace the obsolete decoded/tag-stripped expectation and three absence assertions. No tests were deleted and no skip conditions were added.
 - All requested repository scripts passed, plus image-pipeline, DEBUG-string and artifact-redactor self-tests, entitlement and license checks. `git diff --check` passed.
 - The canonical plan was byte-compared with `/workspace/jellyfin-tvos/test/TESTPLAN-M06.md`. A completeness check verified all 82 IDs are mapped and every M06 Swift test uses an in-range canonical ID with a matching comment.
 - Xcode, Docker and Apple TV hardware are unavailable here. Apple app builds, actual ImageIO execution, remote UI/snapshots, the live server matrix and hardware performance were not executed. The Not automated table records the remaining fixture work and evidence for each affected ID.

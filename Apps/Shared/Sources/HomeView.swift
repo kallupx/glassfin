@@ -9,7 +9,7 @@ struct HomeView: View {
     var onDetail: (MediaItem) -> Void
     var onPlay: (HomePlaybackRequest) -> Void
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @DesignAccessibility private var accessibility
     @Environment(\.displayScale) private var displayScale
     @State private var focusedItem: MediaItem?
     @State private var backdropSelection = HomeBackdropModel()
@@ -185,14 +185,14 @@ struct HomeView: View {
 
     private func loadBackdrop() async {
         guard let item = backdropSelection.item, let tag = item.images.backdropTags.first else { return }
-        let resource = ImageResource(
+        let resource = JellyfinImageResource(
             serverID: session.server.id, itemID: item.id, type: .backdrop, tag: tag,
             width: Int(1920 * displayScale), height: Int(1080 * displayScale))
         do {
             let data = try await imageLoader.data(for: resource)
             let decoded = try await HomeImageDecoder.downsample(data, width: resource.width, height: resource.height)
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: HomePolicy.backdropFade)) {
+            withAnimation(accessibility.reduceMotion ? nil : .easeInOut(duration: HomePolicy.backdropFade)) {
                 backdropID = item.id
                 backdrop = Image(decorative: decoded, scale: displayScale)
             }
@@ -299,12 +299,12 @@ private struct HomeCard: View {
     @State private var placeholderImage: Image?
     @Environment(\.displayScale) private var displayScale
 
-    private var resource: ImageResource? {
+    private var resource: JellyfinImageResource? {
         let type: ItemImageType = style == .poster ? .primary : (item.images.thumbTag != nil ? .thumb : .backdrop)
         let tag = style == .poster ? item.images.primaryTag : (item.images.thumbTag ?? item.images.backdropTags.first)
         guard let tag else { return nil }
         let size = CardMetrics.size(for: style)
-        return ImageResource(
+        return JellyfinImageResource(
             serverID: session.server.id, itemID: item.id, type: type, tag: tag,
             width: Int(size.width * displayScale), height: Int(size.height * displayScale))
     }

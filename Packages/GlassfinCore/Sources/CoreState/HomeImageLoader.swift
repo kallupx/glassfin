@@ -7,7 +7,7 @@ import Foundation
 #endif
 
 public protocol HomeImageLoading: Sendable {
-    func data(for resource: ImageResource) async throws -> Data
+    func data(for resource: JellyfinImageResource) async throws -> Data
 }
 
 /// Only the disk image LRU stores compressed bytes. URLSession's URL cache is disabled.
@@ -20,7 +20,7 @@ public struct HomeImageLoader: HomeImageLoading {
         self.disk = disk
     }
 
-    public func data(for resource: ImageResource) async throws -> Data {
+    public func data(for resource: JellyfinImageResource) async throws -> Data {
         try Task.checkCancellation()
         if let data = await disk.data(for: resource.cacheKey) {
             try ImageDataPolicy.validate(data)
