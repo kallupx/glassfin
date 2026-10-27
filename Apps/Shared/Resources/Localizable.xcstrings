@@ -1,0 +1,20 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "welcome.connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Yhdistä" } }
+      }
+    },
+    "welcome.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Glassfin" } },
+        "fi" : { "stringUnit" : { "state" : "translated", "value" : "Glassfin" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

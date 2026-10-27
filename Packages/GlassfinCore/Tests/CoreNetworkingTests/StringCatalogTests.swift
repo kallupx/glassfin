@@ -3,7 +3,7 @@ import XCTest
 
 final class StringCatalogTests: XCTestCase {
     /// Every `*.xcstrings` in the checkout is checked, not only CoreNetworking.
-    /// That includes `Apps/Shared/Resources/Localizable.xcstrings` once it is in the tree.
+    /// That includes `Apps/Shared/Resources/Localizable.xcstrings`.
     func testEveryStringCatalogHasTranslatedEnglishAndFinnish() throws {
         let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
         let catalogs = StringCatalogLint.catalogs(at: root)
@@ -13,12 +13,10 @@ final class StringCatalogTests: XCTestCase {
             "CoreNetworking string catalog was not discovered"
         )
         let sharedSuffix = "Apps/Shared/Resources/Localizable.xcstrings"
-        if FileManager.default.fileExists(atPath: root.appendingPathComponent(sharedSuffix).path) {
-            XCTAssertTrue(
-                catalogs.contains { $0.path.hasSuffix(sharedSuffix) },
-                "Apps/Shared string catalog was not discovered"
-            )
-        }
+        XCTAssertTrue(
+            catalogs.contains { $0.path.hasSuffix(sharedSuffix) },
+            "Apps/Shared string catalog was not discovered"
+        )
         let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
         XCTAssertEqual(issues, [], issues.joined(separator: "\n"))
     }
@@ -76,6 +74,32 @@ final class StringCatalogTests: XCTestCase {
 
         let ok = try catalog(en: ("translated", "Hello"), fi: ("translated", "fi-translation"))
         XCTAssertEqual(StringCatalogLint.issues(data: ok, file: "Ok.xcstrings"), [])
+    }
+
+    func testCatalogLintRejectsEmptyStringsTable() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "sourceLanguage": "en",
+            "strings": [:],
+            "version": "1.0",
+        ])
+        XCTAssertEqual(
+            StringCatalogLint.issues(data: data, file: "Empty.xcstrings"),
+            ["Empty.xcstrings: strings table has no keys"]
+        )
+    }
+
+    func testCatalogLintRejectsWhitespaceOnlyValues() throws {
+        for locale in ["en", "fi"] {
+            let whitespace = " \t\r\n\u{00A0}"
+            let data = try catalog(
+                en: ("translated", locale == "en" ? whitespace : "Hello"),
+                fi: ("translated", locale == "fi" ? whitespace : "fi-translation")
+            )
+            XCTAssertEqual(
+                StringCatalogLint.issues(data: data, file: "Whitespace.xcstrings"),
+                ["Whitespace.xcstrings: key \"Hello\" locale \(locale) value is empty"]
+            )
+        }
     }
 
     func testCatalogLintChecksEveryPluralVariation() throws {
@@ -192,6 +216,9 @@ private enum StringCatalogLint {
             issues.append("\(file): missing strings table")
             return issues
         }
+        if strings.isEmpty {
+            issues.append("\(file): strings table has no keys")
+        }
         for key in strings.keys.sorted() {
             guard let entry = strings[key] as? [String: Any] else {
                 issues.append("\(file): key \"\(key)\" is not an object")
@@ -218,7 +245,7 @@ private enum StringCatalogLint {
                             "\(file): key \"\(key)\" locale \(locale) state is \"\(unit.state)\", expected translated"
                         )
                     }
-                    if unit.value.isEmpty {
+                    if unit.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         issues.append("\(file): key \"\(key)\" locale \(locale) value is empty")
                     }
                 }

@@ -321,8 +321,8 @@ final class SecurityTransportTests: XCTestCase {
             XCTAssertEqual(ServerTransportPolicy.hostClass(host), .publicAddress, host)
             XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
             XCTAssertEqual(
-                ServerTransportPolicy.message(for: .publicHTTPRejected),
-                "Julkiset osoitteet vaativat HTTPS:n"
+                ServerTransportPolicy.messageKey(for: .publicHTTPRejected),
+                ServerTransportPolicy.publicAddressRequiresHTTPSKey
             )
             let transport = RecordingRequestTransport()
             let client = HTTPJellyfinClient(
@@ -512,14 +512,14 @@ final class SecurityTransportTests: XCTestCase {
         let publicHTTP = try XCTUnwrap(URL(string: "http://jellyfin.example.com"))
         XCTAssertEqual(ServerTransportPolicy.evaluate(publicHTTP), .publicHTTPRejected)
         XCTAssertEqual(
-            ServerTransportPolicy.message(for: .publicHTTPRejected),
-            "Julkiset osoitteet vaativat HTTPS:n"
+            ServerTransportPolicy.messageKey(for: .publicHTTPRejected),
+            ServerTransportPolicy.publicAddressRequiresHTTPSKey
         )
         XCTAssertFalse(ServerTransportPolicy.showsUnencryptedMark(publicHTTP))
 
         let lan = try XCTUnwrap(URL(string: "http://192.168.0.2:8096"))
         XCTAssertEqual(ServerTransportPolicy.evaluate(lan), .unencryptedLocal)
-        XCTAssertEqual(ServerTransportPolicy.badge(for: lan).message, "Yhteys ei ole salattu")
+        XCTAssertEqual(ServerTransportPolicy.badge(for: lan).messageKey, ServerTransportPolicy.unencryptedWarningKey)
         XCTAssertTrue(ServerTransportPolicy.badge(for: lan).showsUnencryptedMark)
         XCTAssertEqual(
             ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://jellyfin.local"))), .unencryptedLocal)
@@ -544,6 +544,23 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertFalse(canonical.absoluteString.contains("secret"))
         XCTAssertTrue(canonical.query?.contains("x=1") == true)
         XCTAssertThrowsError(try ServerAddress.canonical(XCTUnwrap(URL(string: "ftp://media.example/jellyfin"))))
+    }
+
+    func testTransportMessageKeysCoverEveryVerdict() throws {
+        let cases: [(String, ServerTransportPolicy.Verdict, String?)] = [
+            ("https://jellyfin.example.com", .secure, nil),
+            ("http://192.168.0.2:8096", .unencryptedLocal, ServerTransportPolicy.unencryptedWarningKey),
+            ("http://jellyfin.example.com", .publicHTTPRejected, ServerTransportPolicy.publicAddressRequiresHTTPSKey),
+            ("ftp://jellyfin.example.com", .invalid, nil),
+        ]
+        for (address, verdict, expectedKey) in cases {
+            let url = try XCTUnwrap(URL(string: address))
+            XCTAssertEqual(ServerTransportPolicy.messageKey(for: verdict), expectedKey, address)
+            XCTAssertEqual(ServerTransportPolicy.message(for: verdict) == nil, expectedKey == nil, address)
+            let badge = ServerTransportPolicy.badge(for: url)
+            XCTAssertEqual(badge.messageKey, expectedKey, address)
+            XCTAssertEqual(badge.message == nil, expectedKey == nil, address)
+        }
     }
 
     private func entitlements(under root: URL) -> [String] {
