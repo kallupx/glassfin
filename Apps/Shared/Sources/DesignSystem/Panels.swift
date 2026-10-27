@@ -20,7 +20,7 @@ struct HeroHeader: View {
             VStack(alignment: .leading, spacing: SpacingToken.s) {
                 Text(verbatim: title)
                     .font(.largeTitle)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(ContentPaint.heroText)
                     .lineLimit(2)
                     .accessibilityIdentifier("design.hero.title")
                 Text(verbatim: meta)
@@ -29,7 +29,7 @@ struct HeroHeader: View {
                     .accessibilityIdentifier("design.hero.meta")
                 Text(verbatim: overview)
                     .font(.body)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(ContentPaint.heroText)
                     .lineLimit(expanded ? TruncationPolicy.errorMessageLineLimit : 2)
                     .focusable(false)
                     .accessibilityIdentifier(overviewIdentifier)

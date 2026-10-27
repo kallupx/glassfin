@@ -207,21 +207,72 @@ final class DesignSystemLogicTests: XCTestCase {
     }
 
     func testT05_32_scrimContrastOnThreeBackgrounds() {
+        // T05-32: endpoint contrast uses the same color tokens and gradient as HeroHeader's scrim.
         let gradient = ScrimGradient()
         XCTAssertEqual(gradient.opacity(at: 0.6), 0, accuracy: 0.0001)
         XCTAssertEqual(gradient.opacity(at: 1), 0.6, accuracy: 0.0001)
         XCTAssertEqual(gradient.clearUntil, 0.6)
-        let bright = ContrastFixture.text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.bright))
-        let dark = ContrastFixture.text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.dark))
-        let colorful = ContrastFixture.text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.colorful))
+        let text = ContrastFixture.text
+        let bright = text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.bright, at: gradient.end))
+        let dark = text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.dark, at: gradient.end))
+        let colorful = text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.colorful, at: gradient.end))
         XCTAssertGreaterThanOrEqual(dark, ContrastFixture.bodyMinimum)
         XCTAssertGreaterThanOrEqual(colorful, ContrastFixture.bodyMinimum)
         XCTAssertGreaterThanOrEqual(dark, ContrastFixture.largeMinimum)
         XCTAssertGreaterThanOrEqual(colorful, ContrastFixture.largeMinimum)
-        // A 60% black scrim over white yields sRGB 0.4, or about 5.74:1 for white text.
-        // Both AA thresholds pass here; Q5-03's rendered glass measurement method stays open.
+        // These passes cover the darkest stop only; higher hero text is checked conservatively below.
         XCTAssertGreaterThanOrEqual(bright, ContrastFixture.bodyMinimum)
         XCTAssertGreaterThanOrEqual(bright, ContrastFixture.largeMinimum)
+        XCTAssertLessThan(text.contrast(against: ContrastFixture.bright), ContrastFixture.largeMinimum)
+    }
+
+    func testT05_32_contrastFixtureMatchesHeroTokens() {
+        // T05-32: resolve independently so fixture colors or opacity cannot drift from the drawn scrim.
+        let traits = UITraitCollection(userInterfaceStyle: .dark)
+        func components(of color: Color) -> RGB {
+            var red: CGFloat = -1
+            var green: CGFloat = -1
+            var blue: CGFloat = -1
+            var alpha: CGFloat = -1
+            let resolved = UIColor(color).resolvedColor(with: traits)
+            XCTAssertTrue(resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
+            XCTAssertEqual(alpha, 1, accuracy: 0.0001)
+            return RGB(r: Double(red), g: Double(green), b: Double(blue))
+        }
+        let text = components(of: ContentPaint.heroText)
+        let scrim = components(of: ContentPaint.scrim)
+        XCTAssertEqual(ContrastFixture.text, text)
+        XCTAssertEqual(ContrastFixture.scrim, scrim)
+        let gradient = BackdropScrim().gradient
+        XCTAssertEqual(gradient, ScrimGradient())
+        for background in [ContrastFixture.bright, ContrastFixture.dark, ContrastFixture.colorful] {
+            XCTAssertEqual(
+                ContrastFixture.scrimmed(background, at: gradient.end),
+                scrim.composited(over: background, alpha: gradient.endOpacity)
+            )
+        }
+    }
+
+    func testT05_32_upperHeroTextUsesConservativeScrimOpacity() {
+        // T05-32: HeroHeader's bottom-aligned stack includes padding, actions, and expandable overview text.
+        // Its title/overview can reach the transparent region; no minimum text height fraction is enforced.
+        // Use the clear stop (zero opacity, also valid above it) as the conservative bound for that text.
+        // Endpoint passes therefore do not establish AA for the full hero; Q5-03 remains open.
+        let gradient = ScrimGradient()
+        let text = ContrastFixture.text
+        for background in [ContrastFixture.bright, ContrastFixture.dark, ContrastFixture.colorful] {
+            XCTAssertEqual(ContrastFixture.scrimmed(background, at: gradient.clearUntil), background)
+        }
+        let bright = text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.bright, at: gradient.clearUntil))
+        let dark = text.contrast(against: ContrastFixture.scrimmed(ContrastFixture.dark, at: gradient.clearUntil))
+        let colorful = text.contrast(
+            against: ContrastFixture.scrimmed(ContrastFixture.colorful, at: gradient.clearUntil))
+        XCTAssertLessThan(bright, ContrastFixture.largeMinimum)
+        XCTAssertLessThan(bright, ContrastFixture.bodyMinimum)
+        XCTAssertGreaterThanOrEqual(dark, ContrastFixture.bodyMinimum)
+        XCTAssertGreaterThanOrEqual(dark, ContrastFixture.largeMinimum)
+        XCTAssertLessThan(colorful, ContrastFixture.bodyMinimum)
+        XCTAssertGreaterThanOrEqual(colorful, ContrastFixture.largeMinimum)
     }
 
     func testT05_35_reduceTransparencyUsesOneFallbackToken() {
