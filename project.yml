@@ -93,8 +93,11 @@ targets:
     platform: tvOS
     sources:
       - path: Apps/Shared/UITests
+      - path: Apps/Shared/Sources/WelcomeCopy.swift
     dependencies:
       - target: Glassfin-tvOS
+      - package: GlassfinCore
+        product: GlassfinCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.tvos.uitests
@@ -106,8 +109,11 @@ targets:
     platform: iOS
     sources:
       - path: Apps/Shared/UITests
+      - path: Apps/Shared/Sources/WelcomeCopy.swift
     dependencies:
       - target: Glassfin-iOS
+      - package: GlassfinCore
+        product: GlassfinCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.ios.uitests

@@ -71,7 +71,8 @@ public enum AuthCopy {
             case .back: "Back"
             case .serverNotFound: "Server not found"
             case .notJellyfin: "Not a Jellyfin server"
-            case .publicAddressRequiresHTTPS: "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy."
+            case .publicAddressRequiresHTTPS:
+                "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy."
             case .httpOnlyOnLocalNetwork: "If your server only uses HTTP, it must be on your local network"
             case .connectionNotEncrypted: "The connection is not encrypted"
             case .setupIncomplete: "Server setup is incomplete. Finish setup in a browser at %@"
@@ -81,8 +82,10 @@ public enum AuthCopy {
             case .quickConnectUnauthorized: "Quick Connect sign-in failed. Get a new code and try again."
             case .loginTransportFailure: "Can't reach the server. Check your connection and try again."
             case .sessionExpired: AppErrorMessage.sessionExpiredKey
-            case .serverSessionMayRemain: "The server session may remain active until an administrator removes this device."
-            case .quickConnectInstruction: "Open Jellyfin on a phone or in a browser → User → Quick Connect → enter the code"
+            case .serverSessionMayRemain:
+                "The server session may remain active until an administrator removes this device."
+            case .quickConnectInstruction:
+                "Open Jellyfin on a phone or in a browser → User → Quick Connect → enter the code"
             case .usePassword: "Use a password"
             case .quickConnect: "Quick Connect"
             case .signIn: "Sign in"
