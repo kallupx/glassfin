@@ -5,9 +5,9 @@ import os
 
 @testable import Glassfin
 
-@MainActor
 final class DesignSystemSnapshotTests: XCTestCase {
-    func testT05_39_galleryMatrixWritesBothScales() {
+    @MainActor
+    func testT05_39_galleryMatrixWritesBothScales() async {
         let standard = galleryPNG(mode: .standard, scale: 1, name: "gallery-standard-1080.png")
         let standardAgain = galleryPNG(mode: .standard, scale: 1, name: "gallery-standard-1080-repeat.png")
         XCTAssertEqual(standard, standardAgain)
@@ -30,14 +30,16 @@ final class DesignSystemSnapshotTests: XCTestCase {
         )
     }
 
-    func testT05_40_sameRenderIsByteIdentical() {
+    @MainActor
+    func testT05_40_sameRenderIsByteIdentical() async {
         let first = bannerPNG(reduceTransparency: false, increaseContrast: false, name: "banner-repeat-a.png")
         let second = bannerPNG(reduceTransparency: false, increaseContrast: false, name: "banner-repeat-b.png")
         XCTAssertEqual(first, second)
         XCTAssertFalse(first.isEmpty)
     }
 
-    func testT05_35_reduceTransparencyBannerDiffers() {
+    @MainActor
+    func testT05_35_reduceTransparencyBannerDiffers() async {
         let standard = bannerPNG(reduceTransparency: false, increaseContrast: false, name: "banner-standard.png")
         let reduced = bannerPNG(
             reduceTransparency: true,
@@ -47,7 +49,8 @@ final class DesignSystemSnapshotTests: XCTestCase {
         XCTAssertNotEqual(standard, reduced)
     }
 
-    func testT05_36_increaseContrastBannerDiffers() {
+    @MainActor
+    func testT05_36_increaseContrastBannerDiffers() async {
         let standard = bannerPNG(
             reduceTransparency: false,
             increaseContrast: false,
@@ -61,19 +64,22 @@ final class DesignSystemSnapshotTests: XCTestCase {
         XCTAssertNotEqual(standard, increased)
     }
 
-    func testT05_24_focusSampleRendersBothStates() {
+    @MainActor
+    func testT05_24_focusSampleRendersBothStates() async {
         let idle = focusPNG(focused: false, name: "focus-glass-idle.png")
         let focused = focusPNG(focused: true, name: "focus-glass-focused.png")
         XCTAssertNotEqual(idle, focused)
     }
 
-    func testT05_25_focusedGlassDiffersFromIdentity() {
+    @MainActor
+    func testT05_25_focusedGlassDiffersFromIdentity() async {
         let idle = focusPNG(focused: false, name: "focus-glass-identity.png")
         let focused = focusPNG(focused: true, name: "focus-glass-regular.png")
         XCTAssertNotEqual(idle, focused)
     }
 
-    func testT05_32_scrimSamplesRenderOnThreeBackdrops() {
+    @MainActor
+    func testT05_32_scrimSamplesRenderOnThreeBackdrops() async {
         let samples: [(String, Color)] = [
             ("bright", .white),
             ("dark", .black),
@@ -89,7 +95,8 @@ final class DesignSystemSnapshotTests: XCTestCase {
         }
     }
 
-    func testT05_38_largestTypeStillRenders() {
+    @MainActor
+    func testT05_38_largestTypeStillRenders() async {
         let view = VStack(spacing: SpacingToken.l) {
             ErrorStateView(failure: .serverUnreachable, attempts: 1, onRetry: {}, onSwitchServer: {})
             Button(action: {}) {
@@ -108,7 +115,8 @@ final class DesignSystemSnapshotTests: XCTestCase {
         XCTAssertFalse(data.isEmpty)
     }
 
-    func testT05_45_lazyGridSignpostTrend() {
+    @MainActor
+    func testT05_45_lazyGridSignpostTrend() async {
         let options = XCTMeasureOptions()
         options.iterationCount = 1
         let metric = XCTOSSignpostMetric(
@@ -130,7 +138,8 @@ final class DesignSystemSnapshotTests: XCTestCase {
         }
     }
 
-    func testT05_47_cardStyleSamplesRender() {
+    @MainActor
+    func testT05_47_cardStyleSamplesRender() async {
         let item = DemoFixtures.posterVariants[1]
         _ = SnapshotCanvas.png(
             PosterCard(
@@ -162,7 +171,8 @@ final class DesignSystemSnapshotTests: XCTestCase {
         )
     }
 
-    func testT05_49_interactiveProbeRenders() {
+    @MainActor
+    func testT05_49_interactiveProbeRenders() async {
         _ = SnapshotCanvas.png(
             InteractiveGlassProbe(),
             size: CGSize(width: 640, height: 160),
@@ -171,7 +181,8 @@ final class DesignSystemSnapshotTests: XCTestCase {
         )
     }
 
-    func testT05_51_segmentedSeasonPickerRenders() {
+    @MainActor
+    func testT05_51_segmentedSeasonPickerRenders() async {
         _ = SnapshotCanvas.png(
             SeasonPickerHost(),
             size: CGSize(width: 800, height: 120),
@@ -180,6 +191,7 @@ final class DesignSystemSnapshotTests: XCTestCase {
         )
     }
 
+    @MainActor
     private var posterStrip: some View {
         HStack(alignment: .top, spacing: SpacingToken.s) {
             ForEach(DemoFixtures.posterVariants) { item in
@@ -188,6 +200,7 @@ final class DesignSystemSnapshotTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func galleryPNG(mode: GalleryMode, scale: CGFloat, name: String) -> Data {
         SnapshotCanvas.png(
             mode.apply(DesignSystemGallery(backdrop: Color(red: 0.85, green: 0.35, blue: 0.1))),
@@ -197,6 +210,7 @@ final class DesignSystemSnapshotTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func bannerPNG(reduceTransparency: Bool, increaseContrast: Bool, name: String) -> Data {
         let banner = ZStack {
             Color.orange
@@ -209,6 +223,7 @@ final class DesignSystemSnapshotTests: XCTestCase {
         return SnapshotCanvas.png(banner, size: CGSize(width: 800, height: 200), scale: 2, name: name)
     }
 
+    @MainActor
     private func focusPNG(focused: Bool, name: String) -> Data {
         SnapshotCanvas.png(
             FocusGlassSample(forcedFocus: focused),

@@ -5,9 +5,9 @@ import XCTest
 
 @testable import Glassfin
 
-@MainActor
 final class T06HomeSnapshotTests: XCTestCase {
     // T06-70: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_70_homeDefaultAndOpaqueBannerAt1080And4K() async throws {
         let secure = InMemorySecureStore()
         let settings = InMemorySettingsStore()

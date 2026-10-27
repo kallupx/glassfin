@@ -4,9 +4,9 @@ import CoreState
 import Foundation
 import XCTest
 
-@MainActor
 final class T06SessionTests: XCTestCase {
     // T06-51: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_51_image401CancelsOtherRequestsAndDoesNotRetry() async throws {
         let h = Harness.make()
         defer { h.cleanup() }

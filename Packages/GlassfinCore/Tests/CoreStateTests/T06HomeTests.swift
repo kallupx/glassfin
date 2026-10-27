@@ -5,9 +5,9 @@ import Foundation
 import GlassfinServices
 import XCTest
 
-@MainActor
 final class T06HomeTests: XCTestCase {
     // T06-08: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_08_videoLibrariesKeepServerOrderAndSeparateLatestRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -31,6 +31,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-12: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_12_slowResumeDoesNotBlockOtherRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -48,6 +49,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-04: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_04_emptyAndUnknownLibraries() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -61,6 +63,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-14: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_14_sectionFailureAndTargetedRetryLeaveOtherRowsVisible() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -82,6 +85,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-13: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_13_latestFailureIsIsolatedToItsLibrary() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -100,6 +104,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-19: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_19_bodyDecodeFailureShowsSectionRetryAndKeepsOtherRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -118,6 +123,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-57: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_57_playbackStopProjectsImmediatelyAndRefetchesPersonalRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -136,6 +142,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-60: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_60_remoteUserDataWinsOverPendingOptimisticChange() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -168,6 +175,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-62: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_62_foregroundRefreshOnlyAfterSixtySeconds() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -187,6 +195,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-61: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_61_libraryChangeIsDebouncedAndRefetchesLatestOnly() async throws {
         let h = Harness.make(suspendingClock: true)
         defer { h.cleanup() }
@@ -206,7 +215,8 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-65: canonical spec/TESTPLAN-M06.md.
-    func testT06_65_focusRemainsOnSameItemOrSameRowNeighbor() {
+    @MainActor
+    func testT06_65_focusRemainsOnSameItemOrSameRowNeighbor() async {
         let a = Sample.movie()
         let b = Sample.movie(id: Sample.other)
         let c = Sample.movie(id: Sample.season)
@@ -217,7 +227,8 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-32: canonical spec/TESTPLAN-M06.md.
-    func testT06_32_playRequestUsesSafeResumePosition() {
+    @MainActor
+    func testT06_32_playRequestUsesSafeResumePosition() async {
         var item = Sample.movie()
         item.userData.playbackPosition = .seconds(120)
         XCTAssertEqual(HomePlaybackRequest(item: item).position, .seconds(120))
@@ -226,6 +237,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-66: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_66_cancelledLoadCannotPublishLateResults() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -242,6 +254,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-66: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_66_disappearanceAlsoCancelsSectionRetry() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -258,6 +271,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-44: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_44_snapshotPreservesLibraryGroupingAndRejectsOtherUser() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -282,6 +296,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-49: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_49_serverDownRetainsVisibleContentAndBanner() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -300,6 +315,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-46: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_46_noContentUsesExistingServerDownTitleKey() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -313,6 +329,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-48: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_48_pingRecoversAndKeepsCachedContent() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -329,6 +346,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-48: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_48_automaticPingRunsAtTenSecondsAndRecovers() async throws {
         let h = Harness.make(automaticPing: true, suspendingClock: true)
         defer { h.cleanup() }
@@ -342,6 +360,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-51: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_51_latest401EndsSessionOnceEvenWhenOtherRowsSucceed() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -354,6 +373,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-41: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_41_actionsCommitAndFailedEditsRestoreTheRow() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -376,6 +396,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-57: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_57_playedItemStaysRemovedDuringAStaleServerResponse() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -390,6 +411,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-73: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -420,6 +442,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-24: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_24_backdropDebouncePublishesOnlyTheLastFocusAndCancels() async {
         let clock = SuspendingClock()
         let backdrop = HomeBackdropModel(clock: clock)
@@ -441,6 +464,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-16: canonical spec/TESTPLAN-M06.md.
+    @MainActor
     func testT06_16_rowsAreBoundedAndDuplicateIDsAreRemoved() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -452,6 +476,7 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(home.resume.value?.count, HomePolicy.rowLimit)
     }
     // T06-10: the owner's P0 decision keeps in-progress and next episodes in separate rows.
+    @MainActor
     func testT06_10_continueWatchingAndNextUpAreSeparateEpisodeRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -474,12 +499,14 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-33: an item without progress starts at the beginning.
-    func testT06_33_playWithoutProgressStartsAtZero() {
+    @MainActor
+    func testT06_33_playWithoutProgressStartsAtZero() async {
         XCTAssertEqual(HomePlaybackRequest(item: Sample.movie()).position, .zero)
     }
 
     // T06-38: the M07 series handoff preserves the episode's season for the season picker.
-    func testT06_38_seriesHandoffPreservesSeasonAndIsHiddenForMovies() throws {
+    @MainActor
+    func testT06_38_seriesHandoffPreservesSeasonAndIsHiddenForMovies() async throws {
         let episode = MediaItem(
             id: Sample.movie, kind: .episode, name: "<b>Episode</b>\u{202e}", seriesID: Sample.library,
             seasonID: Sample.season, indexNumber: 3, parentIndexNumber: 1)
@@ -493,6 +520,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-50: a server-dependent action fails inline while cards, focus and credentials remain.
+    @MainActor
     func testT06_50_unreachableActionKeepsContentUntilPingRecovery() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -517,6 +545,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-63: a foreground transition before 60 seconds makes no new Home request.
+    @MainActor
     func testT06_63_foregroundBeforeSixtySecondsDoesNotFetch() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
@@ -531,6 +560,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-56: cold launch restores a displayable snapshot even when its network refresh fails.
+    @MainActor
     func testT06_56_cachedColdStartKeepsContentAndServerUnreachableBanner() async throws {
         let h = Harness.make()
         defer { h.cleanup() }

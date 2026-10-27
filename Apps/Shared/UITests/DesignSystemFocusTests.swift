@@ -1,8 +1,8 @@
 import XCTest
 
-@MainActor
 final class DesignSystemFocusTests: XCTestCase {
-    func testT05_22_demoIdentifiersExist() {
+    @MainActor
+    func testT05_22_demoIdentifiersExist() async {
         let app = launch("-uitest-design-system")
         for identifier in [
             "design.root",
@@ -19,7 +19,8 @@ final class DesignSystemFocusTests: XCTestCase {
     }
 
     #if os(tvOS)
-        func testT05_10_longPressOpensTheContextMenu() {
+        @MainActor
+        func testT05_10_longPressOpensTheContextMenu() async {
             let app = launch("-uitest-design-system")
             let card = element(app, "design.row.primary.item.0")
             require(element(app, "design.hero.play"))
@@ -29,7 +30,8 @@ final class DesignSystemFocusTests: XCTestCase {
             require(element(app, "design.context.play"), timeout: 8)
         }
 
-        func testT05_12_rowFocusReturnsToTheRememberedPoster() {
+        @MainActor
+        func testT05_12_rowFocusReturnsToTheRememberedPoster() async {
             let app = launch("-uitest-design-system")
             let play = element(app, "design.hero.play")
             require(play)
@@ -57,7 +59,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertFalse(play.hasFocus)
         }
 
-        func testT05_13_playStartsFocused() {
+        @MainActor
+        func testT05_13_playStartsFocused() async {
             let app = launch("-uitest-design-system")
             let play = element(app, "design.hero.play")
             require(play)
@@ -65,7 +68,8 @@ final class DesignSystemFocusTests: XCTestCase {
             save(app, name: "design-hero-play-focused")
         }
 
-        func testT05_14_overviewIsSkippedAndMoreExpandsIt() {
+        @MainActor
+        func testT05_14_overviewIsSkippedAndMoreExpandsIt() async {
             let app = launch("-uitest-design-system")
             let play = element(app, "design.hero.play")
             require(play)
@@ -87,7 +91,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertFalse(expanded.hasFocus)
         }
 
-        func testT05_16_actionBarExitsDownward() {
+        @MainActor
+        func testT05_16_actionBarExitsDownward() async {
             let app = launch("-uitest-design-system")
             let play = element(app, "design.hero.play")
             require(play)
@@ -101,7 +106,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertFalse(play.hasFocus)
         }
 
-        func testT05_18_offlineBannerIsNotFocusable() {
+        @MainActor
+        func testT05_18_offlineBannerIsNotFocusable() async {
             let app = launch("-uitest-design-system")
             let banner = element(app, "design.banner.offline")
             require(banner)
@@ -112,7 +118,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertFalse(banner.hasFocus)
         }
 
-        func testT05_21_retryIncrementsTheAttemptCount() {
+        @MainActor
+        func testT05_21_retryIncrementsTheAttemptCount() async {
             let app = launch("-uitest-design-system-error")
             let retry = element(app, "design.error.retry")
             require(retry)
@@ -128,7 +135,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertEqual(XCTWaiter().wait(for: [updated], timeout: 5), .completed)
         }
 
-        func testT05_27_threeLibrariesHaveNoOverflowTab() {
+        @MainActor
+        func testT05_27_threeLibrariesHaveNoOverflowTab() async {
             let app = launch("-uitest-design-system-tabs-3")
             require(element(app, "design.tab.home"))
             require(element(app, "design.tab.search"))
@@ -138,7 +146,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertFalse(element(app, "design.tab.libraries").exists)
         }
 
-        func testT05_27_sevenLibrariesKeepFiveInline() {
+        @MainActor
+        func testT05_27_sevenLibrariesKeepFiveInline() async {
             let app = launch("-uitest-design-system-tabs-7")
             require(element(app, "design.tab.libraries"))
             require(element(app, "design.tab.library.0"))
@@ -147,7 +156,8 @@ final class DesignSystemFocusTests: XCTestCase {
             require(element(app, "design.tab.search"))
         }
 
-        func testT05_28_menuWalksBackToTheTabBar() {
+        @MainActor
+        func testT05_28_menuWalksBackToTheTabBar() async {
             let app = launch("-uitest-design-system-nav")
             let detail = element(app, "design.nav.detail")
             require(detail)
@@ -165,7 +175,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertEqual(XCTWaiter().wait(for: [still], timeout: 5), .completed)
         }
 
-        func testT05_29_upLeavesTheHeroForAnotherTarget() {
+        @MainActor
+        func testT05_29_upLeavesTheHeroForAnotherTarget() async {
             let app = launch("-uitest-design-system")
             let play = element(app, "design.hero.play")
             require(play)
@@ -178,7 +189,8 @@ final class DesignSystemFocusTests: XCTestCase {
             waitUntilFocused(play)
         }
 
-        func testT05_30_playPauseRecordsTheFocusedIdentifier() {
+        @MainActor
+        func testT05_30_playPauseRecordsTheFocusedIdentifier() async {
             let app = launch("-uitest-design-system")
             let primary = element(app, "design.row.primary.item.0")
             require(element(app, "design.hero.play"))
@@ -193,7 +205,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertEqual(XCTWaiter().wait(for: [updated], timeout: 5), .completed)
         }
 
-        func testT05_33_iconsExposeAnAccessibilityLabel() {
+        @MainActor
+        func testT05_33_iconsExposeAnAccessibilityLabel() async {
             let app = launch("-uitest-design-system")
             let icon = element(app, "design.action.play.icon")
             require(icon)
@@ -203,13 +216,15 @@ final class DesignSystemFocusTests: XCTestCase {
     #endif
 
     #if os(iOS)
-        func testT05_08_focusDemoLaunches() {
+        @MainActor
+        func testT05_08_focusDemoLaunches() async {
             let app = launch("-uitest-design-system")
             require(element(app, "design.root"))
             require(element(app, "design.hero.play"))
         }
 
-        func testT05_54_tabShellExposesHomeSearchAndSettings() {
+        @MainActor
+        func testT05_54_tabShellExposesHomeSearchAndSettings() async {
             let app = launch("-uitest-design-system-tabs-3")
             require(element(app, "design.shell.root"))
             require(element(app, "design.tab.home"))
@@ -219,6 +234,7 @@ final class DesignSystemFocusTests: XCTestCase {
         }
     #endif
 
+    @MainActor
     private func launch(_ argument: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [argument]
@@ -226,10 +242,12 @@ final class DesignSystemFocusTests: XCTestCase {
         return app
     }
 
+    @MainActor
     private func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier]
     }
 
+    @MainActor
     private func require(
         _ element: XCUIElement,
         timeout: TimeInterval = 20,
@@ -239,6 +257,7 @@ final class DesignSystemFocusTests: XCTestCase {
         XCTAssertTrue(element.waitForExistence(timeout: timeout), file: file, line: line)
     }
 
+    @MainActor
     private func waitUntilFocused(
         _ element: XCUIElement,
         timeout: TimeInterval = 8,
@@ -249,6 +268,7 @@ final class DesignSystemFocusTests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: timeout), .completed, file: file, line: line)
     }
 
+    @MainActor
     private func save(_ app: XCUIApplication, name: String) {
         let shot = app.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
@@ -264,6 +284,7 @@ final class DesignSystemFocusTests: XCTestCase {
     }
 
     #if os(tvOS)
+        @MainActor
         private func remote(_ button: XCUIRemote.Button, forDuration duration: TimeInterval = 0) {
             if duration > 0 {
                 XCUIRemote.shared.press(button, forDuration: duration)
