@@ -18,7 +18,7 @@ struct GlassfinApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AuthRootView(flow: flow)
+            GlassfinRootView(flow: flow)
         }
     }
 }

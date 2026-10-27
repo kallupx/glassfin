@@ -4,13 +4,12 @@ import SwiftUI
 struct AuthRootView: View {
     @Bindable var flow: AuthFlow
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            ContentPaint.scrim.ignoresSafeArea()
             panel
                 .padding(48)
         }
@@ -42,14 +41,8 @@ struct AuthRootView: View {
         case .home:
             home
         default:
-            Group {
-                if reduceTransparency {
-                    content.background(.background, in: ConcentricRectangle())
-                } else {
-                    GlassEffectContainer {
-                        content.glassEffect(.regular, in: ConcentricRectangle())
-                    }
-                }
+            GlassEffectContainer {
+                content.ownGlassSurface(in: ContentShape.concentric)
             }
         }
     }
