@@ -19,6 +19,10 @@ public struct HomeSnapshot: Codable, Sendable, Equatable {
     public var resume: [MediaItem]
     public var nextUp: [MediaItem]
     public var latest: [MediaItem]
+    public var libraries: [Library]?
+    public var latestByLibrary: [String: [MediaItem]]?
+    public var serverID: String?
+    public var userID: String?
 
     public init(resume: [MediaItem], nextUp: [MediaItem], latest: [MediaItem]) {
         self.resume = resume

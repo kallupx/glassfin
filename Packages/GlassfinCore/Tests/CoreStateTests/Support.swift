@@ -378,6 +378,7 @@ final class FakeEvents: ServerEventStream, @unchecked Sendable {
 
 final class StubLibrary: LibraryService, @unchecked Sendable {
     private let lock = NSLock()
+    var viewItems: [Library] = []
     var resumeItems: [MediaItem] = []
     var nextItems: [MediaItem] = []
     var latestByID: [String: Result<[MediaItem], APIError>] = [:]
@@ -398,7 +399,7 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
     private var favoriteWrites: [(String, Bool)] = []
     private var resumeFinished = false
 
-    func userViews() async throws(APIError) -> [Library] { [] }
+    func userViews() async throws(APIError) -> [Library] { value { viewItems } }
 
     func items(in library: Library.ID, query: ItemQuery, page: PageRequest) async throws(APIError) -> Page<MediaItem> {
         let (error, stored) = value { () -> (APIError?, Page<MediaItem>?) in

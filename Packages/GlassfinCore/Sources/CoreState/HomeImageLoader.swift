@@ -38,7 +38,7 @@ public struct HomeImageLoader: HomeImageLoading {
     /// ImageIO thumbnail creation always runs on a worker executor, before SwiftUI sees an image.
     public enum HomeImageDecoder {
         public static func downsample(_ data: Data, width: Int, height: Int) async throws -> CGImage {
-            try await Task.detached(priority: .utility) {
+            let child = Task.detached(priority: .utility) {
                 try Task.checkCancellation()
                 try ImageDataPolicy.validate(data)
                 let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
@@ -56,7 +56,12 @@ public struct HomeImageLoader: HomeImageLoading {
                     throw ImageDataError.invalidImage
                 }
                 return thumbnail
-            }.value
+            }
+            return try await withTaskCancellationHandler {
+                try await child.value
+            } onCancel: {
+                child.cancel()
+            }
         }
     }
 #endif

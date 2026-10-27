@@ -3,6 +3,7 @@ import SwiftUI
 struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
+    var settings: AnyView? = nil
     @State private var selection: String = "home"
 
     private var plan: LibraryTabPlan {
@@ -75,8 +76,14 @@ struct LibraryTabShell: View {
 
     private var settingsTab: some View {
         Tab(value: "settings") {
-            Copy.text(.tabSettings)
-                .accessibilityIdentifier("design.settings.root")
+            Group {
+                if let settings {
+                    settings
+                } else {
+                    Copy.text(.tabSettings)
+                        .accessibilityIdentifier("design.settings.root")
+                }
+            }
         } label: {
             tabLabel(.tabSettings, symbol: "gearshape", identifier: "design.tab.settings")
         }

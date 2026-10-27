@@ -11,7 +11,7 @@ struct AuthRootView: View {
         ZStack {
             ContentPaint.scrim.ignoresSafeArea()
             panel
-                .padding(48)
+                .padding(flow.screen == .home ? 0 : 48)
         }
         .onAppear { focused = flow.focus }
         .onChange(of: flow.focus) { _, focus in
@@ -269,42 +269,7 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        TabView {
-            Tab(AuthCopy.localized(.home), systemImage: "house") {
-                VStack(spacing: 16) {
-                    Text(verbatim: AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
-                    if let key = flow.bannerKey {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.banner")
-                    }
-                    if let key = flow.homeErrorKey {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.error")
-                        Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryHome() } }
-                            .accessibilityIdentifier("home.retry")
-                            .focused($focused, equals: .tryAgain)
-                    } else if let snapshot = flow.cachedHome {
-                        ForEach(snapshot.resume + snapshot.nextUp + snapshot.latest, id: \.id) { item in
-                            Text(verbatim: item.name)
-                        }
-                    }
-                }
-                .defaultFocus($focused, flow.focus)
-            }
-            Tab(AuthCopy.localized(.settings), systemImage: "gear") {
-                VStack(spacing: 16) {
-                    Text(verbatim: flow.displayedName)
-                        .accessibilityIdentifier("settings.serverName")
-                    Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
-                        .accessibilityIdentifier("settings.signOut")
-                    Text(
-                        verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                            ?? ""
-                    )
-                    .accessibilityIdentifier("settings.version")
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("settings.root")
-            }
-        }
+        HomeRootView(flow: flow)
     }
 
     private var logoutConfirm: some View {
@@ -339,9 +304,13 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             if configuration.useMockServer || configuration.resetState {
-                return assemble(
+                let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
                     clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock())
+                if configuration.startOnHome {
+                    HomeMockLaunch.seed(flow.homeApp)
+                }
+                return flow
             }
         #else
             _ = arguments

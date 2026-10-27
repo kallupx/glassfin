@@ -221,6 +221,9 @@ public struct JellyfinLibraryService: LibraryService {
             path: "/UserItems/Resume",
             query: [
                 URLQueryItem(name: "mediaTypes", value: "Video"), URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(name: "fields", value: "PrimaryImageAspectRatio,Overview"),
+                URLQueryItem(name: "enableImageTypes", value: "Primary,Backdrop,Thumb,Logo"),
+                URLQueryItem(name: "enableUserData", value: "true"),
             ]
         )
     }
@@ -230,6 +233,10 @@ public struct JellyfinLibraryService: LibraryService {
             path: "/Shows/NextUp",
             query: [
                 URLQueryItem(name: "enableResumable", value: "false"),
+                URLQueryItem(name: "enableRewatching", value: "false"),
+                URLQueryItem(name: "fields", value: "PrimaryImageAspectRatio,Overview"),
+                URLQueryItem(name: "enableImageTypes", value: "Primary,Backdrop,Thumb,Logo"),
+                URLQueryItem(name: "enableUserData", value: "true"),
                 URLQueryItem(name: "limit", value: String(limit)),
             ]
         )

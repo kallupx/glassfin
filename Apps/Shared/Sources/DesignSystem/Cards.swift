@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PosterFace: View {
+    var image: Image? = nil
     var content: PosterContent
     var style: CardStyle
     var isFocused: Bool
@@ -14,7 +15,7 @@ struct PosterFace: View {
             ZStack(alignment: .bottom) {
                 AsyncPoster(
                     blurHash: content.blurHash,
-                    image: nil,
+                    image: image,
                     failed: false,
                     size: size
                 )

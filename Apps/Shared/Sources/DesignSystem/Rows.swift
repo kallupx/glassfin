@@ -92,6 +92,7 @@ struct GlassActionBar: View {
 }
 
 struct ErrorStateView: View {
+    var messageOverride: String? = nil
     var failure: DesignFailure
     var attempts: Int
     var onRetry: () -> Void
@@ -135,7 +136,9 @@ struct ErrorStateView: View {
                 GlassIcon(systemName: iconName, label: message)
                     .font(.largeTitle)
                 Group {
-                    if case .unsupported(let required) = failure, message == .errorUnsupported {
+                    if let messageOverride {
+                        Text(verbatim: messageOverride)
+                    } else if case .unsupported(let required) = failure, message == .errorUnsupported {
                         Text(verbatim: Copy.format(.errorUnsupported, text: required))
                     } else {
                         Copy.text(message)

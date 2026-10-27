@@ -57,8 +57,10 @@ final class TrustCapture: NSObject, URLSessionTaskDelegate, @unchecked Sendable 
     private let lock = NSLock()
     private var stored: CertificatePresentation?
     private let certificatePin: OriginCertificatePin?
+    private let connectionURL: URL?
 
-    init(certificatePin: OriginCertificatePin? = nil) {
+    init(certificatePin: OriginCertificatePin? = nil, connectionURL: URL? = nil) {
+        self.connectionURL = connectionURL
         self.certificatePin = certificatePin
     }
 
@@ -100,7 +102,7 @@ final class TrustCapture: NSObject, URLSessionTaskDelegate, @unchecked Sendable 
             }
             let presentation = Self.leaf(from: trust)
             record(presentation, isSystemTrusted: false)
-            if let presentation, let target = task.currentRequest?.url,
+            if let presentation, let target = connectionURL ?? task.currentRequest?.url,
                 let fingerprint = certificatePin?.fingerprint(for: target),
                 challenge.protectionSpace.host.lowercased() == target.host?.lowercased(),
                 challenge.protectionSpace.port == (target.port ?? 443),

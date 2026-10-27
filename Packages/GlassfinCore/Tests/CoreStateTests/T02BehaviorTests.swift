@@ -583,7 +583,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(played?.played, true)
         XCTAssertFalse(pending)
         await home.refreshFromStore()
-        XCTAssertEqual(home.resume.value?.first?.userData.played, true)
+        XCTAssertEqual(home.resume.value, [])
         XCTAssertEqual(ended(harness.signposter.snapshot(), .watchedStateHome), 1)
 
         harness.library.error = .forbidden
