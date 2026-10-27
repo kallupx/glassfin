@@ -63,10 +63,15 @@
 - **S5.4** CI has a grep check that looks for `print(` calls and URL interpolation in log calls (a lint rule).
 
 ## S6 Handling of inputs and media
-- **S6.1** Metadata coming from the server (names, descriptions, an overview that contains HTML) is shown as **plain text**. HTML tags are removed, and HTML or Markdown is not rendered.
+- **S6.1** Metadata coming from the server (`Name`, `Overview`, `Taglines`, `Genres`, people names, and similar) is untrusted and is shown as **plain text** (v1.3.4, AGREED with Security 27.10.2026):
+  - Control and bidi characters are stripped with the same function as Q4-16 / S4.7.
+  - Markup is removed with a simple linear scan that deletes `<...>` sequences. There is no HTML or XML parser, no entity decoding beyond `&amp; &lt; &gt; &quot; &#39;`, no `AttributedString(markdown:)`, and no Markdown or HTML rendering. The result is shown only with `Text(verbatim:)`. Links in the text are never made tappable or opened.
+  - Length limits after cleaning, in grapheme clusters: `Name` 256, `Overview` 4,000, each tagline 256 (only the first tagline is shown), each genre 64 and at most 20 genres, each person name 128. The UI may truncate further with `lineLimit`.
 - **S6.2** External links (`ExternalUrls`) do not open on tvOS. On iOS they are opened only with an http(s) scheme.
 - **S6.3** Media is untrusted input. **[AGREED]** Possible FFmpeg, VLCKit, or MPV libraries are kept up to date (Renovate, security updates ≤ 14 days from release), and only the needed demuxers and decoders are used (a smaller attack surface).
 - **S6.4** Subtitle files (SRT, VTT, ASS) are parsed with a size limit (max 10 MB) and a timeout.
+- **S6.6** Images (v1.3.4, AGREED with Security 27.10.2026): image requests carry the `Authorization` header and never a token in the URL. Image bytes are cached only in `DiskImageCache` in the app's Caches directory, keyed by a SHA-256 hash of (server ID, item ID, image type, tag, size). Raw URLs are not used as file names or logged unredacted. Images are decoded with a size limit (max 20 MB per image, downsampled to the displayed size).
+- **S6.7** Recent searches (v1.3.4): stored locally per server ID + user ID (max 10), never synced or logged. They are deleted when that user signs out or the server is removed, and the user can clear them in the search view.
 - **S6.5** Search and filter parameters are passed only through the SDK's query builder (URL encoding). Strings are not concatenated into paths.
 
 ## S7 Permissions and admin

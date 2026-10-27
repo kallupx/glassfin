@@ -57,6 +57,7 @@ public enum AppError: Error, Sendable, Equatable {
 | Playback error | AVPlayerItem `.failed` or `PlaybackInfoResponse.ErrorCode` | See 08-playback.md: automatic fallback direct play → direct stream → transcode, and only then an error message. | See 08. |
 | Unexpected JSON | `DecodingError` | The item is skipped in the list and the error is logged without the token. The whole view does not crash. | A fixture with one broken item → the others are shown. |
 
+- **Server down while content is already on screen (v1.3.4, consistent with 04 Q4-10):** if the current view already has loaded or cached content, it stays visible, `connectivity = .serverUnreachable`, and the banner is shown; actions that need the server show an inline error. The full-screen "Server down" state above is used only when the current view has no content to show. Recovery happens automatically through the 10 s ping.
 - Error messages are written in plain language. Technical details are shown only in the Settings → Diagnostics view (fi: "Asetukset → Diagnostiikka").
 - Crash reporting: ❓ OPEN, whether to use MetricKit (default, no third parties) or a separate service. In both cases tokens and URLs are filtered (03-security.md).
 
