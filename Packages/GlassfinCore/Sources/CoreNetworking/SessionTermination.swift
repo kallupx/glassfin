@@ -57,15 +57,12 @@ public struct SessionEndResult: Sendable, Equatable {
 
 public enum SessionEndCopy {
     /// Key in CoreNetworking `Localizable.xcstrings` (development language `en`, plus `fi`).
-    /// Follow `String(localized: "English source", bundle: .module)` for other user-facing copy.
+    /// Define each English source sentence once as a key and use `localizedString(key)` for user-facing copy.
     public static let serverSessionMayRemainKey =
         "The server session may remain active until an administrator removes this device."
 
     public static var serverSessionMayRemain: String {
-        String(
-            localized: "The server session may remain active until an administrator removes this device.",
-            bundle: .module
-        )
+        localizedString(serverSessionMayRemainKey)
     }
 }
 

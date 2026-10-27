@@ -14,11 +14,11 @@ public enum ServerTransportPolicy {
     public static let publicAddressRequiresHTTPSKey = "Public addresses require HTTPS"
 
     public static var unencryptedWarning: String {
-        String(localized: "This connection is not encrypted", bundle: .module)
+        localizedString(unencryptedWarningKey)
     }
 
     public static var publicAddressRequiresHTTPS: String {
-        String(localized: "Public addresses require HTTPS", bundle: .module)
+        localizedString(publicAddressRequiresHTTPSKey)
     }
 
     public static func evaluate(_ url: URL) -> Verdict {
