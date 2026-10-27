@@ -65,7 +65,8 @@ public final class AuthFlow {
     @ObservationIgnored private var acceptedPinToStore: String?
     @ObservationIgnored private var quickConnectSecret: QuickConnectSecret?
     @ObservationIgnored private var probeTask: Task<Void, Never>?
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
+    // Tests can retain and await a cancelled poll after pausePolling clears this reference.
+    @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
     @ObservationIgnored private var quickConnectIssuedAt: Duration?
     @ObservationIgnored private var pollGeneration = UUID()
     @ObservationIgnored private var isBackground = false
