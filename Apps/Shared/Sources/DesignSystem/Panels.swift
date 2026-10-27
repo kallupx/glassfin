@@ -127,7 +127,7 @@ struct SeasonPickerBar: View {
 
 struct NextUpCard: View {
     var title: String
-    @Environment(\.colorSchemeContrast) private var contrast
+    @DesignAccessibility private var accessibility
 
     var body: some View {
         ContainedGlass {
@@ -145,7 +145,7 @@ struct NextUpCard: View {
                     Button(action: {}) {
                         Copy.text(.actionPlayNow)
                     }
-                    .glassButtonChrome(prominent: true, contrast: contrast)
+                    .glassButtonChrome(prominent: true, contrast: accessibility.contrast)
                     .accessibilityIdentifier("design.nextUp.play")
                 }
             }

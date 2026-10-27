@@ -202,8 +202,10 @@ final class DesignSystemSnapshotTests: XCTestCase {
             Color.orange
             GlassBanner(message: .bannerOffline, systemImage: "wifi.slash", identifier: "snapshot.banner")
         }
-        .environment(\.accessibilityReduceTransparency, reduceTransparency)
-        .environment(\.colorSchemeContrast, increaseContrast ? .increased : .standard)
+        .environment(
+            \.designAccessibilityOverride,
+            DesignAccessibilityValues(reduceTransparency: reduceTransparency, increaseContrast: increaseContrast)
+        )
         return SnapshotCanvas.png(banner, size: CGSize(width: 800, height: 200), scale: 2, name: name)
     }
 
@@ -223,17 +225,20 @@ private enum GalleryMode: String {
     case increaseContrast
     case reduceMotion
 
-    @ViewBuilder
     func apply<V: View>(_ view: V) -> some View {
+        view.environment(\.designAccessibilityOverride, accessibility)
+    }
+
+    private var accessibility: DesignAccessibilityValues {
         switch self {
         case .standard:
-            view
+            DesignAccessibilityValues()
         case .reduceTransparency:
-            view.environment(\.accessibilityReduceTransparency, true)
+            DesignAccessibilityValues(reduceTransparency: true)
         case .increaseContrast:
-            view.environment(\.colorSchemeContrast, .increased)
+            DesignAccessibilityValues(increaseContrast: true)
         case .reduceMotion:
-            view.environment(\.accessibilityReduceMotion, true)
+            DesignAccessibilityValues(reduceMotion: true)
         }
     }
 }
