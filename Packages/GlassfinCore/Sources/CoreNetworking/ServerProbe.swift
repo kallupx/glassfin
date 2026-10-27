@@ -42,7 +42,8 @@ public enum ServerCandidateResult: Sendable, Equatable {
 }
 
 public protocol ServerCandidateClient: Sendable {
-    func fetchPublicInfo(url: URL, timeout: Duration) async -> ServerCandidateResult
+    func fetchPublicInfo(url: URL, timeout: Duration, certificatePin: OriginCertificatePin?) async
+        -> ServerCandidateResult
 }
 
 public enum PublicInfoInterpreter {
@@ -106,7 +107,7 @@ public struct ServerProbe: Sendable {
         self.clock = clock
     }
 
-    public func run(address: String) async -> ServerProbeOutcome {
+    public func run(address: String, certificatePin: OriginCertificatePin? = nil) async -> ServerProbeOutcome {
         if ServerAddressCandidates.containsUserinfo(address) { return .userinfoRejected }
         let plan = ServerAddressCandidates.expand(address)
         if plan.invalid { return .invalidAddress }
@@ -122,7 +123,9 @@ public struct ServerProbe: Sendable {
             if elapsed >= ServerAddressCandidates.overallTimeout { break }
             let remaining = ServerAddressCandidates.overallTimeout - elapsed
             let budget = min(ServerAddressCandidates.attemptTimeout, remaining)
-            let result = await client.fetchPublicInfo(url: candidate.url, timeout: budget)
+            let result = await client.fetchPublicInfo(
+                url: candidate.url, timeout: budget,
+                certificatePin: certificatePin.flatMap { $0.fingerprint(for: candidate.url) == nil ? nil : $0 })
             if Task.isCancelled { return .cancelled }
             switch result {
             case .jellyfin(let info, let startupComplete):
@@ -149,7 +152,8 @@ public struct ServerProbe: Sendable {
             case .tls(let presentation):
                 return .needsCertificate(presentation, url: candidate.url)
             case .transportSecurity:
-                return .notFound(detail)
+                let publicHost = candidate.url.host.map { !ServerTransportPolicy.isLocal($0) } ?? false
+                return .notFound(ProbeFailureDetail(httpSkippedByPolicy: detail.httpSkippedByPolicy || publicHost))
             case .cancelled:
                 return .cancelled
             }

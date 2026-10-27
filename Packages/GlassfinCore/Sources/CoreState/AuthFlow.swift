@@ -38,6 +38,10 @@ public final class AuthFlow {
     public private(set) var displayedName = ""
     public private(set) var displayedVersion = ""
     public private(set) var certificate: CertificatePresentation?
+    public var canAcceptCertificate: Bool {
+        guard let certificate, certificateURL != nil else { return false }
+        return CertificateFingerprint.isValid(CertificateFingerprint.normalize(certificate.sha256))
+    }
     public private(set) var mismatchPrevious: String?
     public private(set) var mismatchPresented: CertificatePresentation?
     public private(set) var setupAddress: URL?
@@ -56,6 +60,9 @@ public final class AuthFlow {
     @ObservationIgnored private let clock: any GlassfinClock
     @ObservationIgnored private let log: any GlassfinLog
     @ObservationIgnored private var server: ServerInfo?
+    @ObservationIgnored private var certificateURL: URL?
+    @ObservationIgnored private var acceptedCertificatePin: OriginCertificatePin?
+    @ObservationIgnored private var acceptedPinToStore: String?
     @ObservationIgnored private var quickConnectSecret: QuickConnectSecret?
     @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
@@ -92,11 +99,28 @@ public final class AuthFlow {
         probeTask?.cancel()
         let address = addressText
         let backend = backend
+        let candidates = ServerAddressCandidates.expand(address).candidates.map(\.url)
+        if !candidates.contains(where: { acceptedCertificatePin?.fingerprint(for: $0) != nil }) {
+            acceptedCertificatePin = nil
+            acceptedPinToStore = nil
+        }
+        let certificatePin =
+            acceptedCertificatePin
+            ?? candidates.compactMap { url in
+                pinnedMatch(for: url).map { OriginCertificatePin(url: url, sha256: $0.fingerprint) }
+            }.first
+        server = nil
+        displayedName = ""
+        displayedVersion = ""
+        certificate = nil
+        certificateURL = nil
+        mismatchPrevious = nil
+        mismatchPresented = nil
         isProbing = true
         inlineError = nil
         httpSkippedByPolicy = false
         probeTask = Task {
-            let outcome = await backend.probe(address)
+            let outcome = await backend.probe(address, certificatePin: certificatePin)
             guard !Task.isCancelled else { return }
             isProbing = false
             await apply(outcome)
@@ -120,18 +144,23 @@ public final class AuthFlow {
     }
 
     public func acceptCertificate(userAcceptedFingerprint: String) throws {
-        guard let leaf = certificate else { return }
-        let serverID = pinnedMatch(for: leaf)?.serverID ?? server?.id ?? "pending"
-        let coordinator = CertificateAcceptanceCoordinator(pins: pins)
-        let outcome = try coordinator.apply(
-            isSystemTrusted: false,
-            leaf: leaf,
-            pinnedSHA256: try? pins.fingerprint(for: serverID),
-            userAcceptedFingerprint: userAcceptedFingerprint,
-            serverID: serverID
+        guard canAcceptCertificate, let leaf = certificate, let url = certificateURL,
+            ServerAddressCandidates.expand(addressText).candidates.contains(where: {
+                RedirectPolicy.originsMatch($0.url, url)
+            })
+        else { return }
+        let outcome = SelfSignedTrustFlow.handle(
+            isSystemTrusted: false, leaf: leaf,
+            pinnedSHA256: pinnedMatch(for: url)?.fingerprint,
+            userAcceptedFingerprint: userAcceptedFingerprint
         )
         switch outcome.decision {
         case .usePinnedCredential:
+            // Only the trust outcome supplies new pin bytes. No ID is invented before the probe succeeds.
+            let fingerprint = outcome.pinToStore ?? pinnedMatch(for: url)?.fingerprint
+            guard let fingerprint else { return }
+            acceptedCertificatePin = OriginCertificatePin(url: url, sha256: fingerprint)
+            acceptedPinToStore = outcome.pinToStore
             screen = .address
             submitAddress()
         case .cancelPinMismatch(let previous, let presented):
@@ -148,6 +177,9 @@ public final class AuthFlow {
     public func rejectCertificate() {
         screen = .address
         certificate = nil
+        certificateURL = nil
+        acceptedCertificatePin = nil
+        acceptedPinToStore = nil
         focus = AuthFocusPolicy.address(fieldIsEmpty: addressText.isEmpty)
     }
 
@@ -226,7 +258,7 @@ public final class AuthFlow {
         server = session.server
         addressText = session.server.url.absoluteString
         cachedHome = app.snapshots.load()
-        displayedName = AuthServerName.display(session.server.name)
+        displayedName = AuthServerName.display(session.server.name, host: session.server.url.host ?? "")
         displayedVersion = ServerVersionGate.dotted(session.server.version)
         guard let token = loadToken(serverID: session.server.id, userID: session.userID) else {
             screen = .home
@@ -292,7 +324,7 @@ public final class AuthFlow {
         let others = app.preferencesSnapshot().users.filter {
             $0.serverID == session.server.id && $0.userID != session.userID
         }
-        publicUsers = others.map { PublicUser(id: $0.userID, name: $0.userName) }
+        publicUsers = others.map { PublicUser(id: $0.userID, name: $0.userName, host: session.server.url.host ?? "") }
         username = ""
         inlineError = nil
         if !publicUsers.isEmpty {
@@ -310,6 +342,11 @@ public final class AuthFlow {
     }
 
     public func removeCurrentServer() {
+        cancelProbe()
+        acceptedCertificatePin = nil
+        acceptedPinToStore = nil
+        certificate = nil
+        certificateURL = nil
         guard let id = server?.id ?? app.activeServer?.id else {
             screen = .welcome
             return
@@ -384,10 +421,20 @@ public final class AuthFlow {
         if case .cancelled = outcome { return }
         switch outcome {
         case .ready(let info):
+            if let pin = acceptedPinToStore, acceptedCertificatePin?.fingerprint(for: info.url) == pin {
+                do {
+                    try pins.save(fingerprint: pin, serverID: info.id)
+                    acceptedPinToStore = nil
+                } catch {
+                    inlineError = .loginTransportFailure
+                    screen = .address
+                    return
+                }
+            }
             await showLogin(for: info)
         case .needsCleartext(let info):
             server = info
-            displayedName = AuthServerName.display(info.name)
+            displayedName = AuthServerName.display(info.name, host: info.url.host ?? "")
             displayedVersion = ServerVersionGate.dotted(info.version)
             screen = .cleartext
             focus = AuthFocusPolicy.cleartextAndCertificate
@@ -408,10 +455,11 @@ public final class AuthFlow {
         case .unsupported(let version, let info):
             server = info
             unsupportedVersion = version
-            displayedName = AuthServerName.display(info.name)
+            displayedName = AuthServerName.display(info.name, host: info.url.host ?? "")
             screen = .unsupported
             focus = .back
         case .setupIncomplete(let address):
+            displayedName = AuthServerName.display("", host: address.host ?? "")
             setupAddress = address
             screen = .setupIncomplete
             focus = .tryAgain
@@ -428,6 +476,12 @@ public final class AuthFlow {
 
     private func presentCertificate(_ leaf: CertificatePresentation, url: URL) {
         certificate = leaf
+        certificateURL = url
+        displayedName =
+            app.preferencesSnapshot().servers.first {
+                RedirectPolicy.originsMatch($0.url, url)
+            }.map { AuthServerName.display($0.name, host: url.host ?? "") }
+            ?? AuthServerName.display("", host: url.host ?? "")
         if let match = pinnedMatch(for: url) {
             let decision = SelfSignedTrustFlow.handle(
                 isSystemTrusted: false,
@@ -449,11 +503,13 @@ public final class AuthFlow {
 
     private func showLogin(for info: ServerInfo, includePublicUsers: Bool = true) async {
         server = info
-        displayedName = AuthServerName.display(info.name)
+        displayedName = AuthServerName.display(info.name, host: info.url.host ?? "")
         displayedVersion = ServerVersionGate.dotted(info.version)
         quickConnectEnabled = (try? await backend.quickConnectEnabled(on: info)) ?? false
         let savedUsers = app.preferencesSnapshot().users.filter { $0.serverID == info.id }
-        publicUsers = includePublicUsers ? savedUsers.map { PublicUser(id: $0.userID, name: $0.userName) } : []
+        publicUsers =
+            includePublicUsers
+            ? savedUsers.map { PublicUser(id: $0.userID, name: $0.userName, host: info.url.host ?? "") } : []
         if publicUsers.count > 1 {
             screen = .userPicker
             focus = .continueButton
@@ -622,25 +678,17 @@ public final class AuthFlow {
 
     private func persist(_ session: AuthenticatedSession) throws(PreferencesError) {
         let user = session.session
-        if (try? CredentialVault.tokenAccount(serverID: user.server.id, userID: user.userID)) != nil {
-            let profile = StoredSessionProfile(
-                serverID: user.server.id,
-                serverName: user.server.name,
-                serverURL: user.server.url.absoluteString,
-                userID: user.userID,
-                userName: user.userName,
-                isAdministrator: user.isAdministrator
-            )
-            do {
-                try vault.save(
-                    token: session.accessToken, serverID: user.server.id, userID: user.userID, profile: profile)
-            } catch {
-                throw .keychainFailed
-            }
-            try app.publishSignedIn(user)
-        } else {
-            try app.didSignIn(user, token: session.accessToken)
+        let profile = StoredSessionProfile(
+            serverID: user.server.id, serverName: user.server.name,
+            serverURL: user.server.url.absoluteString, userID: user.userID,
+            userName: user.userName, isAdministrator: user.isAdministrator
+        )
+        do {
+            try vault.save(token: session.accessToken, serverID: user.server.id, userID: user.userID, profile: profile)
+        } catch {
+            throw .keychainFailed
         }
+        try app.publishSignedIn(user)
     }
 
     private func handleLogin(_ error: APIError) {
@@ -649,27 +697,14 @@ public final class AuthFlow {
     }
 
     private func loadToken(serverID: String, userID: String) -> String? {
-        if let token = try? vault.loadToken(serverID: serverID, userID: userID), !token.isEmpty {
-            return token
-        }
-        let account = SessionCredential.account(serverID: serverID, userID: userID)
-        guard let data = try? vault.secureStore.data(for: account), !data.isEmpty else { return nil }
-        return String(decoding: data, as: UTF8.self)
+        try? vault.loadToken(serverID: serverID, userID: userID)
     }
 
     private func pinnedMatch(for url: URL) -> (serverID: String, fingerprint: String)? {
-        for stored in app.preferencesSnapshot().servers where stored.url.host?.lowercased() == url.host?.lowercased() {
+        for stored in app.preferencesSnapshot().servers where RedirectPolicy.originsMatch(stored.url, url) {
             if let fingerprint = try? pins.fingerprint(for: stored.id) {
                 return (stored.id, fingerprint)
             }
-        }
-        return nil
-    }
-
-    private func pinnedMatch(for leaf: CertificatePresentation) -> (serverID: String, fingerprint: String)? {
-        _ = leaf
-        if let server, let fingerprint = try? pins.fingerprint(for: server.id) {
-            return (server.id, fingerprint)
         }
         return nil
     }

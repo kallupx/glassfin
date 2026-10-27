@@ -29,7 +29,8 @@ final class T04AuthFlowTests: XCTestCase {
         try repo.save(
             repo.load().upserting(
                 user: StoredUser(
-                    serverID: Sample.serverID, userID: Sample.otherUserID, userName: "Bea", isAdministrator: false)))
+                    serverID: Sample.serverID, userID: Sample.otherUserID, userName: "**Bea**\u{202E}\u{0085}",
+                    isAdministrator: false)))
         var server = rig.server()
         server.name = "<b>" + String(repeating: "n", count: 100) + "</b>"
         rig.backend.probeOutcome = .needsCleartext(server)
@@ -41,6 +42,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .userPicker)
         XCTAssertEqual(rig.flow.displayedName.count, 64)
         XCTAssertEqual(rig.flow.publicUsers.count, 2)
+        XCTAssertEqual(rig.flow.publicUsers.last?.name, "**Bea**")
     }
 
     func testT04_26_rejectingCleartextDoesNotSaveTheServer() async {
@@ -90,6 +92,143 @@ final class T04AuthFlowTests: XCTestCase {
         guard case .signedIn = rig.harness.app.phase else {
             return XCTFail("mismatch must not sign the user out")
         }
+    }
+
+    func testS44_acceptCertificateRetriesWithPinAndPersistsOnlyAfterRealServerID() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        let url = Sample.url("https://media.example")
+        rig.flow.addressText = url.absoluteString
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
+        rig.backend.readyWithPin = rig.server()
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertTrue(rig.flow.canAcceptCertificate)
+        XCTAssertTrue(rig.pins.writes.isEmpty)
+        let formatted = sampleLeaf().sha256.uppercased().map(String.init).joined(separator: ":")
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: formatted)
+        // Acceptance is in memory until the retry learns ServerInfo.id.
+        XCTAssertTrue(rig.pins.writes.isEmpty)
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .loginMethod)
+        XCTAssertEqual(rig.backend.probePins.count, 2)
+        XCTAssertEqual(rig.backend.probePins.last.flatMap { $0 }?.fingerprint(for: url), sampleLeaf().sha256)
+        XCTAssertEqual(rig.pins.writes.map(\.serverID), [Sample.serverID])
+        XCTAssertEqual(rig.pins.writes.map(\.fingerprint), [sampleLeaf().sha256])
+        XCTAssertFalse(rig.pins.writes.contains { $0.fingerprint == formatted || $0.serverID == "pending" })
+        XCTAssertNil(try rig.pins.fingerprint(for: "pending"))
+    }
+
+    func testS44_secondNewOriginDoesNotReceiveThePreviousAcceptance() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        let firstURL = Sample.url("https://media.example")
+        rig.flow.addressText = firstURL.absoluteString
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: firstURL)
+        rig.backend.readyWithPin = rig.server()
+        rig.flow.submitAddress()
+        await rig.wait()
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
+        await rig.wait()
+        for secondURL in ["https://other.example", "https://media.example:8920"] {
+            rig.flow.goBack()
+            let url = Sample.url(secondURL)
+            rig.flow.addressText = secondURL
+            rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
+            rig.flow.submitAddress()
+            await rig.wait()
+            XCTAssertEqual(rig.flow.screen, .certificate)
+            XCTAssertNil(rig.backend.probePins.last!)
+            XCTAssertEqual(rig.pins.writes.count, 1)
+        }
+    }
+
+    func testS44_certificateChangeRequiresMatchingConfirmationBeforeReplacingPin() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        let previous = String(repeating: "cd", count: 32)
+        try rig.pins.save(fingerprint: previous, serverID: Sample.serverID)
+        let url = Sample.url("https://media.example:8096")
+        var info = rig.server()
+        info.url = url
+        rig.flow.addressText = url.absoluteString
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
+        rig.backend.readyWithPin = info
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .certificateMismatch)
+        let probes = rig.backend.probes
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: String(repeating: "ef", count: 32))
+        XCTAssertEqual(rig.flow.screen, .certificateMismatch)
+        XCTAssertEqual(rig.backend.probes, probes)
+        XCTAssertEqual(try rig.pins.fingerprint(for: Sample.serverID), previous)
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .loginMethod)
+        XCTAssertEqual(rig.pins.writes.map(\.serverID), [Sample.serverID, Sample.serverID])
+        XCTAssertEqual(try rig.pins.fingerprint(for: Sample.serverID), sampleLeaf().sha256)
+    }
+
+    func testS44_removingServerAlsoRevokesTheInMemoryAcceptance() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        let url = Sample.url("https://media.example")
+        rig.flow.addressText = url.absoluteString
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
+        rig.backend.readyWithPin = rig.server()
+        rig.flow.submitAddress()
+        await rig.wait()
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
+        await rig.wait()
+        rig.flow.removeCurrentServer()
+        XCTAssertNil(try rig.pins.fingerprint(for: Sample.serverID))
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertNil(rig.backend.probePins.last!)
+        XCTAssertEqual(rig.flow.screen, .certificate)
+    }
+
+    func testS44_unknownLeafCannotBeAcceptedOrStored() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        rig.flow.addressText = "https://media.example"
+        rig.backend.probeOutcome = .needsCertificate(
+            ProbeTransportError.unknownLeaf, url: Sample.url(rig.flow.addressText))
+        rig.flow.submitAddress()
+        await rig.wait()
+        let probes = rig.backend.probes
+        XCTAssertFalse(rig.flow.canAcceptCertificate)
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: "")
+        try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .certificate)
+        XCTAssertEqual(rig.backend.probes, probes)
+        XCTAssertTrue(rig.pins.writes.isEmpty)
+    }
+
+    func testQ416_certificateAndMismatchUseSanitizedSavedNameOrHost() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        let repo = PreferencesRepository(store: rig.harness.settings)
+        var prefs = repo.load()
+        prefs.servers[0].name = "**Home**\u{202E}\u{0085}"
+        try repo.save(prefs)
+        try rig.pins.save(fingerprint: String(repeating: "cd", count: 32), serverID: Sample.serverID)
+        rig.flow.addressText = "https://media.example:8096"
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url(rig.flow.addressText))
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .certificateMismatch)
+        XCTAssertEqual(rig.flow.displayedName, "**Home**")
+        rig.flow.rejectCertificate()
+        rig.flow.addressText = "https://other.example"
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url(rig.flow.addressText))
+        rig.flow.submitAddress()
+        await rig.wait()
+        XCTAssertEqual(rig.flow.screen, .certificate)
+        XCTAssertEqual(rig.flow.displayedName, "other.example")
     }
 
     func testT04_34_disabledQuickConnectSkipsA3AndBackReturnsToA2() async {
@@ -230,6 +369,8 @@ final class T04AuthFlowTests: XCTestCase {
         let account = try CredentialVault.tokenAccount(serverID: AuthIDs.server, userID: AuthIDs.user)
         let stored = try XCTUnwrap(try rig.harness.secure.data(for: account))
         XCTAssertEqual(String(decoding: stored, as: UTF8.self), "access-token")
+        XCTAssertEqual(rig.harness.secure.writes().filter { $0.hasPrefix("token:") }, [account])
+        XCTAssertFalse(rig.harness.secure.writes().contains { $0.hasPrefix("session-token/") })
         XCTAssertEqual(rig.backend.capabilityBodies.count, 1)
         let body = String(decoding: rig.backend.capabilityBodies[0], as: UTF8.self)
         XCTAssertTrue(body.contains("Video"))
@@ -828,6 +969,8 @@ private func sampleLeaf() -> CertificatePresentation {
 
 private final class ScriptAuth: AuthBackend, @unchecked Sendable {
     var probeOutcome: ServerProbeOutcome = .invalidAddress
+    var readyWithPin: ServerInfo?
+    var probePins: [OriginCertificatePin?] = []
     var quickConnect = true
     var enabledCalls = 0
     var publicUserCalls = 0
@@ -854,9 +997,16 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
     private var pollWaiter: CheckedContinuation<Bool, Error>?
     private let lock = NSLock()
 
-    func probe(_ address: String) async -> ServerProbeOutcome {
-        _ = address
-        lock.withLock { probes += 1 }
+    func probe(_ address: String, certificatePin: OriginCertificatePin?) async -> ServerProbeOutcome {
+        lock.withLock {
+            probes += 1
+            probePins.append(certificatePin)
+        }
+        if let readyWithPin, certificatePin?.fingerprint(for: readyWithPin.url) == sampleLeaf().sha256,
+            RedirectPolicy.originsMatch(Sample.url(address), readyWithPin.url)
+        {
+            return .ready(readyWithPin)
+        }
         return probeOutcome
     }
 
@@ -1011,8 +1161,12 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
 
 private final class MemoryPins: CertificatePinStore, @unchecked Sendable {
     private var values: [String: String] = [:]
+    var writes: [(serverID: String, fingerprint: String)] = []
     func fingerprint(for serverID: String) throws -> String? { values[serverID] }
-    func save(fingerprint: String, serverID: String) throws { values[serverID] = fingerprint }
+    func save(fingerprint: String, serverID: String) throws {
+        writes.append((serverID, fingerprint))
+        values[serverID] = fingerprint
+    }
     func remove(serverID: String) throws { values[serverID] = nil }
 }
 

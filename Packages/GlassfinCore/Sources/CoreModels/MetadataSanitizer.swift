@@ -7,7 +7,21 @@ public enum MetadataSanitizer {
         text = removeElement(text, named: "script")
         text = removeElement(text, named: "style")
         text = removeTags(text)
-        return decodeEntities(text)
+        let decoded = decodeEntities(text)
+        return String(
+            String.UnicodeScalarView(
+                decoded.unicodeScalars.filter { scalar in
+                    scalar.properties.generalCategory != .control && !scalar.properties.isBidiControl
+                }))
+    }
+
+    /// S4.7/Q4-16: literal display text, at most 64 extended grapheme clusters.
+    public static func displayName(_ raw: String, fallbackHost: String) -> String {
+        let plain = plainText(raw)
+        let value =
+            plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? plainText(fallbackHost) : plain
+        return String(value.prefix(64))
     }
 
     private static func removeElement(_ text: String, named tag: String) -> String {

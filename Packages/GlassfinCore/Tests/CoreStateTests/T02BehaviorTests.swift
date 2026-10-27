@@ -25,9 +25,13 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.app.blockingError, .unsupportedServer(version: "not-a-version"))
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
 
+        let previousWrites = harness.secure.writes().count
         try harness.signIn()
         guard case .signedIn(let session) = harness.app.phase else { return XCTFail("expected session") }
         XCTAssertEqual(session.userName, "Ada")
+        XCTAssertEqual(
+            harness.secure.writes().dropFirst(previousWrites).filter { $0.hasPrefix("token:") }, [Sample.account()])
+        XCTAssertFalse(harness.secure.writes().contains { $0.hasPrefix("session-token/") })
         XCTAssertEqual(harness.app.activeServer?.id, Sample.serverID)
         XCTAssertNil(harness.app.blockingError)
         XCTAssertEqual(harness.log.messages(level: "debug"), ["Signed in."])

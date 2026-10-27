@@ -28,17 +28,10 @@ public enum AuthFocusPolicy {
     public static let cleartextAndCertificate = AuthFocus.cancel
 }
 
-/// The remaining name-limit decision awaits Security confirmation.
-public enum AuthOpenQuestions {
-    // TODO(Q4-16): pending Turvallisuus confirmation
-    public static let addressServerNameLimit = 64
-}
-
 public enum AuthServerName {
-    /// Plain text for a server name. HTML and control characters are removed.
-    /// Uses the S4.7 display sanitizer and the same 64-character limit everywhere.
-    public static func display(_ raw: String) -> String {
-        DiscoveryPolicy.displayName(raw)
+    /// Q4-16 is confirmed by Security: use the shared M03 sanitizer everywhere.
+    public static func display(_ raw: String, host: String = "") -> String {
+        MetadataSanitizer.displayName(raw, fallbackHost: host)
     }
 }
 

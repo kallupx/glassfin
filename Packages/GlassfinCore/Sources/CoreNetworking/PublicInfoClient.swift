@@ -14,14 +14,16 @@ import Foundation
 public struct URLSessionPublicInfoClient: ServerCandidateClient {
     public init() {}
 
-    public func fetchPublicInfo(url: URL, timeout: Duration) async -> ServerCandidateResult {
+    public func fetchPublicInfo(url: URL, timeout: Duration, certificatePin: OriginCertificatePin? = nil) async
+        -> ServerCandidateResult
+    {
         guard let target = ServerAddressCandidates.appendingAPIPath(url, path: "/System/Info/Public") else {
             return .notJellyfin
         }
         var request = URLRequest(url: target)
         request.httpMethod = "GET"
         request.timeoutInterval = Self.seconds(timeout)
-        let capture = TrustCapture()
+        let capture = TrustCapture(certificatePin: certificatePin)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = request.timeoutInterval
         configuration.httpShouldSetCookies = false
@@ -54,6 +56,27 @@ public struct URLSessionPublicInfoClient: ServerCandidateClient {
 final class TrustCapture: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var stored: CertificatePresentation?
+    private let certificatePin: OriginCertificatePin?
+
+    init(certificatePin: OriginCertificatePin? = nil) {
+        self.certificatePin = certificatePin
+    }
+
+    /// Trusted chains never supply an error leaf, including when the task is cancelled.
+    func record(_ presentation: CertificatePresentation?, isSystemTrusted: Bool) {
+        lock.withLock { stored = isSystemTrusted ? nil : presentation }
+    }
+
+    /// Probing must not let a response move the connection to another origin.
+    static func redirectRequest(_ proposed: URLRequest) -> URLRequest? { nil }
+
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(Self.redirectRequest(request))
+    }
 
     var leaf: CertificatePresentation? {
         lock.withLock { stored }
@@ -70,12 +93,23 @@ final class TrustCapture: NSObject, URLSessionTaskDelegate, @unchecked Sendable 
             else {
                 return (.performDefaultHandling, nil)
             }
-            if let presentation = Self.leaf(from: trust) {
-                lock.withLock { stored = presentation }
-            }
             var error: CFError?
             if SecTrustEvaluateWithError(trust, &error) {
+                record(nil, isSystemTrusted: true)
                 return (.performDefaultHandling, nil)
+            }
+            let presentation = Self.leaf(from: trust)
+            record(presentation, isSystemTrusted: false)
+            if let presentation, let target = task.currentRequest?.url,
+                let fingerprint = certificatePin?.fingerprint(for: target),
+                challenge.protectionSpace.host.lowercased() == target.host?.lowercased(),
+                challenge.protectionSpace.port == (target.port ?? 443),
+                case .usePinnedCredential = SelfSignedTrustFlow.handle(
+                    isSystemTrusted: false, leaf: presentation, pinnedSHA256: fingerprint,
+                    userAcceptedFingerprint: nil
+                ).decision
+            {
+                return (.useCredential, URLCredential(trust: trust))
             }
             return (.cancelAuthenticationChallenge, nil)
         #else

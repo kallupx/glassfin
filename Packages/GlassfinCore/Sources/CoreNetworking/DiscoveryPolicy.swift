@@ -55,7 +55,7 @@ public enum DiscoveryPolicy {
         else { return nil }
         let port = url.port ?? defaultPort(url.scheme)
         guard let port else { return nil }
-        let name = displayName(packet.Name ?? "")
+        let name = displayName(packet.Name ?? "", fallbackHost: host)
         let id = String(displayName(packet.Id ?? "").prefix(maximumIDLength))
         let mismatch = publicInfoID.map { $0 != id } ?? false
         return DiscoveryPresentation(
@@ -77,20 +77,8 @@ public enum DiscoveryPolicy {
         return stored
     }
 
-    public static func displayName(_ raw: String) -> String {
-        let plain = MetadataSanitizer.plainText(raw)
-        let cleaned = plain.unicodeScalars.filter { !isControl($0) }
-        return String(String(String.UnicodeScalarView(cleaned)).prefix(maximumNameLength))
-    }
-
-    private static func isControl(_ scalar: Unicode.Scalar) -> Bool {
-        if scalar.value <= 0x1F || scalar.value == 0x7F { return true }
-        switch scalar.value {
-        case 0x202A...0x202E, 0x2066...0x2069:
-            return true
-        default:
-            return false
-        }
+    public static func displayName(_ raw: String, fallbackHost: String = "") -> String {
+        MetadataSanitizer.displayName(raw, fallbackHost: fallbackHost)
     }
 
     private static func defaultPort(_ scheme: String?) -> Int? {

@@ -20,7 +20,7 @@ public enum AuthScreen: Sendable, Equatable {
 }
 
 public protocol AuthBackend: Sendable {
-    func probe(_ address: String) async -> ServerProbeOutcome
+    func probe(_ address: String, certificatePin: OriginCertificatePin?) async -> ServerProbeOutcome
     func quickConnectEnabled(on server: ServerInfo) async throws(APIError) -> Bool
     func beginQuickConnect(on server: ServerInfo) async throws(APIError) -> QuickConnectChallenge
     func pollQuickConnect(on server: ServerInfo, secret: QuickConnectSecret) async throws(APIError) -> Bool

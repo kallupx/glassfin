@@ -2,15 +2,28 @@ import Foundation
 
 public struct ServerInfo: Sendable, Hashable, Codable {
     public var id: String
-    public var name: String
+    public var name: String {
+        didSet { name = MetadataSanitizer.displayName(name, fallbackHost: url.host ?? "") }
+    }
     public var url: URL
     public var version: SemVer
 
     public init(id: String, name: String, url: URL, version: SemVer) {
         self.id = id
-        self.name = name
+        self.name = MetadataSanitizer.displayName(name, fallbackHost: url.host ?? "")
         self.url = url
         self.version = version
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, url, version }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try values.decode(String.self, forKey: .id),
+            name: try values.decode(String.self, forKey: .name),
+            url: try values.decode(URL.self, forKey: .url),
+            version: try values.decode(SemVer.self, forKey: .version))
     }
 }
 
@@ -375,10 +388,16 @@ public struct ItemFilterSet: Sendable, Hashable {
 
 public struct PublicUser: Sendable, Hashable {
     public var id: String
-    public var name: String
+    private var rawName: String
+    private var host: String
+    public var name: String {
+        get { MetadataSanitizer.displayName(rawName, fallbackHost: host) }
+        set { rawName = newValue }
+    }
 
-    public init(id: String, name: String) {
+    public init(id: String, name: String, host: String = "") {
         self.id = id
-        self.name = name
+        self.rawName = name
+        self.host = host
     }
 }

@@ -291,10 +291,12 @@ public final class AppState {
     public func didSignIn(_ session: UserSession, token: String) throws(PreferencesError) {
         try storePreferences(for: session)
         do {
-            try secureStore.set(
-                Data(token.utf8),
-                account: SessionCredential.account(serverID: session.server.id, userID: session.userID),
-                attributes: .production
+            try credentialVault.save(
+                token: token, serverID: session.server.id, userID: session.userID,
+                profile: StoredSessionProfile(
+                    serverID: session.server.id, serverName: session.server.name,
+                    serverURL: session.server.url.absoluteString, userID: session.userID,
+                    userName: session.userName, isAdministrator: session.isAdministrator)
             )
         } catch {
             log.warning("Non-fatal invariant failure")
@@ -333,7 +335,9 @@ public final class AppState {
         }
         try? SettingsCertificatePinStore(settings: preferences.store).remove(serverID: id)
         if ItemID(id) != nil {
-            let vault = CredentialVault(secureStore: secureStore, settings: preferences.store, accessGroup: "")
+            let vault = CredentialVault(
+                secureStore: secureStore, settings: preferences.store,
+                accessGroup: KeychainAttributes.production.accessGroup)
             try? vault.deleteTokens(serverID: id)
         }
         if case .signedIn(let session) = phase, session.server.id == id {
@@ -571,23 +575,18 @@ public final class AppState {
         activeServer = session.server
     }
 
+    private var credentialVault: CredentialVault {
+        CredentialVault(
+            secureStore: secureStore, settings: preferences.store,
+            accessGroup: KeychainAttributes.production.accessGroup)
+    }
+
     private func hasAccessToken(serverID: String, userID: String) -> Bool {
-        if let data = try? secureStore.data(for: SessionCredential.account(serverID: serverID, userID: userID)),
-            !data.isEmpty
-        {
-            return true
-        }
-        guard let account = try? CredentialVault.tokenAccount(serverID: serverID, userID: userID),
-            let data = try? secureStore.data(for: account), !data.isEmpty
-        else { return false }
-        return true
+        (try? credentialVault.loadToken(serverID: serverID, userID: userID)) != nil
     }
 
     private func deleteAccessToken(serverID: String, userID: String) {
-        try? secureStore.remove(account: SessionCredential.account(serverID: serverID, userID: userID))
-        if let account = try? CredentialVault.tokenAccount(serverID: serverID, userID: userID) {
-            try? secureStore.remove(account: account)
-        }
+        try? credentialVault.deleteToken(serverID: serverID, userID: userID)
     }
 
     private func handle(_ event: ServerEvent) async {
