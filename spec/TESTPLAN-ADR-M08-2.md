@@ -72,6 +72,7 @@
 | T08-2-36 | 🔒 The (b) path's own URLSession request is redirected to a cross-origin address | `Authorization` is removed from the new request or the redirect is rejected | S4.6 | X |
 | T08-2-50 | 🔒 The resource loader's playlist has a relative URI, an absolute URI pointing to another origin (variant, segment or `#EXT-X-KEY`) and an `http://` URI in an HTTPS playlist | The relative one is resolved against the playlist's origin and works. Cross-origin and HTTPS → HTTP URIs are rejected, and no request is made to them | 03 T1.3.3/Q8-2-06, S4.6 | X |
 | T08-2-37 | 🔒 `HEAD /Videos/{id}/stream` on Docker servers 10.10.7, 10.11.11 and 12.2 | Each answers 2xx/3xx. If one returns 405, the expected result is open (Q8-2-05) | S4.6 ("HEAD is in OpenAPI 12.2.0"), SPEC §2 | I |
+| T08-2-51 | 🔒 Legacy `X-Emby-Token` header and the supported `Authorization` header on Jellyfin 10.10, 10.11 and 12 | Jellyfin 12 rejects the legacy header with 401; on 10.10/10.11 its status is recorded. The Authorization header is accepted with 200 on every version | S1.5, SPEC §2 | I |
 
 ## Network, errors and cancellation
 | ID | Scenario | Expected result | Reference | Run |

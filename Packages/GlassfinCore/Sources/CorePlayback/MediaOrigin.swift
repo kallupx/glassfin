@@ -2,6 +2,11 @@ import Foundation
 
 /// Scheme, host, and port. Default ports are filled in so `:443` matches an omitted HTTPS port.
 public enum MediaOrigin {
+    /// Whether the URL has a scheme, a nonempty host, and an explicit or scheme-default port.
+    public static func hasSchemeHostAndPort(_ url: URL) -> Bool {
+        parts(url) != nil
+    }
+
     public static func matches(_ lhs: URL, _ rhs: URL) -> Bool {
         guard let left = parts(lhs), let right = parts(rhs) else { return false }
         return left == right
