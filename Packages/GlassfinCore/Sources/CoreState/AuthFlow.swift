@@ -29,10 +29,10 @@ public final class AuthFlow {
         }
     }
     public var bannerKey: AuthCopy.Key? {
-        switch app.connectivity {
-        case .offline: .noNetworkConnection
-        case .serverUnreachable: .serverUnreachable
-        case .online, .degraded: nil
+        switch app.bannerKey {
+        case AppErrorMessage.offlineKey: .noNetworkConnection
+        case AppErrorMessage.serverDownKey: .serverUnreachable
+        default: nil
         }
     }
     public private(set) var displayedName = ""
