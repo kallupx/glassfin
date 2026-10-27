@@ -96,8 +96,8 @@ public final class HomeViewModel: ViewContentProviding {
             && latestRows.allSatisfy { HomePolicy.sectionErrorKey(for: $0.state) == nil }
     }
     public var serverDownTitleKey: String? {
-        !hasContent && (app.connectivity == .serverUnreachable || app.connectivity == .offline)
-            ? AppErrorMessage.messageKey(for: .serverUnreachable) : nil
+        app.showsServerDown || (!hasContent && app.connectivity == .offline)
+            ? app.serverDownTitleKey : nil
     }
     public var bannerKey: String? { app.bannerKey }
     public var playbackBlockedKey: String? { app.playbackBlockedMessageKey }
@@ -135,6 +135,10 @@ public final class HomeViewModel: ViewContentProviding {
         self.scope = scope
         self.log = log
         self.requireSnapshotOwner = requireSnapshotOwner
+    }
+
+    public func onAppear() {
+        app.currentView = self
     }
 
     /// Discover libraries concurrently with the two personal rows.

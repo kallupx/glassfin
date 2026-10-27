@@ -33,9 +33,9 @@ The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied ve
 | T06-38 | `T06HomeTests.testT06_38_seriesHandoffPreservesSeasonAndIsHiddenForMovies` |
 | T06-41 | `T06HomeTests.testT06_41_actionsCommitAndFailedEditsRestoreTheRow` |
 | T06-44 | `T06HomeTests.testT06_44_snapshotPreservesLibraryGroupingAndRejectsOtherUser` |
-| T06-46 | `T06HomeTests.testT06_46_noContentUsesExistingServerDownTitleKey`; `T06HomeUITests.testT06_46_serverDownStillAllowsSettingsAndSignOut` |
+| T06-46 | `T06HomeTests.testT06_46_noContentUsesExistingServerDownTitleKey`; `ScreenReentryTests.testT06_46_homeReentryWithoutContentShowsFullScreen`; `T06HomeUITests.testT06_46_serverDownStillAllowsSettingsAndSignOut` |
 | T06-48 | `T06HomeTests.testT06_48_pingRecoversAndKeepsCachedContent`; `T06HomeTests.testT06_48_automaticPingRunsAtTenSecondsAndRecovers` |
-| T06-49 | `T06HomeTests.testT06_49_serverDownRetainsVisibleContentAndBanner` |
+| T06-49 | `T06HomeTests.testT06_49_serverDownRetainsVisibleContentAndBanner`; `ScreenReentryTests.testT06_49_homeReentryKeepsContentAndShowsBanner` |
 | T06-50 | `T06HomeTests.testT06_50_unreachableActionKeepsContentUntilPingRecovery` |
 | T06-51 | `T06SocketTests.testT06_51_socket401StopsWithoutReconnect`; `T06HomeTests.testT06_51_latest401EndsSessionOnceEvenWhenOtherRowsSucceed`; `T06ImageStreamTests.testT06_51_image401TakesPrecedenceOverSizeHeader`; `T06SessionTests.testT06_51_image401CancelsOtherRequestsAndDoesNotRetry` |
 | T06-56 | `T06HomeTests.testT06_56_cachedColdStartKeepsContentAndServerUnreachableBanner`; `T06HomeUITests.testT06_56_cachedServerDownKeepsCardsAndNonFocusableBanner` |
@@ -119,6 +119,32 @@ Each row identifies the missing part of the canonical scenario and why it remain
 | T06-79 | A <1 MB 30,000-pixel bomb fixture and <=50 MB peak/P11 validation need ImageIO plus Apple hardware profiling; Linux cannot supply this evidence. |
 | T06-80 | Portable production option dictionary is tested. Real 3840x2160 backdrop / 2000x3000 poster thumbnail tests are supplied but require ImageIO on Apple. |
 | T06-82 | Oversize/cancellation/no-cache logic and Apple invalid-decode test supplied. Rendered placeholder and stable focus require Apple UI execution. |
+
+## Screen re-entry regression coverage
+
+The v2 stack merge is `52b37cf`, with parents `370e398` and `a22db4a`. The complete conflict resolution and test/assertion/signature inventory is in [TEST-CHANGES-M06-RESTACK.md](TEST-CHANGES-M06-RESTACK.md), compared with the pre-merge branch and with v2 where isolation needed adaptation.
+
+Home, Library and Series view models conform to #7's `ViewContentProviding` and expose `onAppear()` to select themselves as `app.currentView`. Home's real SwiftUI screen invokes it from `.onAppear`, including NavigationStack pops and tab returns. Library tabs and the M07 item destination remain placeholders in this branch; they have no corresponding Library/Series SwiftUI screens to wire. Series is the existing detail-oriented model; there is no separate item-detail view model here. Home uses #7's `AppState.showsServerDown` for the server-unreachable full-screen decision, while retaining its existing offline presentation.
+
+All nine methods below are `@MainActor async` (the six state scenarios also `throws`), and `ScreenReentryTests` has no class-level actor annotation. Tests exercise actual models and `AppState.handle(.serverUnreachable)`, then inspect `AppState.showsServerDown` and the shared catalog key. Assertions compare keys and localized accessors, with no new UI copy.
+
+| Test in `ScreenReentryTests` | ID / exact assertion coverage |
+|---|---|
+| `testHomeOnAppearSelectsCurrentView` | Extra: initially nil current view; `onAppear()` selects the identical Home instance; idle Home has no content; no Resume request occurs. |
+| `testLibraryOnAppearSelectsCurrentView` | Extra: initially nil current view; selects the identical Library instance; idle Library has no content; no item-page request occurs. |
+| `testSeriesOnAppearSelectsCurrentView` | Extra: initially nil current view; selects the identical Series instance; idle Series has no content. |
+| `testT06_49_homeReentryKeepsContentAndShowsBanner` | T06-49: independently seeds Resume, Next Up and library Latest content; verifies content exists, the other VM identity, then the returning Home identity. Server failure must show the banner with no full-screen state or Home error title. Visiting the empty VM while already unreachable must show full-screen; returning Home restores the banner. Resume, Next Up and each Latest row retain their exact states, and Resume request count stays unchanged. |
+| `testT06_46_homeReentryWithoutContentShowsFullScreen` | T06-46: repeats with idle and successfully loaded-empty Home; navigates through a Library VM with content, checks both identities, and verifies Home has no content. Failure must show the full-screen state with the shared title; Home's title equals AppState's title key. |
+| `testLibraryReentryKeepsContentAndShowsBanner` | Extra, extends the T02-35a rule beyond its Home scenario: loaded Library has content; checks departing/returning identities; verifies the banner before and after a second navigation while unreachable, with full-screen only on the empty other VM. The exact Library state and item-page request count stay unchanged. |
+| `testLibraryReentryWithoutContentShowsFullScreen` | Extra, extends T02-35b: idle and loaded-empty Library; visits Home with content, checks both identities, verifies no Library content, and requires full-screen after failure. |
+| `testSeriesReentryKeepsContentAndShowsBanner` | Extra, extends T02-35a: repeats with seasons alone and seasons plus episodes; verifies content, departing/returning identities, banner before and after navigating while unreachable, and full-screen only on the empty other VM. Exact seasons/episodes states stay unchanged. |
+| `testSeriesReentryWithoutContentShowsFullScreen` | Extra, extends T02-35b: idle and loaded-empty Series; visits Home with content, checks both identities, verifies no Series content, and requires full-screen after failure. |
+
+The banner assertion helper checks exactly four things: `.serverUnreachable` connectivity, `bannerKey == AppErrorMessage.serverDownKey`, `banner == AppErrorMessage.localized(serverDownKey)`, and `showsServerDown == false`. The full-screen helper checks exactly three things: `.serverUnreachable`, `showsServerDown == true`, and `serverDownTitleKey == AppErrorMessage.serverDownKey`. These assertions also apply wherever their helpers are called in the table above.
+
+The seven extra tests do not introduce or reuse canonical IDs: the M02 plan gives T02-35a/b to its existing Home scenarios, and identity-only entry checks have no separate canonical scenario. Home presentation regressions use the matching T06-46/T06-49 IDs. Temporarily removing only Home's `onAppear` registration makes the T06-49 re-entry test fail on identity and full-screen assertions; the hook was restored before final verification. Apple UI execution remains unverified on Linux.
+
+Final v2/re-entry verification (2026-10-27): `bash scripts/coverage-gate.sh` passed with 401 tests, six existing live-integration skips, zero failures, and 91.34% line coverage (7,224 / 7,909; threshold 80%). The exact recursive strict `swift-format` lint, design-system check, string-catalog check, DEBUG-only-string check, `bash scripts/ci-grep.sh` and `git diff --check` passed. The v2 ancestry, byte-identical base-only files, exact #7 display sanitizer implementation, unchanged v2 `project.yml`, absence of class-level XCTest actor isolation, and async signatures for every actor-isolated test were also checked. No Apple build/UI/snapshot execution was available.
 
 ## Binding follow-up decisions
 

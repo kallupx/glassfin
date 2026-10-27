@@ -110,6 +110,10 @@ public final class LibraryViewModel: ViewContentProviding {
         self.log = log
     }
 
+    public func onAppear() {
+        app.currentView = self
+    }
+
     public func reload(libraryID: String, query: ItemQuery = ItemQuery()) async {
         app.currentView = self
         guard ItemID(libraryID) != nil else {
@@ -197,6 +201,10 @@ public final class SeriesViewModel: ViewContentProviding {
         self.userData = userData
         self.app = app
         self.log = log
+    }
+
+    public func onAppear() {
+        app.currentView = self
     }
 
     public func load(seriesID: String) async {

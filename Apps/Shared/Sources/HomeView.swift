@@ -57,6 +57,7 @@ struct HomeView: View {
             }
         #endif
         .accessibilityIdentifier("home.root")
+        .onAppear { model.onAppear() }
         .task { model.start() }
         .task { await model.observePlayback() }
         .onChange(of: focusedItem?.id) { _, _ in backdropSelection.focus(focusedItem) }
