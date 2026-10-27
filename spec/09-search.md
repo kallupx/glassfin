@@ -11,7 +11,7 @@
 1. The Search tab (fi: "Haku") → the system's `.searchable` keyboard (tvOS's native row keyboard; dictation and the iPhone keyboard also work automatically).
 2. Typing → a 300 ms debounce → results grouped into rows: "Movies" (fi: "Elokuvat"), "Series" (fi: "Sarjat"), "Episodes" (fi: "Jaksot"), "People" (fi: "Henkilöt") (P1), "Music" (fi: "Musiikki") (P1, once M12 is done).
 3. Down from the keyboard → to the result rows (the rows are `focusSection` regions). A click → detail. Back returns to search, and the text and the results are kept.
-4. An empty search field: recent searches (max 10, stored per server ID + user ID, deleted on sign-out, clearable; 03 S6.7) and P1 suggestions.
+4. An empty search field: recent searches (max 20, per server ID + user ID, Application Support, deleted on sign-out, clearable; 03 S6.7) and P1 suggestions.
 
 ## API
 - `GET /Items?searchTerm=<q>&recursive=true&includeItemTypes=Movie,Series,Episode&limit=24&fields=PrimaryImageAspectRatio&enableUserData=true`. Separate parallel requests are made for movies, series, and episodes, so that each row gets its own limit.
