@@ -32,13 +32,12 @@ struct OwnGlassSurface<S: Shape>: ViewModifier {
     var kind: OwnGlassKind
     var tinted: Bool
 
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
+    @DesignAccessibility private var accessibility
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         let bordered = applyBody(content)
-        if GlassContrastChrome.showsSeparator(contrast) {
+        if GlassContrastChrome.showsSeparator(accessibility.contrast) {
             bordered.overlay {
                 shape.stroke(Color(.separator), lineWidth: GlassContrastChrome.lineWidth)
             }
@@ -49,7 +48,7 @@ struct OwnGlassSurface<S: Shape>: ViewModifier {
 
     @ViewBuilder
     private func applyBody(_ content: Content) -> some View {
-        if reduceTransparency {
+        if accessibility.reduceTransparency {
             content.background(ReduceTransparencyFallback.color(for: colorScheme), in: shape)
         } else {
             content.glassEffect(glass, in: shape)
@@ -66,7 +65,7 @@ struct OwnGlassSurface<S: Shape>: ViewModifier {
         case .interactiveProbe:
             base = Glass.regular.interactive()
         }
-        if tinted && GlassTint.allowsAccent(contrast) {
+        if tinted && GlassTint.allowsAccent(accessibility.contrast) {
             return base.tint(.accentColor)
         }
         return base

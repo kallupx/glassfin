@@ -58,8 +58,7 @@ struct GlassActionBar: View {
 
     @FocusState private var focus: String?
     @Namespace private var glassNamespace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
+    @DesignAccessibility private var accessibility
 
     var body: some View {
         ContainedGlass(spacing: SpacingToken.m) {
@@ -75,8 +74,12 @@ struct GlassActionBar: View {
                             GlassIcon(systemName: action.systemImage, label: action.iconLabel)
                         }
                     }
-                    .glassButtonChrome(prominent: action.prominent, contrast: contrast)
-                    .glassMorphID(action.id, in: glassNamespace, enabled: MotionPolicy.allowsMorph(reduceMotion))
+                    .glassButtonChrome(prominent: action.prominent, contrast: accessibility.contrast)
+                    .glassMorphID(
+                        action.id,
+                        in: glassNamespace,
+                        enabled: MotionPolicy.allowsMorph(accessibility.reduceMotion)
+                    )
                     .focused($focus, equals: action.id)
                     .accessibilityIdentifier(action.identifier)
                 }
