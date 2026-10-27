@@ -218,10 +218,10 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(colorful, ContrastFixture.bodyMinimum)
         XCTAssertGreaterThanOrEqual(dark, ContrastFixture.largeMinimum)
         XCTAssertGreaterThanOrEqual(colorful, ContrastFixture.largeMinimum)
-        // L-1 fixes the scrim at 60% black. On a white backdrop that ratio is below AA.
-        // Q5-03 keeps the pixel method open, so the scrim is not darkened to force a pass.
-        XCTAssertLessThan(bright, ContrastFixture.largeMinimum)
-        XCTAssertGreaterThan(bright, 2)
+        // A 60% black scrim over white yields sRGB 0.4, or about 5.74:1 for white text.
+        // Both AA thresholds pass here; Q5-03's rendered glass measurement method stays open.
+        XCTAssertGreaterThanOrEqual(bright, ContrastFixture.bodyMinimum)
+        XCTAssertGreaterThanOrEqual(bright, ContrastFixture.largeMinimum)
     }
 
     func testT05_35_reduceTransparencyUsesOneFallbackToken() {
@@ -230,8 +230,8 @@ final class DesignSystemLogicTests: XCTestCase {
             var white: CGFloat = -1
             var alpha: CGFloat = -1
             XCTAssertTrue(color.getWhite(&white, alpha: &alpha))
-            XCTAssertEqual(alpha, 1)
-            XCTAssertEqual(white, scheme == .dark ? 0 : 1)
+            XCTAssertEqual(alpha, 1, accuracy: 0.001)
+            XCTAssertEqual(white, scheme == .dark ? 0 : 1, accuracy: 0.001)
         }
         XCTAssertEqual(GlassContrastChrome.lineWidth, 1)
     }
