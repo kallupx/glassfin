@@ -4,9 +4,9 @@ import XCTest
 
 @testable import Glassfin
 
-@MainActor
 final class DesignSystemLogicTests: XCTestCase {
-    func testT05_01_glassFollowsTheSurfaceTable() {
+    @MainActor
+    func testT05_01_glassFollowsTheSurfaceTable() async {
         XCTAssertEqual(SurfaceAssignment.materials["tabBar"], .systemTabBar)
         XCTAssertEqual(SurfaceAssignment.materials["heroActions"], .glassContainer)
         XCTAssertEqual(SurfaceAssignment.materials["seasonPicker"], .glassContainer)
@@ -22,18 +22,21 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertFalse(SurfaceAssignment.allowsGlass(.subtitle))
     }
 
-    func testT05_06_tintIsRemovedWhenContrastIncreases() {
+    @MainActor
+    func testT05_06_tintIsRemovedWhenContrastIncreases() async {
         XCTAssertTrue(GlassTint.allowsAccent(.standard))
         XCTAssertFalse(GlassTint.allowsAccent(.increased))
     }
 
-    func testT05_08_sharedDesignTypesAreLinked() {
+    @MainActor
+    func testT05_08_sharedDesignTypesAreLinked() async {
         XCTAssertEqual(CardMetrics.posterWidth, 250)
         XCTAssertEqual(SpacingToken.xl, 40)
         XCTAssertEqual(TypographyToken.body, .body)
     }
 
-    func testT05_09_posterMetricsAndProgressStates() {
+    @MainActor
+    func testT05_09_posterMetricsAndProgressStates() async {
         XCTAssertEqual(CardMetrics.posterWidth / CardMetrics.posterHeight, 2.0 / 3.0, accuracy: 0.0001)
         let variants = DemoFixtures.posterVariants
         XCTAssertEqual(variants.map(\.id), ["zero", "half", "done", "count", "unknown"])
@@ -49,7 +52,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertEqual(PosterPhase.failed, .failed)
     }
 
-    func testT05_11_landscapeCardKeepsTheRemainingMinutesKey() {
+    @MainActor
+    func testT05_11_landscapeCardKeepsTheRemainingMinutesKey() async {
         XCTAssertEqual(
             CardMetrics.landscapeWidth / CardMetrics.landscapeHeight,
             16.0 / 9.0,
@@ -65,7 +69,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertFalse(empty.showsBar)
     }
 
-    func testT05_13_playActionIsTheProminentDefault() {
+    @MainActor
+    func testT05_13_playActionIsTheProminentDefault() async {
         let play = HeroHeader.actions(canResume: false)[0]
         XCTAssertEqual(play.id, "play")
         XCTAssertTrue(play.prominent)
@@ -76,21 +81,24 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertTrue(resume.prominent)
     }
 
-    func testT05_15_overviewIsPlainText() {
+    @MainActor
+    func testT05_15_overviewIsPlainText() async {
         let plain = PlainText.overview(DemoFixtures.htmlOverview)
         // S6.1: tags and entities are literal text, with no HTML/entity parsing.
         XCTAssertEqual(plain, DemoFixtures.htmlOverview)
         XCTAssertEqual(DemoFixtures.plainOverview, plain)
     }
 
-    func testT05_17_elementBudgetIsReportedAndNotEnforced() {
+    @MainActor
+    func testT05_17_elementBudgetIsReportedAndNotEnforced() async {
         XCTAssertFalse(GlassBudget.exceedsElementLimit(8))
         XCTAssertTrue(GlassBudget.exceedsElementLimit(9))
         XCTAssertEqual(GlassBudget.displayedCount(of: 9), 9)
         XCTAssertEqual(GlassBudget.maximumElementsPerContainer, 8)
     }
 
-    func testT05_19_imageFadeAndBlurHashPlaceholder() {
+    @MainActor
+    func testT05_19_imageFadeAndBlurHashPlaceholder() async {
         XCTAssertEqual(MotionToken.imageFade(reduceMotion: false), 0.15, accuracy: 0.0001)
         XCTAssertEqual(MotionToken.imageFade(reduceMotion: true), 0, accuracy: 0.0001)
         guard let image = BlurHash.image(from: "00TSUA", width: 1, height: 1),
@@ -104,14 +112,16 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertNil(BlurHash.image(from: "00TSUA", width: 0, height: 1))
     }
 
-    func testT05_20_skeletonUsesTheCardRowHeight() {
+    @MainActor
+    func testT05_20_skeletonUsesTheCardRowHeight() async {
         XCTAssertEqual(CardMetrics.rowHeight(for: .poster), CardMetrics.posterHeight + CardMetrics.titleHeight)
         XCTAssertEqual(CardMetrics.rowHeight(for: .landscape), CardMetrics.landscapeHeight + CardMetrics.titleHeight)
         XCTAssertEqual(CardMetrics.size(for: .poster), CGSize(width: 250, height: 375))
         XCTAssertEqual(CardMetrics.spacing, 40)
     }
 
-    func testT05_21_failurePresentationKeepsContentOrBlocks() {
+    @MainActor
+    func testT05_21_failurePresentationKeepsContentOrBlocks() async {
         XCTAssertEqual(
             LoadPresentation.mode(for: LoadPhase<String>.failed(.offline, nil)),
             .content(banner: .bannerOffline)
@@ -157,7 +167,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertEqual(key, .errorServerUnreachable)
     }
 
-    func testT05_22_copyKeysAreSymbolic() {
+    @MainActor
+    func testT05_22_copyKeysAreSymbolic() async {
         var seen = Set<String>()
         for key in CopyKey.allCases {
             XCTAssertFalse(key.rawValue.contains(" "))
@@ -171,7 +182,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertEqual(CopyKey.welcomeConnect.rawValue, "welcome.connect")
     }
 
-    func testT05_23_fixturesHaveNoSecrets() {
+    @MainActor
+    func testT05_23_fixturesHaveNoSecrets() async {
         let blob = [
             DemoFixtures.htmlOverview,
             DemoFixtures.plainOverview,
@@ -184,12 +196,14 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertFalse(blob.contains(queryName))
     }
 
-    func testT05_25_focusGlassMaterialIsCallable() {
+    @MainActor
+    func testT05_25_focusGlassMaterialIsCallable() async {
         _ = FocusGlass.material(isFocused: true)
         _ = FocusGlass.material(isFocused: false)
     }
 
-    func testT05_27_libraryTabsFollowTheWrittenDefault() {
+    @MainActor
+    func testT05_27_libraryTabsFollowTheWrittenDefault() async {
         XCTAssertEqual(LibraryTabModel.maximumInlineLibraries, 5)
         let none = LibraryTabModel.plan(libraries: [])
         XCTAssertTrue(none.inline.isEmpty)
@@ -204,7 +218,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertEqual(plan7.overflow.map(\.id), ["5", "6"])
     }
 
-    func testT05_32_scrimContrastOnThreeBackgrounds() {
+    @MainActor
+    func testT05_32_scrimContrastOnThreeBackgrounds() async {
         let gradient = ScrimGradient()
         XCTAssertEqual(gradient.opacity(at: 0.6), 0, accuracy: 0.0001)
         XCTAssertEqual(gradient.opacity(at: 1), 0.6, accuracy: 0.0001)
@@ -222,7 +237,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertGreaterThan(bright, 2)
     }
 
-    func testT05_35_reduceTransparencyUsesOneFallbackToken() {
+    @MainActor
+    func testT05_35_reduceTransparencyUsesOneFallbackToken() async {
         for scheme in [ColorScheme.light, .dark] {
             let color = UIColor(ReduceTransparencyFallback.color(for: scheme))
             var white: CGFloat = -1
@@ -234,12 +250,14 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertEqual(GlassContrastChrome.lineWidth, 1)
     }
 
-    func testT05_36_increaseContrastShowsTheSeparatorToken() {
+    @MainActor
+    func testT05_36_increaseContrastShowsTheSeparatorToken() async {
         XCTAssertTrue(GlassContrastChrome.showsSeparator(.increased))
         XCTAssertFalse(GlassContrastChrome.showsSeparator(.standard))
     }
 
-    func testT05_37_reduceMotionDropsMorphAndCrossfade() {
+    @MainActor
+    func testT05_37_reduceMotionDropsMorphAndCrossfade() async {
         XCTAssertFalse(MotionPolicy.allowsMorph(true))
         XCTAssertTrue(MotionPolicy.allowsMorph(false))
         XCTAssertFalse(MotionPolicy.allowsCustomParallax(false))
@@ -247,13 +265,15 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertEqual(MotionToken.imageFade(reduceMotion: true), 0, accuracy: 0.0001)
     }
 
-    func testT05_38_primaryCopyIsNotLineLimited() {
+    @MainActor
+    func testT05_38_primaryCopyIsNotLineLimited() async {
         XCTAssertNil(TruncationPolicy.playButtonLineLimit)
         XCTAssertNil(TruncationPolicy.errorMessageLineLimit)
         XCTAssertNil(TruncationPolicy.codeLineLimit)
     }
 
-    func testT05_41_detailAndPlaybackStayInsideTheGlassBudget() {
+    @MainActor
+    func testT05_41_detailAndPlaybackStayInsideTheGlassBudget() async {
         XCTAssertEqual(ScreenGlassPlan.detail().count, GlassBudget.maximumContainers)
         XCTAssertEqual(ScreenGlassPlan.detail(), [.heroActions, .seasonPicker])
         XCTAssertEqual(ScreenGlassPlan.playback(), [.nextUp])
@@ -261,16 +281,19 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertLessThanOrEqual(ScreenGlassPlan.playback().count, GlassBudget.maximumContainers)
     }
 
-    func testT05_42_cardsAndSubtitlesAreContentSurfaces() {
+    @MainActor
+    func testT05_42_cardsAndSubtitlesAreContentSurfaces() async {
         XCTAssertFalse(SurfaceAssignment.allowsGlass(.content))
         XCTAssertFalse(SurfaceAssignment.allowsGlass(.subtitle))
     }
 
-    func testT05_43_playbackGlassIsTheSingleNextUpOverlay() {
+    @MainActor
+    func testT05_43_playbackGlassIsTheSingleNextUpOverlay() async {
         XCTAssertEqual(ScreenGlassPlan.playback(), [.nextUp])
     }
 
-    func testT05_55_customParallaxStaysOff() {
+    @MainActor
+    func testT05_55_customParallaxStaysOff() async {
         XCTAssertFalse(MotionPolicy.allowsCustomParallax(false))
         XCTAssertFalse(MotionPolicy.allowsCustomParallax(true))
     }

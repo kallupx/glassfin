@@ -5,10 +5,10 @@ import Foundation
 import GlassfinServices
 import XCTest
 
-@MainActor
 final class T09SearchTests: XCTestCase {
     /// T09-03: a single Latin character sends no request and keeps recents available.
-    func testT09_03_oneLatinCharacterKeepsRecentsWithoutSearching() throws {
+    @MainActor
+    func testT09_03_oneLatinCharacterKeepsRecentsWithoutSearching() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
         try fixture.store.record("previous", serverID: Sample.serverID, userID: Sample.userID)
@@ -19,6 +19,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-04: two characters start a request.
+    @MainActor
     func testT09_04_twoCharactersSearch() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -28,6 +29,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-06: whitespace alone sends nothing; transmitted input has surrounding whitespace trimmed.
+    @MainActor
     func testT09_06_whitespaceIsIgnoredForEligibilityAndTransmission() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -39,6 +41,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-07: twenty rapidly entered characters result in exactly one final request.
+    @MainActor
     func testT09_07_twentyCharactersDebounceToOneRequest() async throws {
         let clock = SuspendingClock()
         let fixture = try SearchFixture(clock: clock)
@@ -59,6 +62,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-08: the canonical default is 100 graphemes, including multi-scalar emoji.
+    @MainActor
     func testT09_08_longQueryIsCappedBeforeRequest() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -69,6 +73,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-09, T09-15: clearing cancels pending work and rejects a late response.
+    @MainActor
     func testT09_09_clearDiscardsLateResultsAndShowsRecents() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -85,6 +90,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-16: a cancellation response is never displayed or reported as an error.
+    @MainActor
     func testT09_16_cancelledResponseIsSilent() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -100,6 +106,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-43: completing or retrying a query does not save it; opening a result does.
+    @MainActor
     func testT09_43_historyRecordsOnlyResultSelection() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -113,7 +120,8 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-56: offline searches send no request and retain usable recent-query text.
-    func testT09_56_offlineSearchKeepsRecentsAndDoesNotSend() throws {
+    @MainActor
+    func testT09_56_offlineSearchKeepsRecentsAndDoesNotSend() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
         try fixture.store.record("previous", serverID: Sample.serverID, userID: Sample.userID)
@@ -128,6 +136,7 @@ final class T09SearchTests: XCTestCase {
     }
 
     /// T09-02: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+    @MainActor
     func testT09_02_debounceAndCancellationBeforeRequest() async throws {
         let clock = SuspendingClock()
         let fixture = try SearchFixture(clock: clock)
@@ -148,6 +157,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-14: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_14_reverseResponsesOnlyLatestWins() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -168,7 +178,8 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-05: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_05_minimumLengthAndCJK() {
+    @MainActor
+    func testT09_05_minimumLengthAndCJK() async {
         for term in ["", " ", "a", "ä", "🎬"] { XCTAssertFalse(SearchPolicy.accepts(term)) }
         for term in ["ab", "ä&", "日", "本", "한", "あ", "𠀀", "  日  "] {
             XCTAssertTrue(SearchPolicy.accepts(term))
@@ -177,6 +188,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-34: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_34_loadingThenEmptyAndInvalidTermClearsRows() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -193,6 +205,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-29: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_29_errorAndRetry() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -209,6 +222,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-12: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_12_backKeepsTextResultsAndFocus() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -230,6 +244,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-28: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_28_pagingDeduplicatesAndRetainsServerOrder() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -251,6 +266,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-18: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_18_disappearCancelsAndResumesPendingSearch() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -268,6 +284,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-59: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_59_errorsNeverSignOutExcept401() async throws {
         for error in [APIError.network, .timeout, .tls, .forbidden, .notFound, .server(status: 500), .decoding] {
             let fixture = try SearchFixture()
@@ -283,6 +300,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-64: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_64_metadataIsLiteralThroughViewModel() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -296,6 +314,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-64: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_64_viewModelBoundsNamesAndOverviewByGraphemes() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -312,6 +331,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-66: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_66_queriesNeverReachLogs() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -327,6 +347,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-53: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_53_userClearRemovesDiskHistoryAndViewState() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -343,6 +364,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-59: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_59_stale401EndsSessionOnceCancelsWorkAndClearsHistory() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -364,6 +386,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-57: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_57_serverDownKeepsContentSharedKeyAndTenSecondRecovery() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }
@@ -403,6 +426,7 @@ final class T09SearchTests: XCTestCase {
 
     /// T09-19: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_19_sameTermABAAndWrongResponseTermAreRejected() async throws {
         let fixture = try SearchFixture()
         defer { fixture.cleanup() }

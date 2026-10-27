@@ -4,15 +4,16 @@ import CoreState
 import Foundation
 import XCTest
 
-@MainActor
 final class T04AuthFlowTests: XCTestCase {
-    func testT04_05_addressFocusFollowsTheField() {
+    @MainActor
+    func testT04_05_addressFocusFollowsTheField() async {
         XCTAssertEqual(AuthFocusPolicy.address(fieldIsEmpty: true), .addressField)
         XCTAssertEqual(AuthFocusPolicy.address(fieldIsEmpty: false), .continueButton)
         XCTAssertEqual(AuthFocusPolicy.cleartextAndCertificate, .cancel)
     }
 
-    func testT04_16_serverNameKeepsLiteralMarkupAndCapsAt64() {
+    @MainActor
+    func testT04_16_serverNameKeepsLiteralMarkupAndCapsAt64() async {
         let raw = "<b>Home</b>\u{0007}" + String(repeating: "n", count: 500)
         let shown = AuthServerName.display(raw)
         XCTAssertTrue(shown.hasPrefix("<b>"))
@@ -21,6 +22,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(shown, "<b>Home</b>" + String(repeating: "n", count: 53))
     }
 
+    @MainActor
     func testT04_16_serverNameIsCappedOnAddressAndSavedUserPicker() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -45,6 +47,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.publicUsers.last?.name, "**Bea**")
     }
 
+    @MainActor
     func testT04_26_rejectingCleartextDoesNotSaveTheServer() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -59,6 +62,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertTrue(rig.harness.app.preferencesSnapshot().servers.isEmpty)
     }
 
+    @MainActor
     func testT04_27_warningScreensFocusCancel() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -74,6 +78,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.focus, .cancel)
     }
 
+    @MainActor
     func testT04_31_pinMismatchKeepsTheToken() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -94,6 +99,7 @@ final class T04AuthFlowTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testS44_acceptCertificateRetriesWithPinAndPersistsOnlyAfterRealServerID() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -119,6 +125,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNil(try rig.pins.fingerprint(for: "pending"))
     }
 
+    @MainActor
     func testS44_secondNewOriginDoesNotReceiveThePreviousAcceptance() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -143,6 +150,7 @@ final class T04AuthFlowTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testS44_certificateChangeRequiresMatchingConfirmationBeforeReplacingPin() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -170,6 +178,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(try rig.pins.fingerprint(for: Sample.serverID), sampleLeaf().sha256)
     }
 
+    @MainActor
     func testS44_removingServerAlsoRevokesTheInMemoryAcceptance() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -189,6 +198,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .certificate)
     }
 
+    @MainActor
     func testS44_unknownLeafCannotBeAcceptedOrStored() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -207,6 +217,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertTrue(rig.pins.writes.isEmpty)
     }
 
+    @MainActor
     func testQ416_certificateAndMismatchUseSanitizedSavedNameOrHost() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -231,6 +242,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.displayedName, "other.example")
     }
 
+    @MainActor
     func testT04_34_disabledQuickConnectSkipsA3AndBackReturnsToA2() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -246,6 +258,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.focus, .continueButton)
     }
 
+    @MainActor
     func testT04_35_initiateIsPostOnlyAfterA4Opens() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -262,6 +275,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .quickConnect)
     }
 
+    @MainActor
     func testT04_37_secretIsNotStoredOrLogged() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -279,6 +293,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(String(reflecting: QuickConnectSecret("super-secret-value")).contains("super-secret-value"))
     }
 
+    @MainActor
     func testT04_40_expiryRenewsAtMostThreeTimes() async {
         let clock = AdvancingClock()
         let rig = Rig(clock: clock)
@@ -303,6 +318,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .home)
     }
 
+    @MainActor
     func testT04_41_transientPollFailureDoesNotSignOut() async {
         let rig = Rig(clock: AdvancingClock())
         defer { rig.cleanup() }
@@ -317,6 +333,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNotEqual(rig.harness.app.phase, .needsLogin(rig.server()))
     }
 
+    @MainActor
     func testT04_42_backgroundCancelsPolling() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -335,6 +352,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .quickConnect)
     }
 
+    @MainActor
     func testT04_43_quickConnectUnauthorizedKeepsTheSession() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -353,6 +371,7 @@ final class T04AuthFlowTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testT04_46_passwordSignInReachesHome() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -379,6 +398,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(body.contains("DeviceProfile"))
     }
 
+    @MainActor
     func testT04_47_wrongPasswordClearsTheFieldAndKeepsTheToken() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -398,6 +418,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTFail("login 401 must not end a session")
     }
 
+    @MainActor
     func testT04_48_passwordIsAbsentAfterTheCall() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -414,6 +435,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(rig.backend.seenPasswords.isEmpty)
     }
 
+    @MainActor
     func testT04_50_serverFailureIsNotInvalidCredentials() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -428,6 +450,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNotEqual(rig.flow.inlineError, .invalidCredentials)
     }
 
+    @MainActor
     func testT04_52_capabilitiesFailureKeepsSignedInAndRetriesOnceOnForeground() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -450,6 +473,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.harness.app.preferencesSnapshot().activeUser()?.capabilitiesRetryPending, false)
     }
 
+    @MainActor
     func testT04_54_tokenIsNotInTheSessionOrSettings() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -465,7 +489,8 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(snapshot.contains("access-token"))
     }
 
-    func testT04_55_tenServersAndUsersStayUnderTheBudget() throws {
+    @MainActor
+    func testT04_55_tenServersAndUsersStayUnderTheBudget() async throws {
         var preferences = AppPreferences.empty
         for index in 0..<10 {
             let id = String(format: "server-%02d", index)
@@ -484,6 +509,7 @@ final class T04AuthFlowTests: XCTestCase {
         try PreferencesRepository(store: store).save(preferences)
     }
 
+    @MainActor
     func testT04_58_usersMeUnauthorizedLogsOutOnce() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -498,6 +524,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.backend.currentUserCalls, 1)
     }
 
+    @MainActor
     func testT04_60_usersMeUsesFiveSecondsAndOneAttempt() async throws {
         XCTAssertEqual(AuthSessionTiming.currentUserTimeout, .seconds(5))
         let rig = Rig()
@@ -511,6 +538,7 @@ final class T04AuthFlowTests: XCTestCase {
         guard case .signedIn = rig.harness.app.phase else { return XCTFail("timeout stays signed in") }
     }
 
+    @MainActor
     func testT04_61_usersMeFailuresKeepTheToken() async throws {
         for error in [
             APIError.forbidden, .server(status: 500), .server(status: 502), .server(status: 503), .server(status: 504),
@@ -535,6 +563,7 @@ final class T04AuthFlowTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testT04_65_oldStoredVersionBlocksAndKeepsTheToken() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -546,6 +575,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.backend.currentUserCalls, 0)
     }
 
+    @MainActor
     func testT04_66_logoutPostsThenClearsTheKeychain() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -557,6 +587,7 @@ final class T04AuthFlowTests: XCTestCase {
         guard case .needsLogin = rig.harness.app.phase else { return XCTFail("expected signed out") }
     }
 
+    @MainActor
     func testT04_67_failedLogoutStillClearsAndReportsTheKey() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -573,6 +604,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.harness.app.preferencesSnapshot().servers.count, 1)
     }
 
+    @MainActor
     func testT04_70_removingAServerKeepsTheOtherAccount() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -610,6 +642,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNil(try rig.pins.fingerprint(for: Sample.serverID))
     }
 
+    @MainActor
     func testT04_93_probeFailureShowsTheSkippedHTTPFlag() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -627,6 +660,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(rig.flow.httpSkippedByPolicy)
     }
 
+    @MainActor
     func testT04_92_setupRetryProbesAgainWithoutSaving() async {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -643,6 +677,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .setupIncomplete)
         XCTAssertEqual(rig.backend.enabledCalls, 0)
     }
+    @MainActor
     func testT04_38_pollingChecksImmediatelyThenEveryFiveSeconds() async {
         let clock = SuspendingClock()
         let rig = Rig(clock: clock)
@@ -662,6 +697,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(clock.sleeps(), [.seconds(5), .seconds(5)])
     }
 
+    @MainActor
     func testT04_39_leavingA4CancelsAllFurtherRequests() async {
         let clock = SuspendingClock()
         let rig = Rig(clock: clock)
@@ -684,6 +720,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.screen, .loginMethod)
     }
 
+    @MainActor
     func testT04_42_foregroundChecksYoungCodeImmediatelyAndKeepsOriginalExpiry() async {
         let clock = SuspendingClock()
         let rig = Rig(clock: clock)
@@ -710,6 +747,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.quickConnectRenewals, 1)
     }
 
+    @MainActor
     func testT04_42_oldForegroundCodesConsumeTheThreeRenewals() async {
         let clock = SuspendingClock()
         let rig = Rig(clock: clock)
@@ -735,6 +773,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.focus, .newCode)
     }
 
+    @MainActor
     func testT04_50_passwordAndQuickConnectUseDistinctNetworkAndServerErrorKeys() async {
         for error in [APIError.network, .timeout, .server(status: 500), .server(status: 502), .server(status: 503)] {
             let rig = Rig()
@@ -759,6 +798,7 @@ final class T04AuthFlowTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testT04_52_pendingCapabilitiesRetrySurvivesRelaunchAndIsConsumedOnce() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -780,6 +820,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(rig.harness.log.contains("access-token"))
     }
 
+    @MainActor
     func testT04_59_launchFailureLoadsCachedHomeAndKeepsToken() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -796,6 +837,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
     }
 
+    @MainActor
     func testT04_60_sixSecondRequestTimesOutAtFiveSecondsWithoutRetry() async throws {
         let clock = SuspendingClock()
         let rig = Rig(clock: clock)
@@ -816,6 +858,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
     }
 
+    @MainActor
     func testT04_63_noCacheShowsHomeErrorAndRetryAndStillAllowsLogout() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -836,6 +879,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.confirmFocus, .cancel)
     }
 
+    @MainActor
     func testT04_68_logoutChoosesSavedUsersOnTheSameServerAndKeepsServer() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -859,6 +903,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertNil(try rig.harness.secure.data(for: Sample.account()))
     }
 
+    @MainActor
     func testT04_68_logoutWithoutOtherUsersSkipsA3WhenQuickConnectDisabledOnRelaunch() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
@@ -873,6 +918,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.harness.app.preferencesSnapshot().servers.count, 1)
     }
 
+    @MainActor
     func testT04_87_launchFailurePingsEveryTenSecondsRecoversAndLater401SignsOut() async throws {
         let rig = Rig(automaticPing: true)
         defer { rig.cleanup() }

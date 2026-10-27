@@ -1,9 +1,9 @@
 import XCTest
 
-@MainActor
 final class T09SearchUITests: XCTestCase {
     /// T09-07: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
-    func testT09_07_fastTypingRetainsAllTwentyCharacters() {
+    @MainActor
+    func testT09_07_fastTypingRetainsAllTwentyCharacters() async {
         let app = launch()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -15,7 +15,8 @@ final class T09SearchUITests: XCTestCase {
 
     /// T09-33: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_33_emptyStateUsesCatalogKey() {
+    @MainActor
+    func testT09_33_emptyStateUsesCatalogKey() async {
         let app = launch(extra: ["-uitest-search-empty"])
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -27,7 +28,8 @@ final class T09SearchUITests: XCTestCase {
 
     /// T09-29: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_29_errorShowsRetryAndSharedCoreKey() {
+    @MainActor
+    func testT09_29_errorShowsRetryAndSharedCoreKey() async {
         let app = launch(extra: ["-uitest-search-error"])
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -40,7 +42,8 @@ final class T09SearchUITests: XCTestCase {
 
     /// T09-37: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_37_backRestoresTextResultsAndSelectedCardFocus() {
+    @MainActor
+    func testT09_37_backRestoresTextResultsAndSelectedCardFocus() async {
         let app = launch()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -55,13 +58,14 @@ final class T09SearchUITests: XCTestCase {
         #if os(tvOS)
             let restored = NSPredicate(format: "hasFocus == true")
             expectation(for: restored, evaluatedWith: second)
-            waitForExpectations(timeout: 5)
+            waitForFocusRestoration()
         #endif
     }
 
     #if os(tvOS)
         /// T09-11: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
-        func testT09_11_keyboardToRowsAndVerticalFocusSections() {
+        @MainActor
+        func testT09_11_keyboardToRowsAndVerticalFocusSections() async {
             let app = launch()
             let field = app.searchFields.firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -84,7 +88,8 @@ final class T09SearchUITests: XCTestCase {
 
     /// T09-53: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_53_recentSearchesAreUserClearable() {
+    @MainActor
+    func testT09_53_recentSearchesAreUserClearable() async {
         let app = launch()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -101,6 +106,12 @@ final class T09SearchUITests: XCTestCase {
         XCTAssertFalse(clear.exists)
     }
 
+    @MainActor
+    private func waitForFocusRestoration() {
+        waitForExpectations(timeout: 5)
+    }
+
+    @MainActor
     private func launch(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments =

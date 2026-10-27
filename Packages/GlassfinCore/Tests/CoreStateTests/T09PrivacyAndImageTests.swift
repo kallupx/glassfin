@@ -10,10 +10,10 @@ import XCTest
     import ImageIO
 #endif
 
-@MainActor
 final class T09PrivacyAndImageTests: XCTestCase {
     /// T09-47: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
-    func testT09_47_historyIsScopedByBothServerAndUserAndSurvivesRestart() throws {
+    @MainActor
+    func testT09_47_historyIsScopedByBothServerAndUserAndSurvivesRestart() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -28,7 +28,8 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     /// T09-44: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_44_historyCapRecencyAndDeduplication() throws {
+    @MainActor
+    func testT09_44_historyCapRecencyAndDeduplication() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -46,7 +47,8 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     /// T09-49: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_49_onlyQueryTextInApplicationSupportNoPreferencesOrKeychainWrites() throws {
+    @MainActor
+    func testT09_49_onlyQueryTextInApplicationSupportNoPreferencesOrKeychainWrites() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -67,19 +69,22 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     /// T09-51: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_51_signOutDeletesOnlyThatUsersHistory() throws {
+    @MainActor
+    func testT09_51_signOutDeletesOnlyThatUsersHistory() async throws {
         try checkCleanup(removeServer: false, unauthorized: false)
         try checkCleanup(removeServer: false, unauthorized: true)
     }
 
     /// T09-52: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
-    func testT09_52_serverRemovalDeletesAllItsUsersOnly() throws {
+    @MainActor
+    func testT09_52_serverRemovalDeletesAllItsUsersOnly() async throws {
         try checkCleanup(removeServer: true, unauthorized: false)
     }
 
     /// T09-45, T09-46: trimmed case-insensitive duplicates move to the front without losing display text.
-    func testT09_46_historyDeduplicatesTrimmedTextIgnoringCase() throws {
+    @MainActor
+    func testT09_46_historyDeduplicatesTrimmedTextIgnoringCase() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -90,7 +95,8 @@ final class T09PrivacyAndImageTests: XCTestCase {
     }
 
     /// T09-55: corrupt/oversize history is discarded and a new query can be recorded after recovery.
-    func testT09_55_corruptAndOversizeHistoryStartEmpty() throws {
+    @MainActor
+    func testT09_55_corruptAndOversizeHistoryStartEmpty() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -109,7 +115,8 @@ final class T09PrivacyAndImageTests: XCTestCase {
     }
 
     /// T09-48: history files and their scoped directory are excluded from Apple backups.
-    func testT09_48_historyUsesApplicationSupportAndExcludesBackup() throws {
+    @MainActor
+    func testT09_48_historyUsesApplicationSupportAndExcludesBackup() async throws {
         let support = try XCTUnwrap(
             FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)
         XCTAssertTrue(RecentSearchStore.applicationSupportDirectory.path.hasPrefix(support.path))
@@ -128,6 +135,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     /// T09-65: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_65_imageCacheUsesStableSHA256TupleAsActualFilename() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -162,6 +170,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     /// T09-69: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_69_oversizedImagesRejectedBeforeCachingOrDecode() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -186,6 +195,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     /// T09-59: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
 
+    @MainActor
     func testT09_59_sessionClientCancelsAllRequestsAndNeverRetries401() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -213,7 +223,8 @@ final class T09PrivacyAndImageTests: XCTestCase {
     }
 
     /// T09-68: the production ImageIO dictionary bounds pixels and eagerly decodes only the thumbnail.
-    func testT09_68_thumbnailOptionsUseTheDisplayedPixelSizeOnAllPlatforms() throws {
+    @MainActor
+    func testT09_68_thumbnailOptionsUseTheDisplayedPixelSizeOnAllPlatforms() async throws {
         let request = ItemImageRequest(
             serverID: Sample.serverID, itemID: try XCTUnwrap(ItemID(Sample.movie)), type: .primary, tag: nil,
             width: 600, height: 900)
@@ -236,6 +247,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
 
     #if canImport(ImageIO)
         /// T09-68: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+        @MainActor
         func testT09_68_decodeDownsamplesOffMainThread() async throws {
             let bitmap = try XCTUnwrap(
                 CGContext(
@@ -258,6 +270,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
         }
     #endif
 
+    @MainActor
     private func checkCleanup(removeServer: Bool, unauthorized: Bool) throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -285,6 +298,7 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertEqual(try restored.queries(serverID: Sample.otherServerID, userID: Sample.userID), ["other server"])
     }
 
+    @MainActor
     private func temporaryRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     }

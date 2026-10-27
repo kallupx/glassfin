@@ -4,9 +4,9 @@ import CoreState
 import Foundation
 import XCTest
 
-@MainActor
 final class T09RetryTests: XCTestCase {
     /// T09-60: transient gateway failures retry twice with the shared 0.5/1.5 second delays.
+    @MainActor
     func testT09_60_gatewayFailuresRetryTwiceWithSharedBackoff() async throws {
         for status in [502, 503, 504] {
             let wire = GatewaySearchClient(status: status)
@@ -20,6 +20,7 @@ final class T09RetryTests: XCTestCase {
     }
 
     /// T09-60, T09-13: cancellation while waiting for retry prevents another request for the old query.
+    @MainActor
     func testT09_60_cancelledQueryDoesNotRetryAfterBackoff() async throws {
         let wire = GatewaySearchClient(status: 503)
         let clock = SuspendingClock()

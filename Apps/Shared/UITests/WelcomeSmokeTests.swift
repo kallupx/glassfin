@@ -1,8 +1,8 @@
 import XCTest
 
-@MainActor
 final class WelcomeSmokeTests: XCTestCase {
-    func testWelcomeScreenAppears() {
+    @MainActor
+    func testWelcomeScreenAppears() async {
         let app = XCUIApplication()
         app.launchArguments.append(contentsOf: ["-uitest-mock-server", "-uitest-reset"])
         app.launch()
