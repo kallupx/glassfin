@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 import XCTest
 
 @testable import Glassfin
 
+@MainActor
 final class DesignSystemLogicTests: XCTestCase {
     func testT05_01_glassFollowsTheSurfaceTable() {
         XCTAssertEqual(SurfaceAssignment.materials["tabBar"], .systemTabBar)
@@ -93,15 +95,14 @@ final class DesignSystemLogicTests: XCTestCase {
     func testT05_19_imageFadeAndBlurHashPlaceholder() {
         XCTAssertEqual(MotionToken.imageFade(reduceMotion: false), 0.15, accuracy: 0.0001)
         XCTAssertEqual(MotionToken.imageFade(reduceMotion: true), 0, accuracy: 0.0001)
-        let image = BlurHash.image(from: "00TSUA", width: 1, height: 1)
-        let pointer = image?.dataProvider?.data.map { CFDataGetBytePtr($0) }
-        guard let pointer else {
+        guard let image = BlurHash.image(from: "00TSUA", width: 1, height: 1),
+            let data = image.dataProvider?.data
+        else {
             XCTFail("missing blurhash pixel")
             return
         }
-        XCTAssertEqual(pointer[0], 255)
-        XCTAssertEqual(pointer[1], 255)
-        XCTAssertEqual(pointer[2], 255)
+        let bytes = data as Data
+        XCTAssertEqual(Array(bytes.prefix(4)), [255, 255, 255, 255])
         XCTAssertNil(BlurHash.image(from: "00TSUA", width: 0, height: 1))
     }
 
@@ -224,7 +225,14 @@ final class DesignSystemLogicTests: XCTestCase {
     }
 
     func testT05_35_reduceTransparencyUsesOneFallbackToken() {
-        _ = ReduceTransparencyFallback.color
+        for scheme in [ColorScheme.light, .dark] {
+            let color = UIColor(ReduceTransparencyFallback.color(for: scheme))
+            var white: CGFloat = -1
+            var alpha: CGFloat = -1
+            XCTAssertTrue(color.getWhite(&white, alpha: &alpha))
+            XCTAssertEqual(alpha, 1)
+            XCTAssertEqual(white, scheme == .dark ? 0 : 1)
+        }
         XCTAssertEqual(GlassContrastChrome.lineWidth, 1)
     }
 

@@ -9,11 +9,6 @@ enum GlassContrastChrome {
     }
 }
 
-/// Q5-05: opaque fallback color, one token, so the semantic choice can change without touching call sites.
-enum ReduceTransparencyFallback {
-    static let color = Color(.secondarySystemBackground)
-}
-
 enum GlassTint {
     static func allowsAccent(_ contrast: ColorSchemeContrast) -> Bool {
         contrast != .increased
@@ -39,6 +34,7 @@ struct OwnGlassSurface<S: Shape>: ViewModifier {
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         let bordered = applyBody(content)
@@ -54,7 +50,7 @@ struct OwnGlassSurface<S: Shape>: ViewModifier {
     @ViewBuilder
     private func applyBody(_ content: Content) -> some View {
         if reduceTransparency {
-            content.background(ReduceTransparencyFallback.color, in: shape)
+            content.background(ReduceTransparencyFallback.color(for: colorScheme), in: shape)
         } else {
             content.glassEffect(glass, in: shape)
         }
@@ -78,6 +74,16 @@ struct OwnGlassSurface<S: Shape>: ViewModifier {
 }
 
 extension View {
+    /// Directional focus sections belong to the Siri Remote interface.
+    @ViewBuilder
+    func designFocusSection() -> some View {
+        #if os(tvOS)
+            focusSection()
+        #else
+            self
+        #endif
+    }
+
     func ownGlassSurface<S: Shape>(in shape: S, kind: OwnGlassKind = .regular, tinted: Bool = false) -> some View {
         modifier(OwnGlassSurface(shape: shape, kind: kind, tinted: tinted))
     }
@@ -136,7 +142,7 @@ struct ContainedGlass<Content: View>: View {
         GlassEffectContainer(spacing: spacing) {
             content
         }
-        .focusSection()
+        .designFocusSection()
     }
 }
 

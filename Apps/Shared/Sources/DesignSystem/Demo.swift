@@ -7,19 +7,21 @@ enum DemoFixtures {
     static let blurHash = "00TSUA"
 
     static func posters() -> [PosterContent] {
-        (0..<6).map { index in
-            PosterContent(
-                id: String(index),
-                title: "Poster \(index)",
-                progress: PlaybackProgress.measure(
-                    position: .seconds(index * 60),
-                    runtime: .seconds(32 * 60)
-                ),
-                isWatched: index == 3,
-                unplayedCount: index == 4 ? 3 : nil,
-                blurHash: blurHash
-            )
-        }
+        (0..<6).map(poster(at:))
+    }
+
+    private static func poster(at index: Int) -> PosterContent {
+        let elapsedSeconds: Int = index * 60
+        let runtime: Duration = .seconds(32 * 60)
+        let progress = PlaybackProgress.measure(position: .seconds(elapsedSeconds), runtime: runtime)
+        return PosterContent(
+            id: String(index),
+            title: "Poster \(index)",
+            progress: progress,
+            isWatched: index == 3,
+            unplayedCount: index == 4 ? 3 : nil,
+            blurHash: blurHash
+        )
     }
 
     static func primary() -> [PosterContent] {
@@ -95,7 +97,6 @@ struct DesignSystemFocusDemo: View {
     @State private var expanded = false
     @State private var playbackTarget = "play"
     @State private var focusedItemID = "play"
-    @State private var season = "1"
 
     var body: some View {
         LibraryTabShell(libraries: [], home: AnyView(page))
@@ -105,38 +106,9 @@ struct DesignSystemFocusDemo: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingToken.row) {
                 GlassBanner(message: .bannerOffline, systemImage: "wifi.slash", identifier: "design.banner.offline")
-                HeroHeader(
-                    title: "Night Market",
-                    meta: "2019  12  134 min",
-                    overview: DemoFixtures.plainOverview,
-                    expanded: expanded,
-                    canResume: false,
-                    backdrop: Color.orange.opacity(0.85),
-                    onPlay: { focusedItemID = "play" },
-                    onWatched: {},
-                    onFavorite: {},
-                    onMore: { expanded.toggle() }
-                )
-                MediaRow(
-                    rowID: "design.row.primary",
-                    title: .rowPrimary,
-                    items: DemoFixtures.primary(),
-                    style: .landscape,
-                    rememberedID: $primaryMemory,
-                    onSelect: { focusedItemID = "primary-\($0.id)" },
-                    onTogglePlayed: { _ in },
-                    onToggleFavorite: { _ in }
-                )
-                MediaRow(
-                    rowID: "design.row.posters",
-                    title: .rowPosters,
-                    items: DemoFixtures.posters(),
-                    style: .poster,
-                    rememberedID: $posterMemory,
-                    onSelect: { focusedItemID = "poster-\($0.id)" },
-                    onTogglePlayed: { _ in },
-                    onToggleFavorite: { _ in }
-                )
+                hero
+                primaryRow
+                posterRow
                 SkeletonRow(style: .poster, count: 4, phase: 0)
             }
             .padding(SpacingToken.l)
@@ -159,6 +131,47 @@ struct DesignSystemFocusDemo: View {
                 .accessibilityValue(playbackTarget)
                 .frame(width: 1, height: 1)
         }
+    }
+
+    private var hero: HeroHeader {
+        HeroHeader(
+            title: "Night Market",
+            meta: "2019  12  134 min",
+            overview: DemoFixtures.plainOverview,
+            expanded: expanded,
+            canResume: false,
+            backdrop: Color.orange.opacity(0.85),
+            onPlay: { focusedItemID = "play" },
+            onWatched: {},
+            onFavorite: {},
+            onMore: { expanded.toggle() }
+        )
+    }
+
+    private var primaryRow: MediaRow {
+        MediaRow(
+            rowID: "design.row.primary",
+            title: .rowPrimary,
+            items: DemoFixtures.primary(),
+            style: .landscape,
+            rememberedID: $primaryMemory,
+            onSelect: { focusedItemID = "primary-\($0.id)" },
+            onTogglePlayed: { _ in },
+            onToggleFavorite: { _ in }
+        )
+    }
+
+    private var posterRow: MediaRow {
+        MediaRow(
+            rowID: "design.row.posters",
+            title: .rowPosters,
+            items: DemoFixtures.posters(),
+            style: .poster,
+            rememberedID: $posterMemory,
+            onSelect: { focusedItemID = "poster-\($0.id)" },
+            onTogglePlayed: { _ in },
+            onToggleFavorite: { _ in }
+        )
     }
 }
 
@@ -201,24 +214,8 @@ struct DesignSystemGallery: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: SpacingToken.l) {
                     GlassBanner(message: .bannerOffline, systemImage: "wifi.slash", identifier: "gallery.banner")
-                    HeroHeader(
-                        title: "Night Market",
-                        meta: "2019",
-                        overview: DemoFixtures.plainOverview,
-                        expanded: false,
-                        canResume: false,
-                        backdrop: backdrop,
-                        onPlay: {},
-                        onWatched: {},
-                        onFavorite: {},
-                        onMore: {}
-                    )
-                    .frame(height: 420)
-                    HStack(alignment: .top, spacing: SpacingToken.m) {
-                        ForEach(DemoFixtures.posterVariants) { item in
-                            PosterFace(content: item, style: .poster, isFocused: item.id == "half")
-                        }
-                    }
+                    hero.frame(height: 420)
+                    posterStrip
                     PosterFace(content: DemoFixtures.primary()[0], style: .landscape, isFocused: true)
                     SkeletonRow(style: .poster, count: 3, phase: 0, identifier: "gallery.skeleton")
                     ErrorStateView(failure: .serverUnreachable, attempts: 0, onRetry: {}, onSwitchServer: {})
@@ -235,6 +232,29 @@ struct DesignSystemGallery: View {
             }
         }
         .environment(\.colorScheme, .dark)
+    }
+
+    private var hero: HeroHeader {
+        HeroHeader(
+            title: "Night Market",
+            meta: "2019",
+            overview: DemoFixtures.plainOverview,
+            expanded: false,
+            canResume: false,
+            backdrop: backdrop,
+            onPlay: {},
+            onWatched: {},
+            onFavorite: {},
+            onMore: {}
+        )
+    }
+
+    private var posterStrip: some View {
+        HStack(alignment: .top, spacing: SpacingToken.m) {
+            ForEach(DemoFixtures.posterVariants) { item in
+                PosterFace(content: item, style: .poster, isFocused: item.id == "half")
+            }
+        }
     }
 
     private var standardButton: some View {
