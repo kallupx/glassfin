@@ -6,7 +6,7 @@
 **Background (Researcher, part 3):** AVPlayer does not open MKV and does not support DTS, TrueHD, PGS, or ASS. Its strengths are a native UI, frame-rate and HDR matching, and Dolby Vision P5/P8. Apple TV does not bitstream TrueHD or DTS with any client, and Atmos works only through DD+ (E-AC-3 JOC).
 
 
-> **PoC tier:** for the PoC, SPEC.md §3a "M08a-PoC playback" overrides this module (static DeviceProfile, no video transcoding, unsupported-video message). The rest of this module applies to full M08a.
+> **PoC tier:** for the PoC, [SPEC.md §3a](SPEC.md#3a-poc-tier-p0-poc-decided-27102026) "M08a-PoC playback" overrides this module (static DeviceProfile, no video transcoding, unsupported-video message). The rest of this module applies to full M08a.
 
 ## Split
 | Part | Contents | Priority |
