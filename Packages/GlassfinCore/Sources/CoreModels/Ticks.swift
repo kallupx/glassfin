@@ -28,9 +28,11 @@ public enum Ticks {
         if components.seconds < 0 || components.attoseconds < 0 {
             return 0
         }
-        let whole = components.seconds * perSecond
+        let (whole, overflow) = components.seconds.multipliedReportingOverflow(by: perSecond)
+        if overflow { return Int64.max }
         let fraction = components.attoseconds / attosecondsPerTick
-        let sum = whole + fraction
+        let (sum, additionOverflow) = whole.addingReportingOverflow(fraction)
+        if additionOverflow { return Int64.max }
         return max(0, sum)
     }
 

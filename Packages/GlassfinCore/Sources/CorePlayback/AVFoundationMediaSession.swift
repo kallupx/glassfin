@@ -161,7 +161,7 @@
 
     public enum AVPlayerLogForwarder {
         public static func forward(item: AVPlayerItem, log: any GlassfinLog) {
-            let errors = item.errorLog()?.events.map(\.uri) ?? []
+            let errors = item.errorLog()?.events.flatMap { [$0.uri, $0.errorComment] } ?? []
             let access = item.accessLog()?.events.map(\.uri) ?? []
             PlayerLogSink.record(errors + access, log: log)
         }

@@ -98,6 +98,7 @@ public struct MediaStreamDTO: Decodable, Sendable {
 
 public struct MediaSourceDTO: Decodable, Sendable {
     public var Id: String?
+    public var Container: String?
     public var SupportsDirectPlay: Bool?
     public var SupportsDirectStream: Bool?
     public var SupportsTranscoding: Bool?

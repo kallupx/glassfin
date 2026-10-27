@@ -73,7 +73,7 @@ let package = Package(
         .target(name: "CorePlayback", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),
         .target(
             name: "CoreTestSupport",
-            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"],
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices", "CorePlayback"],
             swiftSettings: debugSettings
         ),
         .target(
@@ -97,7 +97,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CorePlaybackTests",
-            dependencies: ["CorePlayback", "CoreModels", "CoreNetworking"]
+            dependencies: ["CorePlayback", "CoreModels", "CoreNetworking", "CoreTestSupport"]
         ),
         .testTarget(
             name: "IntegrationTests",

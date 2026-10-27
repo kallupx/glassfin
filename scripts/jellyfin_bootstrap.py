@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Finish the Jellyfin startup wizard and wait for one scanned movie.
+"""Finish the Jellyfin startup wizard and wait for the scanned fixture movies.
 
 Credentials come from the environment. This script never prints them or the access token.
 """
@@ -212,6 +212,7 @@ def refresh_library(token: str) -> bool:
 
 
 def wait_for_movie(token: str) -> None:
+    expected = int(os.environ.get("GLASSFIN_SEED_ITEM_COUNT", "1"))
     refresh_library(token)
     deadline = time.monotonic() + 240
     next_scan = time.monotonic() + 15
@@ -226,8 +227,8 @@ def wait_for_movie(token: str) -> None:
         if status == 200:
             items = decoded(raw)
             count = (items.get("TotalRecordCount") or 0) if isinstance(items, dict) else 0
-            if count >= 1:
-                print("bootstrap: movie is in the library")
+            if count >= expected:
+                print(f"bootstrap: {count} fixture movies are in the library")
                 return
         if time.monotonic() >= next_scan:
             task_status, tasks = scheduled_tasks(token)
@@ -240,7 +241,7 @@ def wait_for_movie(token: str) -> None:
                 report(f"start RefreshLibrary task HTTP {started}", token)
             next_scan = time.monotonic() + 30
         time.sleep(3)
-    fail(f"library scan found no movie within 240s; GET /Items HTTP {status}", token)
+    fail(f"library scan did not find all {expected} fixture movies within 240s; GET /Items HTTP {status}", token)
 
 
 def publish_username(name: str) -> None:

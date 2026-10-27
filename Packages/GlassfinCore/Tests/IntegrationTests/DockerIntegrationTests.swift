@@ -19,6 +19,66 @@ final class LiveServerTests: XCTestCase {
         var password: String
     }
 
+    /// T08a-PoC-14: live PlaybackInfo/profile decisions and URL construction only (Q8-2-01).
+    func testT08a_PoC_14_seedMediaPlaybackDecisions() async throws {
+        let target = try liveTarget()
+        let session = try await signIn(target)
+        let identity = ClientIdentity(
+            deviceName: "Glassfin CI", deviceID: "glassfin-integration", version: "0.1.0", token: session.accessToken)
+        let client = HTTPJellyfinClient(server: target.url, identity: identity)
+        let api = PlaybackAPI(client: client)
+        let items = try await client.send(
+            APIRequest(
+                method: "GET", path: "/Items",
+                query: [
+                    URLQueryItem(name: "Recursive", value: "true"),
+                    URLQueryItem(name: "IncludeItemTypes", value: "Movie"),
+                    URLQueryItem(name: "Limit", value: "100"),
+                    URLQueryItem(name: "Fields", value: "Path"),
+                ]), as: SeedItems.self)
+        let fixtures: [(String, PlaybackDecision)] = [
+            ("Test Movie (2024).mp4", .directPlay),
+            ("Glassfin HEVC EAC3 (2024).mp4", .directPlay),
+            ("Glassfin Remux (2024).mkv", .directStream(.remux)),
+            ("Glassfin DTS (2024).mkv", .directStream(.audioTranscode)),
+            ("Glassfin Unsupported (2024).mkv", .unsupported(.unsupportedVideo)),
+        ]
+        for (filename, expected) in fixtures {
+            // Use the path: an online metadata provider may rename the generated movie.
+            let item = try XCTUnwrap(items.Items.first { $0.Path?.hasSuffix(filename) == true }, filename)
+            let info = try await api.playbackInfo(
+                itemID: item.Id, userID: session.session.userID, start: .zero, maxBitrate: 120_000_000)
+            let source = try XCTUnwrap(info.MediaSources?.first, filename)
+            XCTAssertEqual(PlaybackDecision.decide(mediaSource: source), expected, filename)
+            XCTAssertNotNil(info.PlaySessionId, filename)
+            switch expected {
+            case .directPlay:
+                XCTAssertEqual(source.SupportsDirectPlay, true, filename)
+                let prepared = try MediaURLBuilder.directPlay(
+                    server: target.url, identity: identity, itemID: item.Id,
+                    mediaSourceID: try XCTUnwrap(source.Id), playSessionID: try XCTUnwrap(info.PlaySessionId))
+                XCTAssertFalse(MediaCredentialQuery.contains(prepared.url), filename)
+                XCTAssertNotNil(prepared.authorizationHeader)
+            case .directStream(let conversion):
+                let url = try MediaURLBuilder.videoCopyHLS(
+                    server: target.url, transcodingURL: try XCTUnwrap(source.TranscodingUrl, filename),
+                    conversion: conversion)
+                XCTAssertTrue(MediaOrigin.matches(target.url, url), filename)
+                XCTAssertFalse(MediaCredentialQuery.contains(url), filename)
+            case .unsupported(let reason):
+                XCTAssertEqual(reason.localizedKey, PlaybackCopy.unsupportedVideoKey)
+            }
+        }
+    }
+
+    private struct SeedItems: Decodable, Sendable {
+        struct Item: Decodable, Sendable {
+            let Id: String
+            let Path: String?
+        }
+        let Items: [Item]
+    }
+
     /// T01-20. Login, UserViews, Resume, and PlaybackInfo against one live server version.
     func testT01_20_loginUserViewsResumeAndPlaybackInfo() async throws {
         let target = try liveTarget()
