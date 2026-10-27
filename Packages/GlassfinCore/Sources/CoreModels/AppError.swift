@@ -146,16 +146,119 @@ public enum AppErrorMapping {
 
 /// Plain-language copy. Technical detail stays in ``diagnostic(_:)``.
 public enum AppErrorMessage {
-    public static let offline = "Ei verkkoyhteyttä"
-    public static let serverDown = "Palvelimeen ei saada yhteyttä"
-    public static let retry = "Yritä uudelleen"
-    public static let switchServer = "Vaihda palvelinta"
-    public static let sessionEnded = "Istunto päättyi, kirjaudu uudelleen"
-    public static let forbidden = "Ei oikeuksia tähän toimintoon"
-    public static let playbackFailed = "Tätä tiedostoa ei voitu toistaa"
-    public static let buffering = "Puskurointi kestää tavallista pidempään"
-    public static let playbackOffline = "Toisto ei ole käytettävissä ilman verkkoyhteyttä"
-    public static let playbackUnreachable = "Toisto ei ole käytettävissä, koska palvelimeen ei saada yhteyttä"
+    public static let offlineKey = "No network connection"
+    public static let serverDownKey = "Can't reach the server"
+    public static let retryKey = "Try again"
+    public static let switchServerKey = "Switch server"
+    public static let sessionEndedKey = "Your session ended. Sign in again."
+    public static let forbiddenKey = "You don't have permission to do this"
+    public static let playbackFailedKey = "This file couldn't be played"
+    public static let bufferingKey = "Buffering is taking longer than usual"
+    public static let playbackOfflineKey = "Playback isn't available without a network connection"
+    public static let playbackUnreachableKey = "Playback isn't available because the server can't be reached"
+    public static let tlsUntrustedKey = "The server's certificate isn't trusted"
+    public static let invalidCredentialsKey = "Incorrect username or password"
+    public static let insecureRedirectKey = "The connection was redirected to an insecure address"
+    public static let notFoundKey = "Item not found"
+    public static let serverErrorKey = "The server returned an error"
+    public static let unsupportedServerKey =
+        "Server version %@ is not supported. Version %@ or later is required."
+
+    public static var offline: String {
+        String(localized: "No network connection", bundle: .module)
+    }
+
+    public static var serverDown: String {
+        String(localized: "Can't reach the server", bundle: .module)
+    }
+
+    public static var retry: String {
+        String(localized: "Try again", bundle: .module)
+    }
+
+    public static var switchServer: String {
+        String(localized: "Switch server", bundle: .module)
+    }
+
+    public static var sessionEnded: String {
+        String(localized: "Your session ended. Sign in again.", bundle: .module)
+    }
+
+    public static var forbidden: String {
+        String(localized: "You don't have permission to do this", bundle: .module)
+    }
+
+    public static var playbackFailed: String {
+        String(localized: "This file couldn't be played", bundle: .module)
+    }
+
+    public static var buffering: String {
+        String(localized: "Buffering is taking longer than usual", bundle: .module)
+    }
+
+    public static var playbackOffline: String {
+        String(localized: "Playback isn't available without a network connection", bundle: .module)
+    }
+
+    public static var playbackUnreachable: String {
+        String(localized: "Playback isn't available because the server can't be reached", bundle: .module)
+    }
+
+    public static var tlsUntrusted: String {
+        String(localized: "The server's certificate isn't trusted", bundle: .module)
+    }
+
+    public static var invalidCredentials: String {
+        String(localized: "Incorrect username or password", bundle: .module)
+    }
+
+    public static var insecureRedirect: String {
+        String(localized: "The connection was redirected to an insecure address", bundle: .module)
+    }
+
+    public static var notFound: String {
+        String(localized: "Item not found", bundle: .module)
+    }
+
+    public static var serverError: String {
+        String(localized: "The server returned an error", bundle: .module)
+    }
+
+    /// Localized format with the server version first and the minimum version second.
+    public static var unsupportedServer: String {
+        // A format string with placeholders is looked up directly so `%@` is not treated as literal text.
+        Bundle.module.localizedString(forKey: unsupportedServerKey, value: unsupportedServerKey, table: nil)
+    }
+
+    /// Catalog key for the error's message, or nil when the error must not be shown.
+    public static func messageKey(for error: AppError) -> String? {
+        switch error {
+        case .offline:
+            return offlineKey
+        case .serverUnreachable:
+            return serverDownKey
+        case .tlsUntrusted:
+            return tlsUntrustedKey
+        case .unauthorized:
+            return sessionEndedKey
+        case .invalidCredentials:
+            return invalidCredentialsKey
+        case .insecureRedirect:
+            return insecureRedirectKey
+        case .forbidden:
+            return forbiddenKey
+        case .notFound:
+            return notFoundKey
+        case .serverError:
+            return serverErrorKey
+        case .unsupportedServer:
+            return unsupportedServerKey
+        case .playback:
+            return playbackFailedKey
+        case .decoding, .cancelled, .internalInvariant:
+            return nil
+        }
+    }
 
     /// Nil when the error must not be shown (cancellation, skipped JSON, local invariant).
     public static func userFacing(_ error: AppError) -> String? {
@@ -165,22 +268,21 @@ public enum AppErrorMessage {
         case .serverUnreachable:
             return serverDown
         case .tlsUntrusted:
-            return "Palvelimen sertifikaatti ei ole luotettu"
+            return tlsUntrusted
         case .unauthorized:
             return sessionEnded
         case .invalidCredentials:
-            return "Virheellinen käyttäjätunnus tai salasana"
+            return invalidCredentials
         case .insecureRedirect:
-            return "Yhteys ohjattiin turvattomaan osoitteeseen"
+            return insecureRedirect
         case .forbidden:
             return forbidden
         case .notFound:
-            return "Kohdetta ei löydy"
+            return notFound
         case .serverError:
-            return "Palvelin palautti virheen"
+            return serverError
         case .unsupportedServer(let version):
-            return
-                "Palvelinversio \(version) ei ole tuettu. Vaaditaan vähintään \(ServerVersionGate.dotted(.minimumJellyfin))."
+            return String(format: unsupportedServer, version, ServerVersionGate.dotted(.minimumJellyfin))
         case .playback:
             return playbackFailed
         case .decoding, .cancelled, .internalInvariant:

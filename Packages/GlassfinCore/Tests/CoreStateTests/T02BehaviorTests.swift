@@ -46,9 +46,12 @@ final class T02BehaviorTests: XCTestCase {
         try seed(harness, version: "10.9.11", token: Sample.token)
         harness.app.bootstrap()
         XCTAssertEqual(harness.app.blockingError, .unsupportedServer(version: "10.9.11"))
-        let message = AppErrorMessage.userFacing(.unsupportedServer(version: "10.9.11")) ?? ""
+        let error = try XCTUnwrap(harness.app.blockingError)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: error), AppErrorMessage.unsupportedServerKey)
+        // Version numbers are format arguments, not translated copy.
+        let message = try XCTUnwrap(AppErrorMessage.userFacing(error))
         XCTAssertTrue(message.contains("10.9.11"))
-        XCTAssertTrue(message.contains("10.10.7"))
+        XCTAssertTrue(message.contains(ServerVersionGate.dotted(.minimumJellyfin)))
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
         harness.app.removeServer(id: Sample.serverID)
@@ -83,9 +86,9 @@ final class T02BehaviorTests: XCTestCase {
         let harness = Harness.make(online: false)
         defer { harness.cleanup() }
         XCTAssertEqual(harness.app.connectivity, .offline)
-        XCTAssertEqual(harness.app.banner, "Ei verkkoyhteyttä")
+        XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.offlineKey)
         XCTAssertTrue(harness.app.playbackBlocked)
-        XCTAssertEqual(harness.app.playbackBlockedMessage, AppErrorMessage.playbackOffline)
+        XCTAssertEqual(harness.app.playbackBlockedMessageKey, AppErrorMessage.playbackOfflineKey)
         try harness.signIn()
         XCTAssertTrue(harness.app.playbackBlocked)
         let box = Counter()
@@ -100,9 +103,9 @@ final class T02BehaviorTests: XCTestCase {
         guard case .signedIn = harness.app.phase else { return XCTFail("stayed signed in") }
 
         harness.path.setOnline(false)
-        await waitUntil { harness.app.banner == AppErrorMessage.offline }
+        await waitUntil { harness.app.bannerKey == AppErrorMessage.offlineKey }
         XCTAssertTrue(harness.app.playbackBlocked)
-        XCTAssertEqual(harness.app.playbackBlockedMessage, AppErrorMessage.playbackOffline)
+        XCTAssertEqual(harness.app.playbackBlockedMessageKey, AppErrorMessage.playbackOfflineKey)
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 
@@ -120,7 +123,7 @@ final class T02BehaviorTests: XCTestCase {
         harness.app.handle(.serverUnreachable)
         harness.app.noteRequestFinished(elapsed: .seconds(9))
         XCTAssertEqual(harness.app.connectivity, .serverUnreachable)
-        XCTAssertEqual(harness.app.playbackBlockedMessage, AppErrorMessage.playbackUnreachable)
+        XCTAssertEqual(harness.app.playbackBlockedMessageKey, AppErrorMessage.playbackUnreachableKey)
         XCTAssertNil(harness.app.banner)
         harness.app.handle(.offline)
         harness.app.noteRequestFinished(elapsed: .seconds(9))
@@ -133,9 +136,9 @@ final class T02BehaviorTests: XCTestCase {
         try harness.signIn()
         harness.app.handle(.serverUnreachable)
         XCTAssertTrue(harness.app.showsServerDown)
-        XCTAssertEqual(harness.app.serverDownTitle, "Palvelimeen ei saada yhteyttä")
-        XCTAssertEqual(harness.app.retryTitle, "Yritä uudelleen")
-        XCTAssertEqual(harness.app.switchServerTitle, "Vaihda palvelinta")
+        XCTAssertEqual(harness.app.serverDownTitleKey, AppErrorMessage.serverDownKey)
+        XCTAssertEqual(harness.app.retryTitleKey, AppErrorMessage.retryKey)
+        XCTAssertEqual(harness.app.switchServerTitleKey, AppErrorMessage.switchServerKey)
         await waitUntil { harness.suspending?.sleeps() == [.seconds(10)] }
         harness.pinger.outcome = .ok
         harness.suspending?.resumeAll()
@@ -163,7 +166,7 @@ final class T02BehaviorTests: XCTestCase {
         await home.reload(libraryIDs: [])
         guard case .needsLogin(let info) = harness.app.phase else { return XCTFail("expected login") }
         XCTAssertEqual(info.id, Sample.serverID)
-        XCTAssertEqual(harness.app.sessionNotice, "Istunto päättyi, kirjaudu uudelleen")
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionEndedKey)
         XCTAssertEqual(harness.secure.removed(), [Sample.account()])
         XCTAssertNil(try harness.secure.data(for: Sample.account()))
         XCTAssertFalse(harness.log.contains(Sample.token))
@@ -189,7 +192,7 @@ final class T02BehaviorTests: XCTestCase {
         }
         XCTAssertEqual(harness.secure.removed().count, 1)
         guard case .needsLogin = harness.app.phase else { return XCTFail("expected login") }
-        XCTAssertEqual(harness.app.sessionNotice, AppErrorMessage.sessionEnded)
+        XCTAssertEqual(harness.app.sessionNoticeKey, AppErrorMessage.sessionEndedKey)
     }
 
     func testT02_08_network403And5xxDoNotLogOut() async throws {
@@ -222,7 +225,7 @@ final class T02BehaviorTests: XCTestCase {
         let home = harness.home()
         await home.reload(libraryIDs: [])
         XCTAssertEqual(home.resume.presentedError, .forbidden)
-        XCTAssertEqual(AppErrorMessage.userFacing(.forbidden), "Ei oikeuksia tähän toimintoon")
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .forbidden), AppErrorMessage.forbiddenKey)
         guard case .signedIn = harness.app.phase else { return XCTFail("session dropped") }
     }
 
@@ -519,7 +522,7 @@ final class T02BehaviorTests: XCTestCase {
         player.noteBuffering(elapsed: .seconds(5))
         XCTAssertNil(player.stallMessage)
         player.noteBuffering(elapsed: .seconds(5) + .milliseconds(1))
-        XCTAssertEqual(player.stallMessage, "Puskurointi kestää tavallista pidempään")
+        XCTAssertEqual(player.stallMessageKey, AppErrorMessage.bufferingKey)
         let scrubbed = await player.measureScrub { 1 }
         let trick = await player.measureTrickplay { 2 }
         let switched = await player.measureTrackSwitch { 3 }
