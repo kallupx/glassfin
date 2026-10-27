@@ -28,6 +28,7 @@ settings:
   configs:
     Debug:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      ENABLE_TESTABILITY: YES
     Release:
       SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
 packages:
@@ -120,6 +121,35 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: Glassfin-iOS
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+  Glassfin-tvOSTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - path: Apps/Shared/Tests/Logic
+      - path: Apps/Shared/Tests/Snapshots
+    dependencies:
+      - target: Glassfin-tvOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.tvos.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Glassfin.app/Glassfin"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TVOS_DEPLOYMENT_TARGET: "26.0"
+  Glassfin-iOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Apps/Shared/Tests/Logic
+    dependencies:
+      - target: Glassfin-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Glassfin.app/Glassfin"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
 schemes:
   Glassfin-tvOS:
     build:
@@ -136,6 +166,8 @@ schemes:
       environmentVariables:
         GLASSFIN_SCREENSHOT_DIR: $(SRCROOT)/artifacts/screenshots
       targets:
+        - name: Glassfin-tvOSTests
+          parallelizable: false
         - name: Glassfin-tvOSUITests
           parallelizable: false
   Glassfin-iOS:
@@ -152,5 +184,7 @@ schemes:
       environmentVariables:
         GLASSFIN_SCREENSHOT_DIR: $(SRCROOT)/artifacts/screenshots
       targets:
+        - name: Glassfin-iOSTests
+          parallelizable: false
         - name: Glassfin-iOSUITests
           parallelizable: false
