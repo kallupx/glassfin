@@ -41,7 +41,7 @@ public struct ImageResource: Hashable, Sendable {
                 URLQueryItem(name: "tag", value: tag),
                 URLQueryItem(name: "maxWidth", value: String(width)),
                 URLQueryItem(name: "maxHeight", value: String(height)),
-            ])
+            ], maximumResponseBytes: MetadataPolicy.imageMaxBytes)
     }
 }
 

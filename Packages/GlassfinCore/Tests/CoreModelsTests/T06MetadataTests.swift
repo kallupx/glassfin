@@ -4,9 +4,10 @@ import XCTest
 final class T06MetadataTests: XCTestCase {
     // T06-73: canonical spec/TESTPLAN-M06.md.
     func testT06_73_metadataPreservesLiteralMarkupAndEntities() {
-        let source = "\u{202e}<b>x</b>&amp;<script>x</script>\u{0007}"
-        XCTAssertEqual(MetadataPolicy.clean(source, limit: MetadataPolicy.nameMax), "<b>x</b>&amp;<script>x</script>")
-        XCTAssertEqual(MetadataSanitizer.plainText(source), "<b>x</b>&amp;<script>x</script>")
+        let literal = "<b>x</b>&amp;<script>x</script>**x**[x](https://example.invalid)"
+        let source = "\u{202e}\u{200f}\u{0000}" + literal + "\u{0007}"
+        XCTAssertEqual(MetadataPolicy.clean(source, limit: MetadataPolicy.nameMax), literal)
+        XCTAssertEqual(MetadataSanitizer.plainText(source), literal)
     }
 
     // T06-73: canonical spec/TESTPLAN-M06.md.
@@ -16,11 +17,20 @@ final class T06MetadataTests: XCTestCase {
             MetadataPolicy.nameMax, MetadataPolicy.overviewMax, MetadataPolicy.taglineMax,
             MetadataPolicy.genreMax, MetadataPolicy.displayNameMax,
         ] {
-            let source = "\u{202e}\u{0007}" + String(repeating: pair, count: limit)
-            let cleaned = MetadataPolicy.clean(source, limit: limit)
-            XCTAssertEqual(cleaned.count, limit)
-            XCTAssertEqual(cleaned, String(String(repeating: pair, count: limit).prefix(limit)))
+            for count in [limit - 1, limit, limit + 1] {
+                let payload = String(String(repeating: pair, count: count).prefix(count))
+                let source = "\u{202e}\u{0007}" + payload
+                let cleaned = MetadataPolicy.clean(source, limit: limit)
+                XCTAssertEqual(cleaned.count, min(count, limit))
+                XCTAssertEqual(cleaned, String(payload.prefix(limit)))
+            }
         }
+        XCTAssertEqual(MetadataPolicy.overviewMax, 2000)
+        XCTAssertEqual(MetadataPolicy.taglineMax, 200)
+        XCTAssertEqual(MetadataPolicy.genreMax, 64)
+        XCTAssertEqual(MetadataPolicy.nameMax, 200)
+        XCTAssertEqual(MetadataPolicy.displayNameMax, 64)
+        XCTAssertEqual(MetadataPolicy.imageMaxBytes, 20 * 1024 * 1024)
         XCTAssertEqual(MetadataPolicy.taglinesMax, 3)
         XCTAssertEqual(MetadataPolicy.genresMax, 10)
         XCTAssertEqual(MetadataPolicy.recentSearchesMax, 20)

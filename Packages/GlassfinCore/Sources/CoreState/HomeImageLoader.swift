@@ -26,7 +26,12 @@ public struct HomeImageLoader: HomeImageLoading {
             try ImageDataPolicy.validate(data)
             return data
         }
-        let data = try await client.send(resource.request())
+        let data: Data
+        do {
+            data = try await client.send(resource.request())
+        } catch APIError.responseTooLarge {
+            throw ImageDataError.oversized
+        }
         try Task.checkCancellation()
         try ImageDataPolicy.validate(data)
         await disk.store(key: resource.cacheKey, data: data)
@@ -34,9 +39,19 @@ public struct HomeImageLoader: HomeImageLoading {
     }
 }
 
-#if canImport(ImageIO)
-    /// ImageIO thumbnail creation always runs on a worker executor, before SwiftUI sees an image.
-    public enum HomeImageDecoder {
+/// The same option dictionary is tested on Linux and passed directly to ImageIO on Apple platforms.
+public enum HomeImageDecoder {
+    public static func thumbnailOptions(width: Int, height: Int) -> [String: Any] {
+        [
+            "kCGImageSourceCreateThumbnailFromImageAlways": true,
+            "kCGImageSourceCreateThumbnailWithTransform": true,
+            "kCGImageSourceThumbnailMaxPixelSize": max(1, max(width, height)),
+            "kCGImageSourceShouldCacheImmediately": true,
+        ]
+    }
+
+    #if canImport(ImageIO)
+        /// Thumbnail creation runs on a worker executor, before SwiftUI sees an image.
         public static func downsample(_ data: Data, width: Int, height: Int) async throws -> CGImage {
             let child = Task.detached(priority: .utility) {
                 try Task.checkCancellation()
@@ -45,13 +60,7 @@ public struct HomeImageLoader: HomeImageLoading {
                 guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
                     throw ImageDataError.invalidImage
                 }
-                let options =
-                    [
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceThumbnailMaxPixelSize: max(1, max(width, height)),
-                        kCGImageSourceShouldCacheImmediately: true,
-                    ] as CFDictionary
+                let options = thumbnailOptions(width: width, height: height) as CFDictionary
                 guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
                     throw ImageDataError.invalidImage
                 }
@@ -63,5 +72,5 @@ public struct HomeImageLoader: HomeImageLoading {
                 child.cancel()
             }
         }
-    }
-#endif
+    #endif
+}

@@ -1,24 +1,28 @@
-# M06 implementation decisions and remaining questions
+# M06 remaining questions and evidence
 
-Binding inputs: `spec/06-home.md`, Q4-10, and spec PR #18's M01/M02/S6.1/S6.6/S6.7 updates supplied in `/workspace/codex-logs/spec18-*.md`. The PR #18 metadata rule overrides older tag-removal expectations, including the existing sanitizer's behavior.
+Binding inputs are the merged `spec/01-core.md`, `spec/02-state-errors-performance.md`, `spec/03-security.md`, `spec/06-home.md`, and the verbatim [canonical test plan](../spec/TESTPLAN-M06.md). Question numbers below follow that plan. The earlier local implementation question numbering has been removed.
 
-| ID | Decision / remaining work | Code |
-|---|---|---|
-| Q6-01 | Remove from Continue Watching sends `POST /UserItems/{id}/UserData` with position zero and played false. The row updates optimistically and rolls back on failure. Confirm the server's Resume-list behavior on 10.10.7, 10.11.11, and 12.2; the disposable-server reset test is supplied. No separate hide endpoint is assumed. | `HomeViewModel.removeFromResume` |
-| Q6-02 | M07 is developed separately. Home passes the sanitized `MediaItem` (or series ID) into a NavigationStack destination. The local detail destination is a TODO stub until M07 is integrated. | `HomeRootView` |
-| Q6-03 | M08 is developed separately. Home passes a `HomePlaybackRequest` containing the focused item and nonnegative resume position. Play/Pause and the context Play action reach this destination; actual AVPlayer playback awaits M08. | `HomeRootView`, `HomeNavigation.swift` |
-| Q6-04 | P15's real server delivery latency still needs matrix evidence. The header-only URLSession socket adapter uses the existing reconnect stream, AppState consumes events, and Home responds to its generations. Mock delivery is tested. A socket 401 terminates the stream and session without retry. | `URLSessionEventSocket.swift`, `AuthFlow.makeHomeEvents` |
-| Q6-05 | Resolved P0 default: separate Continue Watching and Next Up rows. Favorites and the combined-row preference remain disabled P1 stubs. | `HomeFutureFeatures` |
-| Q6-06 | Row order/visibility editing is P1; server DisplayPreferences is P2. No settings controls are exposed yet. | `HomeFutureFeatures` |
-| Q6-07 | Latest rows include video collection types movies, tvshows, homevideos, boxsets, mixed, musicvideos, trailers, and unspecified/mixed views. Other explicit types are omitted. Unknown plugin-defined collection types need an explicit video classification before inclusion. | `HomeMetadata.isVideoLibrary` |
-| Q6-08 | The shared view compiles into both app targets, but a dedicated iOS touch layout remains M11/P1. | `HomeFutureFeatures` |
-| Q6-14 | Resolved: full-screen server-down copy reuses `AppErrorMessage.key(for: .serverUnreachable)` / `AuthCopy.Key.serverUnreachable`. No new server-down title is added to either catalog. Cached content remains visible with GlassBanner. | `HomeViewModel.serverDownTitleKey`, M05 message override hooks |
+| Question | Current behavior / remaining decision |
+|---|---|
+| Q6-01 | When both personal rows are empty, default focus falls through to the first visible Latest row. Confirm this fallback; a dedicated tvOS focus fixture remains pending (T06-03). |
+| Q6-02 | Latest includes movies, tvshows, homevideos, boxsets, mixed, musicvideos, trailers and unspecified collection types; excludes explicit music, Live TV, books and unknown plugin types. Confirm the video classification (T06-08). |
+| Q6-03 | Cross-row overlap policy is still pending. Requests send `enableResumable=false`; explicit Resume/Next Up overlap de-duplication is not implemented (T06-11). |
+| Q6-04 | Home has fixed 20-item rows, without paging or See all in P0 (T06-16). Confirm the P0 scope. |
+| Q6-05 | Latest title uses the localized `home.latest` format with the sanitized library name. Confirm the format (T06-17). |
+| Q6-06 | Latest requests `groupItems=true`; the card uses the server's returned item and unplayed count. Grouped-series presentation still needs a fixture and snapshot review (T06-22). |
+| Q6-07 | Missing or failed backdrops keep the previous backdrop, falling back to the content scrim on first use (T06-26). |
+| Q6-08 | Go to series is shown only for episodes with a valid series ID. The handoff preserves the season ID and index. M07 owns the series destination and season picker (T06-38). |
+| Q6-09 | A removed focused item selects the same-row neighbor. If that row disappears, focus falls through to the next available row; confirm the whole-row policy on tvOS (T06-65). |
+| Q6-10 | Remove from Continue Watching sends `POST /UserItems/{id}/UserData` with position zero and played false. Optimistic rollback is implemented. Actual absence from Resume after refetch still requires the disposable 10.10.7 / 10.11.11 / 12.2 matrix (T06-37). |
+| Q6-11 | Failed sections show an inline catalog message and focusable retry; only that section refetches. Confirm focus after retry on tvOS (T06-14). |
+| Q6-12 | Play/Pause sends the sanitized item and nonnegative resume position to an M08 handoff. Actual playback awaits M08 integration (T06-32, T06-58). |
+| Q6-13 | Empty guidance and retry use the existing en/fi catalog keys. Confirm the wording and tab escape with snapshot/UI review (T06-04). |
+| Q6-16 | Other rows expose Play, played/unplayed and favorite actions; Go to series is episode-only; Remove from Continue Watching is resume-only (T06-34). |
+| Q6-19 | The 250 ms debounce still applies with Reduce Motion; the crossfade duration becomes zero. Visual confirmation remains on Apple TV (T06-25). |
 
-## Integration and verification limits
+## Pending integration and platform evidence
 
-- The only change in M05 Shell is an optional Settings content hook, necessary to preserve M04 sign-out inside the shared shell. Existing callers retain the demo Settings content. The known `some View` versus `TabContent` compile issue is deliberately untouched; so are the separate Demo and GlassChrome fixes.
-- Other M05 hooks accept already decoded poster/placeholder images and localized core error/banner copy. Existing default behavior is unchanged. Home decodes both thumbnails and BlurHash placeholders on worker tasks.
-- Home's endpoints are fixed 20-item rows. Lazy stacks avoid eagerly constructing cells; Home does not invent paging beyond the spec's row limits. Library browsing owns larger paged lists.
-- New snapshots contain server/user ownership and per-library rows. Unowned legacy snapshots are supported by the M02-compatible model initializer, but the app requires ownership before displaying a snapshot. Other-user snapshots never become Home content.
-- The shared `MetadataPolicy.swift` is byte-identical to the M07 and M09 worktrees at verification time. Keep that file identical when stacking these branches.
-- Apple-platform compilation, XCUITests, PNG generation, hardware metrics, and the Docker matrix cannot run in this Linux workspace without Xcode / Docker. See the test map for exact coverage and commands.
+- [The coverage map](TEST-COVERAGE-M06.md) accounts for every canonical T06 ID and records partial and unautomated scenarios with reasons.
+- M07 detail and M08 playback destinations are explicit handoffs. Home does not implement a competing series or player screen.
+- Real-client WebSocket delivery within five seconds needs the disposable server matrix (T06-59).
+- Apple builds, remote focus tests, ImageIO decoding and screenshot rendering require Xcode. Memory/hitch/cold-start budgets and the decompression-bomb peak require supported Apple TV hardware and Instruments. Linux verification does not claim those results.

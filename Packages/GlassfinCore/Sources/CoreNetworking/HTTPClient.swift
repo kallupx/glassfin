@@ -10,12 +10,17 @@ public struct APIRequest: Sendable, Equatable {
     public var path: String
     public var query: [URLQueryItem]
     public var body: Data?
+    public var maximumResponseBytes: Int?
 
-    public init(method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil) {
+    public init(
+        method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil,
+        maximumResponseBytes: Int? = nil
+    ) {
         self.method = method
         self.path = path
         self.query = query
         self.body = body
+        self.maximumResponseBytes = maximumResponseBytes
     }
 }
 
@@ -63,7 +68,7 @@ public struct ClientIdentity: Sendable, Equatable {
 }
 
 protocol RequestTransport: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?)
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?)
 }
 
 struct URLSessionRequestTransport: RequestTransport {
@@ -71,7 +76,12 @@ struct URLSessionRequestTransport: RequestTransport {
     var redirects: RedirectSessionDelegate
     var certificatePin: OriginCertificatePin? = nil
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
+        if let maximumBytes {
+            return try await BoundedImageDownload(
+                maximumBytes: maximumBytes, certificatePin: certificatePin
+            ).data(for: request, configuration: session.configuration)
+        }
         let proxy = RedirectTaskProxy(owner: redirects, certificatePin: certificatePin)
         let (data, response) = try await session.data(for: request, delegate: proxy)
         return (data, response, proxy.capturedTaskIdentifier())
@@ -161,7 +171,8 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.invalidURL
         }
         do {
-            let (data, response, taskIdentifier) = try await transport.data(for: urlRequest)
+            let (data, response, taskIdentifier) = try await transport.data(
+                for: urlRequest, maximumBytes: request.maximumResponseBytes)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
             if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
                 if case .redirectRejected = failure {

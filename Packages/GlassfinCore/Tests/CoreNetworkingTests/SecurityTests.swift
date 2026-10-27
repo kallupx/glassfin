@@ -1042,7 +1042,7 @@ private final class RecordingRequestTransport: RequestTransport, @unchecked Send
     private let lock = NSLock()
     private var stored: [URLRequest] = []
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         record(request)
         guard let url = request.url ?? URL(string: "http://invalid.example/"),
             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)

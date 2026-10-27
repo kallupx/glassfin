@@ -1,120 +1,151 @@
 # M06 canonical test coverage
 
-The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied verbatim from the binding Testaaja plan. IDs below use its numbering. A supplied Apple test is not evidence of an executed Apple build. Tests assert catalog keys or accessibility identifiers; metadata assertions compare literal payloads.
+The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied verbatim from the binding Testaaja plan. All test IDs below use its numbering. Partial automation is explicitly recorded below; supplied Apple tests are not evidence of executed Apple builds. Assertions use catalog keys or accessibility identifiers; metadata assertions compare literal payloads.
 
 ## Automated tests and checks
 
-| Canonical ID | Test source |
+| Canonical ID | Test / check source |
 |---|---|
 | T06-01 | `T06HomeUITests.testT06_01_resumeFirstCardHasDefaultFocusAndDetailBackRestoresIt` |
 | T06-02 | `T06HomeUITests.testT06_02_nextUpGetsDefaultFocusWhenResumeIsEmpty` |
 | T06-04 | `T06HomeTests.testT06_04_emptyAndUnknownLibraries`; `T06HomeUITests.testT06_04_emptyLibraryHasGuidanceAndRetry` |
-| T06-06 | `T06HomeServiceTests.testT06_06_homeEndpointParametersMatchSpec` |
-| T06-07 | `T06HomeServiceTests.testT06_06_homeEndpointParametersMatchSpec` |
-| T06-08 | `T06HomeTests.testT06_08_videoLibrariesKeepServerOrderAndSeparateLatestRows` |
+| T06-06 | `T06HomeServiceTests.testT06_06_resumeEndpointParametersMatchSpec` |
+| T06-07 | `T06HomeServiceTests.testT06_07_nextUpEndpointParametersMatchSpec` |
+| T06-08 | `T06HomeServiceTests.testT06_08_latestEndpointParametersMatchSpec`; `T06HomeTests.testT06_08_videoLibrariesKeepServerOrderAndSeparateLatestRows` |
 | T06-09 | `T06HomeUITests.testT06_09_allRowsAndLibraryTabsExist` |
+| T06-10 | `T06HomeTests.testT06_10_continueWatchingAndNextUpAreSeparateEpisodeRows` |
 | T06-12 | `T06HomeTests.testT06_12_slowResumeDoesNotBlockOtherRows` |
 | T06-13 | `T06HomeTests.testT06_13_latestFailureIsIsolatedToItsLibrary`; `T06HomeUITests.testT06_13_partialErrorKeepsOtherRowsAndHasSectionRetry` |
 | T06-14 | `T06HomeTests.testT06_14_sectionFailureAndTargetedRetryLeaveOtherRowsVisible` |
 | T06-16 | `T06HomeTests.testT06_16_rowsAreBoundedAndDuplicateIDsAreRemoved` |
-| T06-19 | `T06HomeTests.testT06_19_decodeFailureFinishesWithoutAnEndlessSkeleton` |
+| T06-17 | `scripts/check-string-catalogs.py` (all Home keys have en/fi localizations) |
+| T06-19 | `T06HomeTests.testT06_19_bodyDecodeFailureShowsSectionRetryAndKeepsOtherRows` |
+| T06-23 | `T06HomeTests.testT06_24_backdropDebouncePublishesOnlyTheLastFocusAndCancels` (debounce constants; crossfade requires device review) |
 | T06-24 | `T06HomeTests.testT06_24_backdropDebouncePublishesOnlyTheLastFocusAndCancels` |
+| T06-25 | `T06HomeTests.testT06_24_backdropDebouncePublishesOnlyTheLastFocusAndCancels` (Reduce Motion duration) |
+| T06-27 | `scripts/check-design-system.py` (glass placement) |
+| T06-29 | `T06ImageTests.testT06_71_imageURLHasNoCredentialQueryAndRequestHasAuthorization` (dimension and auth assertions for all four image types) |
 | T06-31 | `T06HomeUITests.testT06_01_resumeFirstCardHasDefaultFocusAndDetailBackRestoresIt` |
 | T06-32 | `T06HomeTests.testT06_32_playRequestUsesSafeResumePosition`; `T06HomeUITests.testT06_32_playPauseUsesFocusedResumePosition` |
+| T06-33 | `T06HomeTests.testT06_33_playWithoutProgressStartsAtZero` |
 | T06-34 | `T06HomeUITests.testT06_34_longPressShowsContextActions` |
-| T06-37 | `DockerIntegrationTests.testT06_37_homeEndpointsAndResetPosition` |
+| T06-37 | `LiveServerTests.testT06_37_homeEndpointsAndResetPosition` |
+| T06-38 | `T06HomeTests.testT06_38_seriesHandoffPreservesSeasonAndIsHiddenForMovies` |
 | T06-41 | `T06HomeTests.testT06_41_actionsCommitAndFailedEditsRestoreTheRow` |
 | T06-44 | `T06HomeTests.testT06_44_snapshotPreservesLibraryGroupingAndRejectsOtherUser` |
 | T06-46 | `T06HomeTests.testT06_46_noContentUsesExistingServerDownTitleKey`; `T06HomeUITests.testT06_46_serverDownStillAllowsSettingsAndSignOut` |
 | T06-48 | `T06HomeTests.testT06_48_pingRecoversAndKeepsCachedContent`; `T06HomeTests.testT06_48_automaticPingRunsAtTenSecondsAndRecovers` |
 | T06-49 | `T06HomeTests.testT06_49_serverDownRetainsVisibleContentAndBanner` |
-| T06-51 | `T06SessionTests.testT06_51_image401CancelsOtherRequestsAndDoesNotRetry`; `T06HomeTests.testT06_51_latest401EndsSessionOnceEvenWhenOtherRowsSucceed`; `T06SocketTests.testT06_51_socket401StopsWithoutReconnect` |
-| T06-56 | `T06HomeUITests.testT06_56_cachedServerDownKeepsCardsAndNonFocusableBanner` |
+| T06-50 | `T06HomeTests.testT06_50_unreachableActionKeepsContentUntilPingRecovery` |
+| T06-51 | `T06SocketTests.testT06_51_socket401StopsWithoutReconnect`; `T06HomeTests.testT06_51_latest401EndsSessionOnceEvenWhenOtherRowsSucceed`; `T06ImageStreamTests.testT06_51_image401TakesPrecedenceOverSizeHeader`; `T06SessionTests.testT06_51_image401CancelsOtherRequestsAndDoesNotRetry` |
+| T06-56 | `T06HomeTests.testT06_56_cachedColdStartKeepsContentAndServerUnreachableBanner`; `T06HomeUITests.testT06_56_cachedServerDownKeepsCardsAndNonFocusableBanner` |
 | T06-57 | `T06HomeTests.testT06_57_playbackStopProjectsImmediatelyAndRefetchesPersonalRows`; `T06HomeTests.testT06_57_playedItemStaysRemovedDuringAStaleServerResponse` |
-| T06-60 | `T06HomeTests.testT06_60_remoteUserDataProjectsOnAllRows` |
+| T06-60 | `T06HomeTests.testT06_60_remoteUserDataWinsOverPendingOptimisticChange` |
 | T06-61 | `T06HomeTests.testT06_61_libraryChangeIsDebouncedAndRefetchesLatestOnly` |
 | T06-62 | `T06HomeTests.testT06_62_foregroundRefreshOnlyAfterSixtySeconds` |
+| T06-63 | `T06HomeTests.testT06_63_foregroundBeforeSixtySecondsDoesNotFetch` |
 | T06-64 | `T06HomeUITests.testT06_64_backgroundRefreshKeepsTheFocusedItem` |
 | T06-65 | `T06HomeTests.testT06_65_focusRemainsOnSameItemOrSameRowNeighbor` |
 | T06-66 | `T06HomeTests.testT06_66_cancelledLoadCannotPublishLateResults`; `T06HomeTests.testT06_66_disappearanceAlsoCancelsSectionRetry` |
 | T06-70 | `T06HomeUITests.testT06_70_accessibilityScreenshots`; `T06HomeSnapshotTests.testT06_70_homeDefaultAndOpaqueBannerAt1080And4K` |
 | T06-71 | `T06ImageTests.testT06_71_imageURLHasNoCredentialQueryAndRequestHasAuthorization`; `T06ImageTests.testT06_71_inheritedCredentialQueriesAreRejected` |
-| T06-72 | `T06ImageStoreTests.testT06_72_diskFilenameIsTheStableSHA256AndBytesRoundTrip`; `T06ImageTests.testT06_72_imageCacheKeyIsStableSHA256OfIdentityTuple` |
-| T06-73 | `T06HomeTests.testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels`; `T06MetadataTests.testT06_73_metadataPreservesLiteralMarkupAndEntities`; `T06MetadataTests.testT06_73_limitsCountCleanedGraphemeClusters` |
-| T06-80 | `T06ImageDecodeTests.testT06_80_decoderDownsamplesToDisplayedPixelSize` |
-| T06-82 | `T06ImageStoreTests.testT06_82_loaderAndDiskRejectOversizedImageWithoutCaching`; `T06ImageTests.testT06_82_imageByteLimitRejectsOversize` |
+| T06-72 | `T06ImageTests.testT06_72_imageCacheKeyIsStableSHA256OfIdentityTuple`; `T06ImageStoreTests.testT06_72_diskFilenameIsTheStableSHA256AndBytesRoundTrip` |
+| T06-73 | `T06MetadataTests.testT06_73_metadataPreservesLiteralMarkupAndEntities`; `T06MetadataTests.testT06_73_limitsCountCleanedGraphemeClusters`; `T06HomeTests.testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels` |
+| T06-74 | `scripts/ci-grep.sh`; existing M03 redactor tests |
+| T06-75 | `scripts/redact_artifacts.py --self-test` (redactor only; final artifacts pending) |
+| T06-76 | `T06ImageStreamTests.testT06_76_missingContentLengthAbortsDuringDownload`; `T06ImageStreamTests.testT06_76_exactByteLimitIsAcceptedAndCached` |
+| T06-77 | `T06ImageStreamTests.testT06_77_lyingContentLengthAbortsDuringDownload` |
+| T06-78 | `T06ImageStreamTests.testT06_78_advertisedOversizeRejectsBeforeBody` |
+| T06-80 | `T06ImageOptionsTests.testT06_80_thumbnailOptionsUseDisplayedPixelsOnEveryPlatform`; `T06ImageDecodeTests.testT06_80_decoderDownsamplesToDisplayedPixelSize` |
+| T06-81 | `scripts/check-image-pipeline.py` and its `--self-test`, invoked by `scripts/ci-grep.sh` |
+| T06-82 | `T06ImageTests.testT06_82_imageByteLimitRejectsOversize`; `T06ImageDecodeTests.testT06_82_invalidImageFailsBeforePublishingBitmap`; `T06ImageStoreTests.testT06_82_loaderAndDiskRejectOversizedImageWithoutCaching`; `T06ImageStreamTests.testT06_82_cancelledStreamCannotCachePartialImage` |
 
 ## Not automated
 
-This table records absent automation and portions of scenarios that still need platform, integration, or manual evidence. The follow-up implementation updates these entries as checks are added.
+Each row identifies the missing part of the canonical scenario and why it remains unautomated or unexecuted. Some IDs have partial tests above; this section prevents those tests being mistaken for complete scenario evidence.
 
 | Canonical ID | Remaining evidence / reason |
 |---|---|
-| T06-03 | tvOS Latest-only default focus scenario has no dedicated UI fixture yet. |
-| T06-05 | System Menu-to-tab-to-exit routing requires Apple TV / XCUITest evidence. |
-| T06-09 | UI assertions exist; exact visual row ordering still needs Apple execution. |
-| T06-10 | Separate-row owner decision needs an explicit episode fixture test. |
-| T06-11 | Resume/Next Up overlap needs explicit de-duplication and a test. |
-| T06-12 | Gate test proves independent publishing; the plan's 1 s per section / <1.5 s timing still needs measurement. |
-| T06-14 | Targeted refetch covered in logic; section focus after retry needs tvOS UI execution. |
-| T06-15 | Empty row visibility requires rendered snapshot review. |
-| T06-17 | Catalog key checks run globally; dedicated Home row-title assertions remain to add. |
-| T06-18 | Lossy item decoding has baseline M01 coverage; no dedicated M06 malformed-row fixture yet. |
-| T06-20 | Progress fixtures and screenshot inspection require Apple snapshot rendering. |
-| T06-21 | Episode card layout requires Apple snapshot rendering. |
-| T06-22 | Grouped series response/card fixture is not automated yet. |
-| T06-23 | 250 ms debounce is tested through T06-24; crossfade appearance needs device review. |
-| T06-24 | State debounce covered; image-request count across ten focus changes needs a dedicated fixture. |
-| T06-25 | Reduce Motion duration asserted in T06-24; visual transition requires Apple execution. |
-| T06-26 | Missing-backdrop fallback requires a snapshot fixture and visual review. |
-| T06-27 | Design-system script enforces glass placement; final appearance requires snapshot review. |
-| T06-28 | Readability on bright/dark/busy backdrops requires snapshot review. |
-| T06-29 | Image URL dimensions covered by T06-71; all displayed geometries need Apple review. |
-| T06-30 | Cross-row focus memory needs tvOS remote automation. |
-| T06-31 | Detail destination is an M07 handoff stub; UI back restoration test supplied, execution requires Xcode. |
-| T06-33 | Zero-position Play/Pause fixture not yet dedicated. |
-| T06-35 | Mark-played success and <=2 s Next Up replacement need an explicit action test / M08 UI integration. |
-| T06-36 | 500 rollback fixture not yet dedicated (403 rollback is T06-41). |
-| T06-37 | Reset payload and disposable-server test supplied; staying absent from real Resume after refetch needs Docker matrix evidence. |
-| T06-38 | M07 series destination and season picker are outside this branch; Home only passes a series handoff. |
-| T06-39 | Favorite success covered in T06-41; DELETE and failure rollback need dedicated assertions. |
-| T06-40 | Context dismissal focus needs tvOS remote automation. |
-| T06-42 | Baseline M02 path/banner state coverage; Home offline playback blocking needs dedicated UI evidence. |
-| T06-43 | Network return, refetch, and stable focus need a Home UI fixture. |
-| T06-44 | Snapshot ownership tested; same-user immediate stale display and focus need explicit coverage. |
-| T06-45 | Cache-purge cold-start fixture not yet dedicated. |
-| T06-46 | Shared key and Settings escape tested; default retry focus and Change server need Apple UI execution. |
-| T06-47 | Change server UI path requires XCUITest execution and token retention assertion. |
-| T06-50 | Server-dependent action while unreachable needs a dedicated inline-error and focus fixture. |
-| T06-51 | Logic/API/image/socket 401 tests supplied; real UI sign-in transition requires Apple execution. |
-| T06-52 | Retry/status classification is covered by M02 baseline; no dedicated M06 HTTP retry fixture yet. |
-| T06-53 | Network Link Conditioner requires Apple tooling / device. |
-| T06-54 | M02 handles server lifecycle events; dedicated Home content/no-content cases remain to add. |
-| T06-55 | Transport config uses 15 s; dedicated Home timeout fixture remains to add. |
-| T06-56 | UI fixture supplied; cold cached launch logic and actual UI execution remain. |
-| T06-58 | End-of-playback UI latency needs M08 integration and an Apple player. |
-| T06-59 | Two-client WebSocket delivery <=5 s needs a disposable Docker server matrix. |
-| T06-60 | Remote projection tested; event winning over a pending optimistic edit needs a dedicated race fixture. |
-| T06-61 | Debounce covered with two events; five-event burst fixture remains to add. |
-| T06-62 | Age threshold covered; old-content/focus assertion needs explicit fixture. |
-| T06-63 | Threshold covered within T06-62; dedicated <60 s test remains to add. |
+| T06-03 | Latest-only default focus still needs a dedicated tvOS UI scenario; the plan marks the fallback as an assumption pending Q6-01. |
+| T06-05 | System Menu-to-tab-to-exit behavior requires tvOS remote automation / Apple TV execution. |
+| T06-09 | Row and tab identifiers are asserted; exact row order and Favorites absence need rendered UI review. |
+| T06-11 | Pending Q6-03 overlap decision. Requests send enableResumable=false; explicit cross-row de-duplication has no implementation/test. |
+| T06-12 | The deterministic gate test proves concurrent independent publishing; the exact 1 s per section / <1.5 s budget needs a timed Apple fixture. |
+| T06-14 | Logic tests prove targeted retry. Focus after retry requires tvOS remote execution and the Q6-11 presentation decision. |
+| T06-15 | Hidden empty headers need rendered snapshots; the state test alone does not verify view visibility. |
+| T06-18 | M01 already covers lossy item decoding; a Home-specific malformed-row/log fixture is still pending. Whole-body failure is covered separately by T06-19. |
+| T06-20 | Progress / unknown-duration layouts need Apple snapshot fixtures and visual inspection. |
+| T06-21 | Series/episode card copy and layout need Apple snapshot rendering and M07 metadata model integration. |
+| T06-22 | Pending Q6-06 presentation decision and grouped-series fixture; request groupItems=true is asserted by T06-08. |
+| T06-23 | Debounce constants are automated; appearance and the 300 ms crossfade require tvOS visual review. |
+| T06-24 | State debounce and cancellation are automated; the exact ten-focus image-request-count fixture is still pending Apple view integration. |
+| T06-25 | Zero fade duration is automated; the rendered Reduce Motion transition requires Apple UI/snapshot execution. |
+| T06-26 | Pending Q6-07 fallback decision; missing-backdrop visuals need an Apple snapshot fixture. |
+| T06-27 | Glass placement is source-checked; final home rendering still requires snapshots. |
+| T06-28 | Bright/dark/busy backdrop readability is a visual review requiring rendered snapshots. |
+| T06-29 | Displayed-pixel request parameters are unit-tested; actual view geometry and scale require Apple rendering. |
+| T06-30 | Cross-row remote focus memory requires tvOS XCUITest execution. |
+| T06-31 | The back-restoration UI test is supplied but requires Xcode; the actual M07 detail destination is a separate module handoff. |
+| T06-35 | Mark-played-to-next-episode UI timing requires M08 integration. A dedicated successful action fixture remains pending; playback-stop refresh is automated by T06-57. |
+| T06-36 | A dedicated HTTP 500 mark-played rollback fixture is pending; the existing action test asserts rollback for 403 (T06-41). |
+| T06-37 | Reset payload and a disposable-server test are supplied; actual absence from Resume after a real refetch requires the Docker version matrix and Q6-10 verification. |
+| T06-38 | Season-preserving series handoff and movie exclusion are automated. M07 owns the per-season detail picker; UI navigation awaits that module and Xcode. |
+| T06-39 | The action test asserts favorite POST success. DELETE/failure rollback still needs a dedicated fixture; no complete favorite-action claim is made. |
+| T06-40 | Context-menu dismissal and same-card focus require tvOS remote UI execution. |
+| T06-42 | Baseline M02 tests cover path/banner state. Home-specific offline playback feedback and its <=2 s UI timing require an Apple fixture. |
+| T06-43 | Automatic refresh and stable focus after network return require a Home UI fixture and Apple execution. |
+| T06-44 | Snapshot grouping, ownership, and account isolation are automated; immediate same-user stale display and focus need a dedicated cache-launch fixture. |
+| T06-45 | Purged-cache launch needs a dedicated cold-start fixture. Cache loss is supported by the M02 stores, but that is not full Home scenario coverage. |
+| T06-46 | The shared server-down key and Settings escape have tests; default retry focus and Change server still need Apple UI execution. |
+| T06-47 | Change server navigation and token retention require an Apple UI flow fixture. |
+| T06-51 | API/image/socket 401 behavior is automated; the visible sign-in transition requires Apple UI execution. |
+| T06-52 | M02 baseline tests cover retry classification/backoff; a dedicated M06 HTTP-to-section retry fixture is pending. |
+| T06-53 | Network Link Conditioner needs Apple tooling and device/simulator execution. |
+| T06-54 | M02 handles lifecycle events; dedicated Home content/no-content event fixtures are still pending. |
+| T06-55 | Production request configuration uses 15 s; the dedicated Home timeout-to-section fixture remains pending. |
+| T06-56 | Cached cold-launch logic is automated; actual cached-down rendering and focus require the supplied UI test on Apple. |
+| T06-58 | End-of-playback UI latency requires M08 integration and an Apple player. |
+| T06-59 | Two-client WebSocket delivery <=5 s requires the disposable Docker Jellyfin matrix. |
+| T06-62 | Foreground age/content/remembered-focus logic is automated; actual quiet refresh and focus require Apple UI execution. |
 | T06-64 | UI test supplied; execution requires tvOS Xcode / simulator. |
-| T06-65 | Neighbor policy unit tested; rendered focus change needs tvOS remote evidence. |
-| T06-67 | Cold-start and row-loading budgets require A15/oldest hardware and LAN measurements. |
+| T06-65 | Neighbor policy unit-tested; rendered focus movement and Q6-09 whole-row fallback require tvOS remote evidence. |
+| T06-67 | Cold-start and row-loading budgets need LAN measurements on A15 and the oldest supported Apple TV. |
 | T06-68 | 60 fps / hitches / glass G-4 require Instruments on supported Apple TVs. |
-| T06-69 | Memory budget and warning behavior require Apple memory profiling. |
-| T06-70 | Snapshot/UI sources supplied; PNG matrix and tab chrome review require Xcode. |
-| T06-73 | Literal/grapheme policy and Home name/overview fixtures supplied; all field layouts require M07 snapshots. |
-| T06-74 | Global ci-grep covers source logging; runtime diagnostic/artifact scan needs Apple CI artifacts. |
-| T06-75 | Mock screenshots supplied; final artifact secret scan requires generated CI artifacts. |
-| T06-76 | Streaming byte-count enforcement and missing-length transport fixture required by this follow-up. |
-| T06-77 | Lying-length stream transport fixture required by this follow-up. |
-| T06-78 | Early Content-Length rejection transport fixture required by this follow-up. |
-| T06-79 | Compressed 30k image regression and P11 / +50 MB peak need ImageIO and hardware profiling. |
-| T06-80 | Apple thumbnail test supplied; portable option-builder assertion required by this follow-up. |
-| T06-81 | Dedicated forbidden-image-source check required by this follow-up. |
-| T06-82 | Buffered oversize and no-cache tests supplied; rendered placeholder/focus requires Apple UI evidence. |
+| T06-69 | P11 memory and memory-warning behavior require Apple memory profiling. |
+| T06-70 | Snapshot/UI sources supplied; the PNG matrix, full row coverage and opaque tab chrome need Xcode execution/review. |
+| T06-73 | Literal metadata and grapheme boundaries are unit-tested; Taglines/Genres/people/studio field layout belongs to M07 and needs its fixtures/snapshots. |
+| T06-74 | Source and baseline redaction tests pass; runtime diagnostics still need Apple CI artifact review. |
+| T06-75 | Redactor self-test passes; final screenshot/JUnit/xcresult secret scanning requires generated Apple CI artifacts. |
+| T06-79 | A <1 MB 30,000-pixel bomb fixture and <=50 MB peak/P11 validation need ImageIO plus Apple hardware profiling; Linux cannot supply this evidence. |
+| T06-80 | Portable production option dictionary is tested. Real 3840x2160 backdrop / 2000x3000 poster thumbnail tests are supplied but require ImageIO on Apple. |
+| T06-82 | Oversize/cancellation/no-cache logic and Apple invalid-decode test supplied. Rendered placeholder and stable focus require Apple UI execution. |
+
+## Binding follow-up decisions
+
+- Continue Watching and Next Up are separate P0 rows (owner decision Q6-20), asserted with distinct in-progress and next episode fixtures in T06-10. Favorites and the combined-row preference remain disabled P1 switches.
+- Series detail uses one season at a time with a season picker (owner decision Q7-25). This branch supplies the M07 handoff, preserving the season ID/index (T06-38); it contains no alternative episode-list implementation.
+- `MetadataPolicy.swift` contains Overview 2,000; Taglines 3 x 200; Genres 10 x 64; other strings 200; server/public-user display names 64; recent searches 20; image bytes 20 x 1,024 x 1,024. Cleaning removes only control/bidi scalars before truncating graphemes, preserving tags, entities and Markdown literally (T06-73). M09 owns recent-search persistence.
+- Image requests set a maximum response budget from `MetadataPolicy.imageMaxBytes`. The URLSession data delegate checks every chunk before appending and cancels immediately on overflow. Content-Length only permits early rejection. Overflow and cancellation cannot write a partial disk cache entry (T06-76 through T06-78, T06-82). The SDK adapter also routes bounded requests through CoreNetworking. Each capped download has independent redirect state and forwards certificate challenges to the existing trust policy; 401 takes precedence over size headers (T06-51).
+- The portable option dictionary is passed directly to ImageIO thumbnail creation in a detached utility task. ImageIO code is guarded by `canImport(ImageIO)`. The source check scans all Apps and package source Swift files for forbidden framework networking/full-bitmap APIs (T06-80, T06-81).
+- Loaded or cached content survives server failure with the existing `.serverUnreachable` banner. The existing full-screen title key is used only with no displayable content; failed server actions stay inline (T06-46, T06-49, T06-50, T06-56). Whole-body decode failures show a section retry instead of the empty-library guidance (T06-19).
 
 ## Verification
 
-Linux: export `LD_LIBRARY_PATH=~/.local/lib/swiftcompat`, source `~/.local/share/swiftly/env.sh`, then run the build, test, strict formatter and repository scripts specified in the task. Apple UI/snapshot tests require Xcode; live tests require disposable Jellyfin containers. Performance claims require supported Apple TV hardware.
+Run in `Packages/GlassfinCore` after exporting `LD_LIBRARY_PATH=~/.local/lib/swiftcompat` and sourcing `~/.local/share/swiftly/env.sh`:
+
+```sh
+swift build
+swift test
+swift-format lint --recursive --strict Package.swift Sources Tests ../../Apps
+```
+
+From the root: design-system, string-catalog, DEBUG-only-string, image-pipeline (including self-test), ci-grep, entitlement, license, artifact-redactor self-test and coverage-gate checks. Apple build/UI/snapshot commands require Xcode; live tests require disposable Jellyfin containers; hardware metrics require supported Apple TVs.
+
+## Linux verification result (2026-10-27)
+
+- `swift build`, `swift test`, and the exact recursive strict formatter command passed. The full suite executed 374 tests with six live integration skips and zero failures. M06 contributed 51 passing test cases across 37 canonical IDs; its live T06-37 test was skipped.
+- Passing Linux test IDs: T06-04, T06-06 through T06-08, T06-10, T06-12 through T06-14, T06-16, T06-19, T06-24, T06-32, T06-33, T06-38, T06-41, T06-44, T06-46, T06-48 through T06-51, T06-56, T06-57, T06-60 through T06-63, T06-65, T06-66, T06-71 through T06-73, T06-76 through T06-78, T06-80 and T06-82. Additional catalog/design/logging/image source checks are mapped above.
+- The native coverage gate passed at 91.26% (7,021 / 7,693 lines; threshold 80%).
+- All requested repository scripts passed, plus image-pipeline, DEBUG-string and artifact-redactor self-tests, entitlement and license checks. `git diff --check` passed.
+- The canonical plan was byte-compared with `/workspace/jellyfin-tvos/test/TESTPLAN-M06.md`. A completeness check verified all 82 IDs are mapped and every M06 Swift test uses an in-range canonical ID with a matching comment.
+- Xcode, Docker and Apple TV hardware are unavailable here. Apple app builds, actual ImageIO execution, remote UI/snapshots, the live server matrix and hardware performance were not executed. The Not automated table records the remaining fixture work and evidence for each affected ID.

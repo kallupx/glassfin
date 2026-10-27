@@ -101,7 +101,7 @@ struct HomeView: View {
                             id: row.id, title: Copy.format(.homeLatest, text: row.library.name),
                             state: row.state, style: .poster)
                     }
-                    if model.libraries.presentedError != nil {
+                    if HomePolicy.sectionErrorKey(for: model.libraries) != nil {
                         VStack(alignment: .leading, spacing: SpacingToken.s) {
                             Copy.text(.homeLibrariesRetry)
                             Button {
@@ -144,10 +144,10 @@ struct HomeView: View {
     private func row(id: String, title: String, state: LoadState<[MediaItem]>, style: CardStyle) -> some View {
         if state.showsSkeleton || isIdle(state) {
             SkeletonRow(style: style, count: 3, phase: 0, identifier: "home.\(id).skeleton")
-        } else if !(state.value ?? []).isEmpty || state.presentedError != nil {
+        } else if !(state.value ?? []).isEmpty || HomePolicy.sectionErrorKey(for: state) != nil {
             VStack(alignment: .leading, spacing: SpacingToken.s) {
                 Text(verbatim: title).font(.title3).accessibilityAddTraits(.isHeader)
-                if let error = state.presentedError, let key = AppErrorMessage.key(for: error) {
+                if let key = HomePolicy.sectionErrorKey(for: state) {
                     HStack(spacing: SpacingToken.m) {
                         Text(verbatim: AuthCopy.localized(key)).accessibilityValue(key.rawValue)
                         Button {
@@ -253,9 +253,9 @@ private struct HomeMediaRow: View {
                             }
                             .accessibilityIdentifier("home.context.removeResume")
                         }
-                        if let seriesID = item.seriesID {
+                        if let series = HomeNavigation.seriesDestination(for: item) {
                             Button {
-                                onDetail(MediaItem(id: seriesID, kind: .series, name: item.name))
+                                onDetail(series)
                             } label: {
                                 Copy.text(.homeGoToSeries)
                             }

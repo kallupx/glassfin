@@ -9,6 +9,12 @@ public enum HomePolicy {
     public static let foregroundAge: Duration = .seconds(60)
     public static let libraryDebounce: Duration = .seconds(2)
     public static let backdropDebounce: Duration = .milliseconds(250)
+    /// A whole-body decode failure is a failed section; skipped individual items remain invisible.
+    public static func sectionErrorKey<T>(for state: LoadState<T>) -> AuthCopy.Key? {
+        guard case .failed(let error, _) = state else { return nil }
+        return error == .decoding ? .serverError : AppErrorMessage.key(for: error)
+    }
+
     public static let backdropFade = 0.3
     public static func backdropFade(reduceMotion: Bool) -> Double { reduceMotion ? 0 : backdropFade }
 }
@@ -81,9 +87,10 @@ public final class HomeViewModel {
     }
     public var isEmpty: Bool {
         (lastFetch != nil || (resume.value != nil && nextUp.value != nil)) && !hasContent && !isLoading
-            && resume.presentedError == nil
-            && nextUp.presentedError == nil
-            && libraries.presentedError == nil && latestRows.allSatisfy { $0.state.presentedError == nil }
+            && HomePolicy.sectionErrorKey(for: resume) == nil
+            && HomePolicy.sectionErrorKey(for: nextUp) == nil
+            && HomePolicy.sectionErrorKey(for: libraries) == nil
+            && latestRows.allSatisfy { HomePolicy.sectionErrorKey(for: $0.state) == nil }
     }
     public var serverDownTitleKey: AuthCopy.Key? {
         !hasContent && (app.connectivity == .serverUnreachable || app.connectivity == .offline)
@@ -321,7 +328,7 @@ public final class HomeViewModel {
     }
 
     public func removeFromResume(_ item: MediaItem) async {
-        // TODO(Q6-01): verify reset-position semantics against all three Jellyfin versions.
+        // TODO(Q6-10): verify reset-position semantics against all three Jellyfin versions.
         resetResumeIDs.insert(item.id)
         await edit(
             item,

@@ -120,7 +120,7 @@ public enum AppErrorMapping {
             return deviceOffline ? .offline : .serverUnreachable
         case .tls:
             return .tlsUntrusted(.unavailable)
-        case .decoding:
+        case .decoding, .responseTooLarge:
             return .decoding
         case .cancelled:
             return .cancelled

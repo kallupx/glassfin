@@ -26,6 +26,18 @@ final class T06ImageTests: XCTestCase {
         XCTAssertTrue(request.value(forHTTPHeaderField: "Authorization")?.contains("Token=\"secret\"") == true)
         XCTAssertTrue(url.path.hasSuffix("/Images/Primary"))
         XCTAssertEqual(client.session.configuration.urlCache, nil)
+        XCTAssertEqual(try resource.request().maximumResponseBytes, MetadataPolicy.imageMaxBytes)
+        // T06-29: all image types request displayed dimensions, already multiplied by display scale.
+        for type in [ItemImageType.primary, .thumb, .logo, .backdrop] {
+            let image = ImageResource(
+                serverID: resource.serverID, itemID: resource.itemID, type: type, tag: "t", width: 500, height: 750)
+            let call = try image.request()
+            XCTAssertEqual(call.query.first { $0.name == "maxWidth" }?.value, "500")
+            XCTAssertEqual(call.query.first { $0.name == "maxHeight" }?.value, "750")
+            let built = try client.makeURLRequest(call)
+            XCTAssertNotNil(built.value(forHTTPHeaderField: "Authorization"))
+            XCTAssertFalse(try XCTUnwrap(built.url).absoluteString.contains("secret"))
+        }
     }
 
     // T06-71: canonical spec/TESTPLAN-M06.md.
@@ -49,6 +61,19 @@ final class T06ImageTests: XCTestCase {
         let other = ImageResource(
             serverID: "other", itemID: resource.itemID, type: .primary, tag: resource.tag, width: 250, height: 375)
         XCTAssertNotEqual(resource.cacheKey, other.cacheKey)
+        for changed in [
+            ImageResource(
+                serverID: resource.serverID, itemID: resource.itemID, type: .thumb, tag: resource.tag, width: 250,
+                height: 375),
+            ImageResource(
+                serverID: resource.serverID, itemID: resource.itemID, type: .primary, tag: "new", width: 250,
+                height: 375),
+            ImageResource(
+                serverID: resource.serverID, itemID: resource.itemID, type: .primary, tag: resource.tag, width: 500,
+                height: 750),
+        ] {
+            XCTAssertNotEqual(resource.cacheKey, changed.cacheKey)
+        }
     }
 
     // T06-82: canonical spec/TESTPLAN-M06.md.

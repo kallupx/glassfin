@@ -100,15 +100,21 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-19: canonical spec/TESTPLAN-M06.md.
-    func testT06_19_decodeFailureFinishesWithoutAnEndlessSkeleton() async throws {
+    func testT06_19_bodyDecodeFailureShowsSectionRetryAndKeepsOtherRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
         h.library.resumeError = .decoding
+        h.library.nextItems = [Sample.movie()]
         let home = h.home()
         await home.load()
         XCTAssertFalse(home.isLoading)
-        XCTAssertTrue(home.isEmpty)
+        XCTAssertFalse(home.isEmpty)
+        XCTAssertEqual(HomePolicy.sectionErrorKey(for: home.resume), .serverError)
+        XCTAssertEqual(home.nextUp.value?.first?.id, Sample.movie)
+        h.library.resumeError = nil
+        await home.retry(rowID: "resume")
+        XCTAssertNil(HomePolicy.sectionErrorKey(for: home.resume))
     }
 
     // T06-57: canonical spec/TESTPLAN-M06.md.
@@ -130,7 +136,7 @@ final class T06HomeTests: XCTestCase {
     }
 
     // T06-60: canonical spec/TESTPLAN-M06.md.
-    func testT06_60_remoteUserDataProjectsOnAllRows() async throws {
+    func testT06_60_remoteUserDataWinsOverPendingOptimisticChange() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -138,17 +144,26 @@ final class T06HomeTests: XCTestCase {
         h.library.latestByID[Sample.library] = .success([Sample.movie()])
         let home = h.home()
         await home.reload(libraryIDs: [Sample.library])
+        var optimistic = Sample.movie().userData
+        optimistic.isFavorite = true
+        await h.app.userData.applyOptimistic(id: Sample.movie, next: optimistic)
+        await home.retry(rowID: "resume")
+        XCTAssertEqual(home.resume.value?.first?.userData.isFavorite, true)
+        let pending = await h.app.userData.isPending(id: Sample.movie)
+        XCTAssertTrue(pending)
         let events = FakeEvents()
         h.app.watch(events)
         events.emit(
             .userDataChanged(items: [
-                UserDataChange(itemID: Sample.movie, played: true, positionTicks: 0, isFavorite: true)
+                UserDataChange(itemID: Sample.movie, played: true, positionTicks: 0, isFavorite: false)
             ]))
         await waitUntil { h.app.userDataGeneration == 1 }
         await home.refreshFromStore()
         XCTAssertEqual(home.resume.value, [])
         XCTAssertTrue(home.latestRows.first?.state.value?.first?.userData.played == true)
-        XCTAssertTrue(home.latestRows.first?.state.value?.first?.userData.isFavorite == true)
+        XCTAssertEqual(home.latestRows.first?.state.value?.first?.userData.isFavorite, false)
+        let stillPending = await h.app.userData.isPending(id: Sample.movie)
+        XCTAssertFalse(stillPending)
         events.stop()
     }
 
@@ -157,14 +172,18 @@ final class T06HomeTests: XCTestCase {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
+        h.library.resumeItems = [Sample.movie()]
         let home = h.home()
         await home.load()
+        home.rememberedIDs["resume"] = Sample.movie
         h.manual?.advance(by: HomePolicy.foregroundAge)
         home.foreground()
         XCTAssertEqual(h.library.resumeCallCount(), 1)
         h.manual?.advance(by: .seconds(1))
         home.foreground()
         await waitUntil { h.library.resumeCallCount() == 2 }
+        XCTAssertEqual(home.resume.value?.first?.id, Sample.movie)
+        XCTAssertEqual(home.rememberedIDs["resume"], Sample.movie)
     }
 
     // T06-61: canonical spec/TESTPLAN-M06.md.
@@ -175,10 +194,11 @@ final class T06HomeTests: XCTestCase {
         h.library.viewItems = [Library(id: Sample.library, name: "1")]
         let home = h.home()
         await home.load()
-        home.libraryDidChange()
-        await h.suspending?.waitForSleeps(1)
-        home.libraryDidChange()
-        await h.suspending?.waitForSleeps(2)
+        for count in 1...5 {
+            home.libraryDidChange()
+            await h.suspending?.waitForSleeps(count)
+        }
+        XCTAssertEqual(h.suspending?.sleeps(), Array(repeating: HomePolicy.libraryDebounce, count: 5))
         XCTAssertEqual(h.library.latestIdentifiers().count, 1)
         h.suspending?.resumeAll()
         await waitUntil { h.library.latestIdentifiers().count == 2 }
@@ -431,4 +451,100 @@ final class T06HomeTests: XCTestCase {
         await home.reload(libraryIDs: [])
         XCTAssertEqual(home.resume.value?.count, HomePolicy.rowLimit)
     }
+    // T06-10: the owner's P0 decision keeps in-progress and next episodes in separate rows.
+    func testT06_10_continueWatchingAndNextUpAreSeparateEpisodeRows() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        let resume = MediaItem(
+            id: Sample.movie, kind: .episode, name: "Episode 3", seriesID: Sample.library,
+            seasonID: Sample.season, indexNumber: 3, parentIndexNumber: 1,
+            userData: UserItemState(playbackPosition: .seconds(120)))
+        let next = MediaItem(
+            id: Sample.other, kind: .episode, name: "Episode 4", seriesID: Sample.otherServerID,
+            seasonID: Sample.season, indexNumber: 4, parentIndexNumber: 1)
+        h.library.resumeItems = [resume]
+        h.library.nextItems = [next]
+        let home = h.home()
+        await home.reload(libraryIDs: [])
+        XCTAssertEqual(home.resume.value?.map(\.id), [resume.id])
+        XCTAssertEqual(home.nextUp.value?.map(\.id), [next.id])
+        XCTAssertFalse(HomeFutureFeatures.combinedUpNextEnabled)
+        XCTAssertFalse(HomeFutureFeatures.favoritesRowEnabled)
+    }
+
+    // T06-33: an item without progress starts at the beginning.
+    func testT06_33_playWithoutProgressStartsAtZero() {
+        XCTAssertEqual(HomePlaybackRequest(item: Sample.movie()).position, .zero)
+    }
+
+    // T06-38: the M07 series handoff preserves the episode's season for the season picker.
+    func testT06_38_seriesHandoffPreservesSeasonAndIsHiddenForMovies() throws {
+        let episode = MediaItem(
+            id: Sample.movie, kind: .episode, name: "<b>Episode</b>\u{202e}", seriesID: Sample.library,
+            seasonID: Sample.season, indexNumber: 3, parentIndexNumber: 1)
+        let series = try XCTUnwrap(HomeNavigation.seriesDestination(for: episode))
+        XCTAssertEqual(series.id, Sample.library)
+        XCTAssertEqual(series.kind, .series)
+        XCTAssertEqual(series.seasonID, Sample.season)
+        XCTAssertEqual(series.parentIndexNumber, 1)
+        XCTAssertEqual(series.name, "<b>Episode</b>")
+        XCTAssertNil(HomeNavigation.seriesDestination(for: Sample.movie()))
+    }
+
+    // T06-50: a server-dependent action fails inline while cards, focus and credentials remain.
+    func testT06_50_unreachableActionKeepsContentUntilPingRecovery() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        let item = Sample.movie()
+        h.library.resumeItems = [item]
+        let home = h.home()
+        await home.reload(libraryIDs: [])
+        home.rememberedIDs["resume"] = item.id
+        h.app.handle(.serverUnreachable)
+        h.library.error = .network
+        await home.setFavorite(item)
+        XCTAssertEqual(home.actionError, .serverUnreachable)
+        XCTAssertEqual(home.bannerKey, .serverUnreachable)
+        XCTAssertNil(home.serverDownTitleKey)
+        XCTAssertEqual(home.resume.value?.first?.id, item.id)
+        XCTAssertEqual(home.rememberedIDs["resume"], item.id)
+        XCTAssertNotNil(try h.secure.data(for: Sample.account()))
+        await h.app.probeServer()
+        XCTAssertNil(home.bannerKey)
+        XCTAssertEqual(home.resume.value?.first?.id, item.id)
+    }
+
+    // T06-63: a foreground transition before 60 seconds makes no new Home request.
+    func testT06_63_foregroundBeforeSixtySecondsDoesNotFetch() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        let home = h.home()
+        await home.load()
+        let calls = h.library.resumeCallCount()
+        h.manual?.advance(by: HomePolicy.foregroundAge - .seconds(1))
+        home.foreground()
+        XCTAssertEqual(h.library.resumeCallCount(), calls)
+        XCTAssertFalse(home.isLoading)
+    }
+
+    // T06-56: cold launch restores a displayable snapshot even when its network refresh fails.
+    func testT06_56_cachedColdStartKeepsContentAndServerUnreachableBanner() async throws {
+        let h = Harness.make()
+        defer { h.cleanup() }
+        try h.signIn()
+        h.library.resumeItems = [Sample.movie()]
+        await h.home().reload(libraryIDs: [])
+        h.library.resumeError = .network
+        h.library.nextError = .network
+        let home = h.home()
+        await home.reload(libraryIDs: [], coldStart: true)
+        XCTAssertEqual(home.resume.value?.first?.id, Sample.movie)
+        XCTAssertEqual(home.bannerKey, .serverUnreachable)
+        XCTAssertNil(home.serverDownTitleKey)
+        XCTAssertNotNil(try h.secure.data(for: Sample.account()))
+    }
+
 }

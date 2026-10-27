@@ -36,7 +36,7 @@ struct HomeRootView: View {
             context?.model.onDisappear()
         }
         .fullScreenCover(item: $playback) { request in
-            // TODO(Q6-03): replace this destination with the M08 player adapter.
+            // TODO(M08): replace this destination with the M08 player adapter.
             VStack(spacing: SpacingToken.l) {
                 Text(verbatim: request.item.name).font(.title)
                 Copy.text(.homePlaybackPending)
@@ -60,7 +60,7 @@ struct HomeRootView: View {
                 onDetail: { detailPath.append($0) }, onPlay: { playback = $0 }
             )
             .navigationDestination(for: MediaItem.self) { item in
-                // TODO(Q6-02): route this value to the M07 detail destination.
+                // TODO(M07): route this value to the M07 detail destination.
                 VStack(spacing: SpacingToken.l) {
                     Text(verbatim: item.name).font(.largeTitle)
                     if let overview = item.overview { Text(verbatim: overview) }
