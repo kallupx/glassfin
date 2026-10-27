@@ -61,7 +61,10 @@ struct LibraryGridView: View {
                 .padding(SpacingToken.xl)
             }
             .scrollPosition($scrollPosition)
-            .onAppear { focus = model.focusedID }
+            .onAppear {
+                model.onAppear()
+                focus = model.focusedID
+            }
             .onChange(of: focus) { _, id in
                 if let id {
                     model.focusedID = id

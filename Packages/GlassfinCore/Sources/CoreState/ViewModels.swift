@@ -114,6 +114,11 @@ public final class HomeViewModel: ViewContentProviding {
         self.log = log
     }
 
+    /// Returning to a retained screen must restore its content provider without reloading.
+    public func onAppear() {
+        app.currentView = self
+    }
+
     public func start(libraryIDs: [String], coldStart: Bool = false) {
         task?.cancel()
         let child = Task { @MainActor in

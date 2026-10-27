@@ -290,6 +290,7 @@ struct AuthRootView: View {
                     }
                 }
                 .defaultFocus($focused, flow.focus)
+                .onAppear { flow.onAppear() }
             }
             if let librarySession {
                 ForEach(librarySession.directLibraries) { library in

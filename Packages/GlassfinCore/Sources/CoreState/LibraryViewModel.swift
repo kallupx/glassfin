@@ -55,6 +55,11 @@ public final class LibraryViewModel: ViewContentProviding {
     public var errorKey: String? { state.presentedError.flatMap(AppErrorMessage.messageKey) }
     public var hasContent: Bool { !(state.value ?? []).isEmpty }
 
+    /// Returning to a retained screen must restore its content provider without reloading.
+    public func onAppear() {
+        app.currentView = self
+    }
+
     public func browse(_ definition: Library) async {
         collectionType = definition.collectionType
         choices = preferences?.load(libraryID: definition.id) ?? choices

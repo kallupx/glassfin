@@ -10,6 +10,7 @@ public enum SeriesFocus: Sendable, Hashable {
     case episode(String)
 }
 
+/// Episode content embedded in ItemDetailScreen; the detail view model owns screen visibility.
 @MainActor
 @Observable
 public final class SeriesViewModel: ViewContentProviding {
@@ -61,8 +62,12 @@ public final class SeriesViewModel: ViewContentProviding {
         episodes.value?.first(where: { $0.id == focusedEpisodeID })?.overview ?? ""
     }
 
-    public func load(seriesID: String, seasonID: String? = nil) async {
+    /// Standalone hosts register on entry; an embedded episode section keeps its detail screen's provider.
+    public func onAppear() {
         app.currentView = self
+    }
+
+    public func load(seriesID: String, seasonID: String? = nil) async {
         guard ItemID(seriesID) != nil else {
             seasons = .failed(.internalInvariant, previous: seasons.value)
             return

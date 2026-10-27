@@ -90,7 +90,7 @@ public final class LibraryUserActions {
 
 @MainActor
 @Observable
-public final class ItemDetailViewModel {
+public final class ItemDetailViewModel: ViewContentProviding {
     public private(set) var state: LoadState<MediaItem> = .idle
     public private(set) var similar: LoadState<[MediaItem]> = .idle
     public var audioStreamIndex: Int?
@@ -106,7 +106,15 @@ public final class ItemDetailViewModel {
         self.app = app
     }
 
+    public var hasContent: Bool { state.value != nil }
+
+    /// Returning to a retained screen must restore its content provider without reloading.
+    public func onAppear() {
+        app.currentView = self
+    }
+
     public func load(id: String) async {
+        app.currentView = self
         guard ItemID(id) != nil else {
             state = .failed(.internalInvariant, previous: state.value)
             return

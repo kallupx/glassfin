@@ -437,7 +437,7 @@ final class T02BehaviorTests: XCTestCase {
         await library.reload(libraryID: Sample.other)
         XCTAssertNil(library.state.value)
         XCTAssertTrue(harness.app.showsServerDown)
-        harness.app.currentView = home  // Returning to a retained screen without a reload.
+        home.onAppear()  // Returning to a retained screen without a reload.
         XCTAssertFalse(harness.app.showsServerDown)
         harness.app.currentView = nil
         XCTAssertTrue(harness.app.showsServerDown)
@@ -853,6 +853,7 @@ final class T02BehaviorTests: XCTestCase {
         harness.library.episodes = [Sample.movie(id: Sample.other, name: "Pilot")]
         let series = SeriesViewModel(
             library: harness.library, userData: harness.app.userData, app: harness.app, log: harness.log)
+        series.onAppear()
         await series.load(seriesID: Sample.movie)
         XCTAssertEqual(series.episodes.value?.first?.name, "Pilot")
         harness.library.seasonError = .network

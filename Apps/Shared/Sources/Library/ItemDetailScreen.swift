@@ -50,7 +50,8 @@ struct ItemDetailScreen: View {
                 }
                 if let error = session.actions.lastError { LibraryInlineError(error: error) }
                 if let playbackError {
-                    Text(verbatim: AppErrorMessage.localized(playbackError)).accessibilityIdentifier("detail.playback.error")
+                    Text(verbatim: AppErrorMessage.localized(playbackError)).accessibilityIdentifier(
+                        "detail.playback.error")
                 }
                 if playbackNotice {
                     Copy.text(.detailPlaybackPending).accessibilityIdentifier("detail.playback.pending")
@@ -58,6 +59,7 @@ struct ItemDetailScreen: View {
             }
         }
         .accessibilityIdentifier("detail.root")
+        .onAppear { model.onAppear() }
         .defaultFocus($focus, Optional(.play), priority: .userInitiated)
         .task {
             if model.state.value == nil {

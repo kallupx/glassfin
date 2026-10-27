@@ -241,7 +241,8 @@ final class DesignSystemLogicTests: XCTestCase {
         XCTAssertLessThan(text.contrast(against: ContrastFixture.bright), ContrastFixture.largeMinimum)
     }
 
-    func testT05_32_contrastFixtureMatchesHeroTokens() {
+    @MainActor
+    func testT05_32_contrastFixtureMatchesHeroTokens() async {
         // T05-32: resolve independently so fixture colors or opacity cannot drift from the drawn scrim.
         let traits = UITraitCollection(userInterfaceStyle: .dark)
         func components(of color: Color) -> RGB {
@@ -268,7 +269,8 @@ final class DesignSystemLogicTests: XCTestCase {
         }
     }
 
-    func testT05_32_upperHeroTextUsesConservativeScrimOpacity() {
+    @MainActor
+    func testT05_32_upperHeroTextUsesConservativeScrimOpacity() async {
         // T05-32: HeroHeader's bottom-aligned stack includes padding, actions, and expandable overview text.
         // Its title/overview can reach the transparent region; no minimum text height fraction is enforced.
         // Use the clear stop (zero opacity, also valid above it) as the conservative bound for that text.

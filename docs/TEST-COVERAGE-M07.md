@@ -76,8 +76,8 @@ and finishing playback may advance focus. The canonical file is unchanged.
 | T07-60 | Partial K: design-system glass rules; series Reduce Transparency snapshots require Apple SDK. |
 | T07-61 | Not automated: bright/dark series backdrop and logo snapshots require Apple SDK. |
 | T07-62 | Not automated: series snapshot matrix requires Apple SDK/artifacts. |
-| T07-63 | L: grid outage/filter failure/recovery and episode outage tests; A: retained-content/banner UI test. `testT07_63_movieDetailRetainsContentWhenTheServerBecomesUnreachable` covers movie detail. |
-| T07-64 | L: `testT07_64_downWithoutContentUsesTheExistingServerDownKey` and `testT07_64_emptyDetailUsesTheSharedServerDownKey`; full-screen buttons require Apple UI execution. |
+| T07-63 | L: grid outage/filter failure/recovery and episode outage tests; A: retained-content/banner UI test. `testT07_63_movieDetailRetainsContentWhenTheServerBecomesUnreachable` covers movie detail. `T07ScreenLifecycleTests` now covers retained grid, movie/series/season/episode detail, standalone series and embedded series hero returns; it verifies AppState banner/full-screen decisions before and after an outage without reloading. |
+| T07-64 | L: `testT07_64_downWithoutContentUsesTheExistingServerDownKey` and `testT07_64_emptyDetailUsesTheSharedServerDownKey`; `T07ScreenLifecycleTests` adds empty grid, failed first detail request and empty standalone series returns, proving a retained populated screen cannot suppress AppState.showsServerDown. Shared title/retry/change-server keys are checked; full-screen buttons require Apple UI execution. |
 | T07-65 | Partial L: T07-63 checks loaded pages survive and retry resumes the offset. 500/timeout/no-loop retry card assertions remain (Q7-04). |
 | T07-66 | Not automated: deleted-item removal and return routing need dedicated tests (Q7-11). |
 | T07-67 | L: `testT07_67_401CancelsAllRequestsEndsSessionOnceAndNeverRetries`. |
@@ -97,7 +97,7 @@ and finishing playback may advance focus. The canonical file is unchanged.
 | T07-81 | L: `testT07_81_missingContentLengthStreamIsCancelledAtTheCap` and `testT07_81_lyingContentLengthStreamIsCancelledAtTheCap` exercise the real URLSession delegate with paced 64 KB chunks and absent/false 1 MB headers. They assert cancellation at the 20 MB boundary, before EOF; T07-78 asserts failed data is not cached. Visual fallback/focus requires Apple UI execution. |
 | T07-82 | Not automated: decompression-bomb memory/no-crash and fallback need Apple ImageIO/device tests. |
 
-## Validation
+## Earlier M07 validation
 
 The pre-existing merge `632af36` is complete. Both parents' integration tests and
 helpers are retained with duplicate helpers removed. Linux `swift build` and
@@ -140,3 +140,51 @@ strings 200; ServerName/PublicUser.name 64; recent searches 20; image bytes
 20 × 1,024 × 1,024. Cleaning strips only control/bidi scalars and preserves tags,
 entities, Markdown and URL-looking text literally. No renderer or link opener
 is involved.
+
+
+## Stack v2 and screen reactivation validation
+
+The v2 stack merge is `68d1c02` with the requested message. Conflict resolutions,
+every changed test, exact locally changed assertion expressions, upstream test
+adoption, and every new signature adjustment are recorded in
+[M07-STACK-V2-TEST-AUDIT.md](M07-STACK-V2-TEST-AUDIT.md).
+
+There are 12 new Linux lifecycle tests. The seven new M07 methods map directly
+to T07-63 or T07-64; four Home methods use T02-35a/b. The remaining identity-only
+method is extra coverage, not a new canonical plan ID:
+
+| Test | Plan mapping and assertions |
+| --- | --- |
+| `testOnAppearRegistersEachFeatureViewModel` | Extra: exact currentView identity for Home, grid, detail, standalone series and Home again; initially empty content; no Home or grid requests. |
+| `testT02_35a_returningToHomeKeepsBannerWithContent` | T02-35a: each Home section independently counts as content; loaded and failed-with-previous states; return before and after outage; identities, connectivity, localized banner, no full-screen state and unchanged request counts. |
+| `testT02_35b_returningToEmptyHomeShowsFullScreen` | T02-35b: loaded empty sections; another populated screen retained; return switches identity and shows the full-screen state with the shared title/retry/change-server keys. |
+| `testT02_35a_returningToAuthHomeKeepsBannerWithCachedContent` | T02-35a: the current AuthFlow-rendered Home tab restores its identity and cached Latest content; banner with no blocking Home error. |
+| `testT02_35b_returningToAuthHomeWithoutContentShowsFullScreen` | T02-35b: both absent and empty snapshots are empty; another detail screen can remain populated; returning Home selects the full-screen state and shared error key. |
+| `testT07_63_returningToLibraryKeepsBannerWithContent` | T07-63: loaded grid and failed reload retaining its page; identity restoration before/after outage; shared localized banner and no full-screen state; no return-time fetch. |
+| `testT07_64_returningToEmptyLibraryShowsFullScreen` | T07-64: a loaded empty grid uses the full-screen state even with a populated Home retained; shared title/retry/change-server keys. |
+| `testT07_63_returningToDetailKeepsBannerWithContent` | T07-63: movie, series, season and episode item content, including failed reloads with previous values; identities, banner/full-screen decision and unchanged return-time request counts. |
+| `testT07_64_returningToEmptyDetailShowsFullScreen` | T07-64: a failed first request has no content; a populated Home cannot suppress the full-screen state; exact failure and shared title/retry/change-server keys. |
+| `testT07_63_returningToSeriesKeepsBannerWithContent` | T07-63: standalone series keeps seasons/episodes after a failed reload, restores identity and chooses the banner in both outage/return orders. |
+| `testT07_64_returningToEmptySeriesShowsFullScreen` | T07-64: standalone series with no seasons/episodes uses the full-screen state while a loaded detail is retained; shared title/retry/change-server keys. |
+| `testT07_63_seriesSectionDoesNotReplaceDetailContentProvider` | T07-63: empty/failed embedded seasons do not replace the loaded detail provider; series hero content selects the banner. |
+
+The actual Home tab calls AuthFlow.onAppear; the library and detail screens call
+their own view-model hooks. HomeViewModel also exposes the hook for its future
+feature screen. SeriesViewModel is embedded in ItemDetailScreen here, so the
+detail provider owns the complete screen; standalone hosts have an explicit hook.
+All hasContent implementations include retained previous values. Home and grid
+require a nonempty section/list; detail requires an item; standalone series
+requires seasons or episodes. Empty Home snapshots now count as empty.
+
+Current Linux validation: `bash scripts/coverage-gate.sh` passed, executing 400
+tests with zero failures and five live Docker skips (395 passed). Line coverage
+is 91.71% (7,581/8,266), above the 80% threshold. The 12 new lifecycle tests pass.
+Strict swift-format, design-system, en/fi String Catalog, DEBUG-string and CI grep
+checks also passed. All ten inherited bootstrap unit tests passed.
+
+There are now 73 authored M07-ID tests: 59 Linux and 14 Apple tests; the four new
+Home-ID tests and one identity-only extra are listed separately above.
+
+No Apple UI/snapshot execution is claimed. Xcode and Docker are unavailable in
+this environment. The merge imports v2's existing project.yml lines verbatim;
+the M07 reactivation change edits no plist, project.yml or workflow.
