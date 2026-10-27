@@ -90,7 +90,7 @@ struct AsyncPoster: View {
     var failed: Bool
     var size: CGSize
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @DesignAccessibility private var accessibility
 
     var body: some View {
         ZStack {
@@ -109,7 +109,7 @@ struct AsyncPoster: View {
     }
 
     private var fade: Animation? {
-        let duration = MotionToken.imageFade(reduceMotion: reduceMotion)
+        let duration = MotionToken.imageFade(reduceMotion: accessibility.reduceMotion)
         if duration == 0 {
             return nil
         }
@@ -167,7 +167,7 @@ struct SkeletonRow: View {
     var phase: Double
     var identifier = "design.skeleton.row"
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @DesignAccessibility private var accessibility
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.s) {
@@ -191,7 +191,7 @@ struct SkeletonRow: View {
                 .fill(Color.primary.opacity(0.16))
                 .frame(width: size.width, height: size.height)
                 .overlay {
-                    if !reduceMotion {
+                    if !accessibility.reduceMotion {
                         shimmer(index: index)
                     }
                 }
