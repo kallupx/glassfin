@@ -132,6 +132,9 @@ The PoC is the first build the user tries by hand. It is a strict subset of P0 (
 - **Self-signed (pinned) server:** DirectPlay works through the resource loader; remux is blocked by design (`hlsSegmentsBypassPinnedTrust`) and shows "This video can't be played yet from a server with a self-signed certificate." (fi: "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne.") (Security, Q8P-13).
 - **Reporting:** `Playing`, `Progress` (every 10 s and on pause/seek), `Stopped` through `CoreNetworking`, so resume and Continue watching work.
 - **Security:** as stated by Security 27.10.2026 (header via resource loader, `MediaLogRedactor`, 401 -> `/Users/Me` -> "Session expired, please sign in again", no retry loop).
+  - **Remux (ADR M08-2 D4):** the master playlist is fetched through the resource loader with the `Authorization` header. `ApiKey` in server-produced segment URLs is an accepted risk, but every segment URL must match the server origin (`MediaOrigin.matches`); any other origin or an HTTPS -> HTTP downgrade is rejected. In Release builds the app never adds `ApiKey` to any URL it builds.
+  - **`TranscodeReasons`:** `TranscodingUrl` contains a token, so the parser reads only that one query parameter, and the URL is never written unredacted to a log or an error message.
+  - **Acceptance runs:** token-related rows run on a Release build. `poc-acceptance` generates random admin and test-user passwords on every run and fails if any artifact (including recordings and xcresult logs) contains an `ApiKey=` or `Token=` value or a password.
 
 ### PoC acceptance
 All PoC PRs merged with the usual approvals, and the path sign-in -> Home -> detail -> playback passes in the simulator against Jellyfin 10.10.7, 10.11.11 and 12.2 servers (run natively on the macOS CI runner; Docker is used only for the API-level matrix on Linux) per TESTPLAN-PoC-ACCEPTANCE.md, using seed files F1–F5 (F6 optional).
