@@ -143,7 +143,7 @@ extension RGB {
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
         precondition(resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha))
-        precondition(alpha == 1, "Contrast fixtures require opaque text and scrim color tokens")
+        precondition(abs(alpha - 1) < 0.001, "Contrast fixtures require opaque text and scrim color tokens")
         self.init(r: Double(red), g: Double(green), b: Double(blue))
     }
 }
