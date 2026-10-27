@@ -55,7 +55,7 @@
         }
       }
     },
-    "playback.error.pinnedHLS" : {
+    "playback.selfSignedRemuxBlocked" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -89,7 +89,7 @@
         }
       }
     },
-    "playback.error.unsupportedVideo" : {
+    "playback.unsupportedVideoFormat" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {

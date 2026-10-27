@@ -40,27 +40,30 @@ public enum PlaybackDecision: Sendable, Equatable {
     case directStream(StreamConversion)
     case unsupported(PlaybackFailure)
 
-    /// Select the default video rather than an attached picture or alternate stream.
-    public static func supportsVideo(streams: [MediaStreamDTO]?, defaultIndex: Int? = nil) -> Bool {
+    /// The first default video wins; an audio default and server index hints do not select video.
+    public static func videoFailure(streams: [MediaStreamDTO]?) -> PlaybackFailure? {
         let videos = (streams ?? []).filter { $0.Type?.lowercased() == "video" }
-        let video =
-            defaultIndex.flatMap { index in videos.first { $0.Index == index } }
-            ?? videos.first { $0.IsDefault == true } ?? videos.first
-        return ["h264", "hevc"].contains(video?.Codec?.lowercased() ?? "")
+        guard let video = videos.first(where: { $0.IsDefault == true }) ?? videos.first else {
+            return .couldNotPlay
+        }
+        // Provisional: accept the h265 alias alongside Jellyfin's canonical hevc codec name.
+        return ["h264", "hevc", "h265"].contains(video.Codec?.lowercased() ?? "") ? nil : .unsupportedVideo
     }
 
-    /// Mirrors the static profile and fails closed when codec metadata is missing.
-    public static func decide(mediaSource source: MediaSourceDTO) -> PlaybackDecision {
+    public static func supportsVideo(streams: [MediaStreamDTO]?) -> Bool {
+        videoFailure(streams: streams) == nil
+    }
+
+    public static func decide(mediaSource source: MediaSourceDTO, allowDirectPlay: Bool = true) -> PlaybackDecision {
         let streams = source.MediaStreams ?? []
-        guard supportsVideo(streams: streams, defaultIndex: source.DefaultVideoStreamIndex),
-            !VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl)
-        else {
+        if let reason = videoFailure(streams: streams) { return .unsupported(reason) }
+        if VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl) {
             return .unsupported(.unsupportedVideo)
         }
         let audio = streams.first { $0.Type?.lowercased() == "audio" }
         let supportedAudio = audio == nil || ["aac", "ac3", "eac3"].contains(audio?.Codec?.lowercased() ?? "")
         let nativeContainer = ["mp4", "mov", "m4v", "hls"].contains(source.Container?.lowercased() ?? "")
-        if nativeContainer && supportedAudio && source.SupportsDirectPlay == true {
+        if allowDirectPlay && nativeContainer && supportedAudio && source.SupportsDirectPlay == true {
             return .directPlay
         }
         guard let url = source.TranscodingUrl, !url.isEmpty else { return .unsupported(.couldNotPlay) }

@@ -40,7 +40,18 @@ generate "Movies/Glassfin DTS (2024).mkv" 6 "${h264[@]}" -c:a dca -strict -2 -b:
 generate "Movies/Glassfin Unsupported (2024).mkv" 6 -c:v mpeg2video -c:a aac
 generate "Movies/Glassfin HEVC AC3 (2024).mkv" 6 "${hevc[@]}" -c:a ac3 -ac 6 -b:a 192k
 for episode in 01 02 03; do
-  generate "Shows/Glassfin Test Show (2024)/Season 01/Glassfin Test Show S01E${episode}.mp4" 6 \
+  generate "Shows/Glassfin Test Show (2026)/Season 01/Glassfin Test Show S01E${episode}.mp4" 60 \
     "${h264[@]}" -c:a aac -movflags +faststart
+  cat > "$media_dir/Shows/Glassfin Test Show (2026)/Season 01/Glassfin Test Show S01E${episode}.nfo" <<EOF
+<episodedetails><title>Episode ${episode}</title><season>1</season><episode>${episode#0}</episode><aired>2026-01-${episode}</aired></episodedetails>
+EOF
 done
-echo "playback-media: generated six movies (F1/F3 60 s, others 6 s) and three 6 s episodes"
+generate "Shows/Glassfin Test Show (2026)/Season 02/Glassfin Test Show S02E01.mp4" 6 \
+  "${h264[@]}" -c:a aac -movflags +faststart
+cat > "$media_dir/Shows/Glassfin Test Show (2026)/Season 02/Glassfin Test Show S02E01.nfo" <<'EOF'
+<episodedetails><title>Season 2 Episode 1</title><season>2</season><episode>1</episode><aired>2026-02-01</aired></episodedetails>
+EOF
+cat > "$media_dir/Shows/Glassfin Test Show (2026)/tvshow.nfo" <<'EOF'
+<tvshow><title>Glassfin Test Show</title><year>2026</year><premiered>2026-01-01</premiered></tvshow>
+EOF
+echo "playback-media: generated six movies (F1/F3 60 s, others 6 s) and four episodes (Season 1: three 60 s; Season 2: one 6 s)"

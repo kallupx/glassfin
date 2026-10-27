@@ -264,7 +264,7 @@ def create_test_user(token: str) -> None:
 
 def wait_for_scan(token: str) -> None:
     expected_movies = int(os.environ.get("GLASSFIN_SEED_ITEM_COUNT", "6"))
-    expected_episodes = int(os.environ.get("GLASSFIN_SEED_EPISODE_COUNT", "3"))
+    expected_episodes = int(os.environ.get("GLASSFIN_SEED_EPISODE_COUNT", "4"))
     refresh_library(token)
     deadline = time.monotonic() + 240
     next_scan = time.monotonic() + 15
@@ -273,7 +273,7 @@ def wait_for_scan(token: str) -> None:
     while time.monotonic() < deadline:
         ready = True
         counts = []
-        for kind, expected in [("Movie", expected_movies), ("Series", 1), ("Season", 1), ("Episode", expected_episodes)]:
+        for kind, expected in [("Movie", expected_movies), ("Series", 1), ("Season", 2), ("Episode", expected_episodes)]:
             status, raw = request("GET", "/Items", token=token, query={
                 "Recursive": "true", "IncludeItemTypes": kind, "Limit": "100",
                 "Fields": "MediaStreams,Path",
@@ -300,7 +300,7 @@ def wait_for_scan(token: str) -> None:
         else:
             ready = False
         if ready:
-            print(f"bootstrap: scan complete ({counts[0]} movies, {counts[1]} series, {counts[2]} season, {counts[3]} episodes)")
+            print(f"bootstrap: scan complete ({counts[0]} movies, {counts[1]} series, {counts[2]} seasons, {counts[3]} episodes)")
             return
         if time.monotonic() >= next_scan:
             task = scan_task(tasks) if status == 200 else None

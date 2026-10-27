@@ -31,6 +31,10 @@ public final class MockPlaybackEngine: PlaybackEngine {
     public var position: Duration = .zero
     public var canSeek = true
     public var loadError: APIError?
+    public var loadErrors: [APIError?] = []
+    public var automaticallyReady = true
+    public var automaticallyPlaying = true
+    public private(set) var loadAttempts: [ResourceLoaderCarrier] = []
     public private(set) var loads: [(carrier: ResourceLoaderCarrier, start: Duration)] = []
     public private(set) var stopCount = 0
     private var continuation: AsyncStream<PlaybackEngineEvent>.Continuation?
@@ -44,13 +48,18 @@ public final class MockPlaybackEngine: PlaybackEngine {
     }
 
     public func load(_ carrier: ResourceLoaderCarrier, startAt: Duration) async throws(APIError) {
-        if let loadError { throw loadError }
+        loadAttempts.append(carrier)
+        if !loadErrors.isEmpty {
+            if let error = loadErrors.removeFirst() { throw error }
+        } else if let loadError {
+            throw loadError
+        }
         loads.append((carrier, startAt))
         position = startAt
-        emit(.ready)
+        if automaticallyReady { emit(.ready) }
     }
 
-    public func play() { emit(.playing) }
+    public func play() { if automaticallyPlaying { emit(.playing) } }
     public func pause() { emit(.paused) }
     public func seek(to position: Duration) async {
         self.position = position
@@ -82,13 +91,15 @@ public final class ManualPlaybackTimer: PlaybackProgressScheduling {
 
 public actor MockPlaybackOrigin: MediaOriginClient {
     public private(set) var requests: [OriginMediaRequest] = []
+    private var responses: [OriginMediaResponse] = []
+    public func setResponses(_ values: [OriginMediaResponse]) { responses = values }
     public var response: OriginMediaResponse
     public init(response: OriginMediaResponse = OriginMediaResponse(status: 200)) {
         self.response = response
     }
     public func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
         requests.append(request)
-        return response
+        return responses.isEmpty ? response : responses.removeFirst()
     }
 }
 

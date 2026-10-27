@@ -361,8 +361,8 @@ final class MediaLoaderSecurityTests: XCTestCase {
         }
     }
 
-    /// T08P-70: both master and variant playlists use the header; server segment credentials stay on-origin.
-    func testT08P_70_masterAndVariantUseLoaderAndSegmentsStayOnOrigin() async throws {
+    /// T08P-70/88: both master and variant playlists use the header; server segment credentials stay on-origin.
+    func testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin() async throws {
         let master = URL(string: "https://example.invalid/master.m3u8")!
         let variant = URL(string: "https://example.invalid/variant.m3u8")!
         let responses = [

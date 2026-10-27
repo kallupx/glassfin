@@ -30,6 +30,9 @@ public final class PlaybackCoordinator {
     private var generation = 0
     private var started = false
     private var paused = false
+    private var engineLoaded = false
+    private var startPosition: Duration = .zero
+    private var retryTask: Task<Void, Never>?
 
     public init(
         session: any PlaybackSessionProviding, engine: any PlaybackEngine, origin: any MediaOriginClient,
@@ -54,15 +57,17 @@ public final class PlaybackCoordinator {
         paused = false
         state = .loading
         do {
-            let item = try await api.item(itemID: itemID, userID: session.userID)
+            var item = try await api.item(itemID: itemID, userID: session.userID)
             guard await continueStartup(run) else { return }
-            let metadata = item.MediaSources?.first
-            guard
-                PlaybackDecision.supportsVideo(
-                    streams: metadata?.MediaStreams ?? item.MediaStreams,
-                    defaultIndex: metadata?.DefaultVideoStreamIndex
-                )
-            else { throw PlaybackFailure.unsupportedVideo }
+            if item.MediaStreams == nil && item.MediaSources?.first?.MediaStreams == nil {
+                item = try await api.item(itemID: itemID, userID: session.userID)
+                guard await continueStartup(run) else { return }
+            }
+            if let reason = PlaybackDecision.videoFailure(
+                streams: item.MediaStreams ?? item.MediaSources?.first?.MediaStreams)
+            {
+                throw reason
+            }
             let ticks: Int64
             switch choice {
             case .resume: ticks = item.UserData?.PlaybackPositionTicks ?? 0
@@ -74,14 +79,29 @@ public final class PlaybackCoordinator {
                 log.warning("Negative UserData.PlaybackPositionTicks for item \(try ItemID.require(itemID).value)")
             }
             let start = Ticks.positionDuration(from: max(0, ticks), log: log)
+            startPosition = start
+            await startAttempt(itemID: itemID, start: start, run: run)
+        } catch {
+            await startupFailed(error, run: run)
+        }
+    }
+
+    private func startAttempt(
+        itemID: String, start: Duration, run: Int, directStreamOnly: Bool = false,
+        previousSessionID: String? = nil
+    ) async {
+        startPosition = start
+        do {
             let info = try await api.playbackInfo(
-                itemID: itemID, userID: session.userID, start: start, maxBitrate: maxBitrate
+                itemID: itemID, userID: session.userID, start: start, maxBitrate: maxBitrate,
+                enableDirectPlay: !directStreamOnly
             )
             guard await continueStartup(run) else { return }
             guard info.ErrorCode == nil, let source = info.MediaSources?.first,
-                let sourceID = source.Id, let playSessionID = info.PlaySessionId, !playSessionID.isEmpty
+                let sourceID = source.Id, let playSessionID = info.PlaySessionId, !playSessionID.isEmpty,
+                playSessionID != previousSessionID
             else { throw PlaybackFailure.couldNotPlay }
-            let decision = PlaybackDecision.decide(mediaSource: source)
+            let decision = PlaybackDecision.decide(mediaSource: source, allowDirectPlay: !directStreamOnly)
             let delivery: MediaDelivery
             let url: URL
             switch decision {
@@ -114,7 +134,7 @@ public final class PlaybackCoordinator {
             let carrier: ResourceLoaderCarrier
             switch result {
             case .open(let plan):
-                // No fallback chain in M08a-PoC, including in Debug builds.
+                // Media credentials always stay on the resource-loader path.
                 if plan.primary.block == .hlsSegmentsBypassPinnedTrust {
                     throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
                 }
@@ -133,23 +153,74 @@ public final class PlaybackCoordinator {
             }
             try await engine.load(carrier, startAt: start)
             guard await continueStartup(run) else { return }
+            engineLoaded = true
             engine.play()
         } catch {
-            guard generation == run else { return }
-            if Task.isCancelled || error as? APIError == .cancelled {
-                await finish(state: .idle, failed: false)
-                return
-            }
-            if let error = error as? APIError, error == .unauthorized {
-                if context != nil {
-                    await mediaUnauthorized()
-                } else {
-                    await expireSession(run: run)
-                }
+            await startupFailed(error, run: run)
+        }
+    }
+
+    private func startupFailed(_ error: any Error, run: Int) async {
+        guard generation == run else { return }
+        if Task.isCancelled || error as? APIError == .cancelled {
+            await finish(state: .idle, failed: false)
+        } else if error as? APIError == .unauthorized {
+            if context != nil {
+                await mediaUnauthorized()
             } else {
-                await fail((error as? PlaybackFailure) ?? .couldNotPlay)
+                await expireSession(run: run)
+            }
+        } else {
+            let reason = (error as? PlaybackFailure) ?? .couldNotPlay
+            if reason == .couldNotPlay || (reason == .insecureRedirect && context?.method == .directPlay) {
+                await attemptFailed(run: run)
+            } else {
+                await fail(reason)
             }
         }
+    }
+
+    private func attemptFailed(run: Int, fromEngineEvent: Bool = false) async {
+        guard isCurrent(run) else { return }
+        guard let failedAttempt = context, failedAttempt.method == .directPlay else {
+            await fail(.couldNotPlay)
+            return
+        }
+        if case .pinnedSelfSigned = session.trust {
+            await fail(.hlsSegmentsBypassPinnedTrust)
+            return
+        }
+        let position = engineLoaded ? max(.zero, engine.position) : startPosition
+        let retryRun = generation + 1
+        let error = await finish(state: .loading, failed: true)
+        guard generation == retryRun else { return }
+        if error == .unauthorized {
+            state = .failed(localizedKey: PlaybackCopy.couldNotPlayKey)
+            await checkCurrentUser(run: retryRun)
+            return
+        }
+        if !fromEngineEvent && Task.isCancelled {
+            await finish(state: .idle, failed: false)
+            return
+        }
+        paused = false
+        // finish cancels the failed engine's event task. The remux owns a fresh task and generation.
+        let task = Task<Void, Never> { [weak self] in
+            await self?.startAttempt(
+                itemID: failedAttempt.itemID, start: position, run: retryRun,
+                directStreamOnly: true, previousSessionID: failedAttempt.playSessionID)
+        }
+        retryTask = task
+        if fromEngineEvent {
+            await task.value
+        } else {
+            await withTaskCancellationHandler {
+                await task.value
+            } onCancel: {
+                task.cancel()
+            }
+        }
+        if generation == retryRun { retryTask = nil }
     }
 
     public func stop() async {
@@ -210,7 +281,8 @@ public final class PlaybackCoordinator {
             let error = await finish(state: .ended, failed: false)
             if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
         case .failed(.unauthorized): await mediaUnauthorized()
-        case .failed: await fail(.couldNotPlay)
+        case .failed(.cancelled): break
+        case .failed: await attemptFailed(run: run, fromEngineEvent: true)
         }
     }
 
@@ -230,13 +302,16 @@ public final class PlaybackCoordinator {
     @discardableResult
     private func finish(state terminal: PlaybackState, failed: Bool) async -> APIError? {
         generation += 1
+        retryTask?.cancel()
+        retryTask = nil
         timer.cancel()
         eventsTask?.cancel()
         eventsTask = nil
         let stopped = context
         context = nil
-        let position = engine.position
-        let canSeek = engine.canSeek
+        let position = engineLoaded ? engine.position : startPosition
+        let canSeek = engineLoaded && engine.canSeek
+        engineLoaded = false
         engine.stop()
         started = false
         state = terminal
@@ -280,6 +355,7 @@ public final class PlaybackCoordinator {
     }
 
     isolated deinit {
+        retryTask?.cancel()
         eventsTask?.cancel()
         timer.cancel()
         engine.stop()

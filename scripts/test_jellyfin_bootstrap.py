@@ -110,7 +110,7 @@ class BootstrapTests(unittest.TestCase):
                 return 204, b""
             if path == "/Items":
                 kind = kwargs["query"]["IncludeItemTypes"]
-                count = {"Movie": 6, "Series": 1, "Season": 1, "Episode": 3}[kind] if started else 0
+                count = {"Movie": 6, "Series": 1, "Season": 2, "Episode": 4}[kind] if started else 0
                 return response({"TotalRecordCount": count, "Items": [
                     {"RunTimeTicks": 60_000_000, "MediaStreams": [{"Type": "Video", "Codec": "h264"}]}
                 ] * count})
@@ -208,7 +208,7 @@ class PoCBootstrapTests(unittest.TestCase):
                 rounds[0] += 1
                 return 200, json.dumps([{"Key": "RefreshLibrary", "State": state}]).encode()
             kind = query["IncludeItemTypes"]
-            count = {"Movie": 6, "Series": 1, "Season": 1, "Episode": 3}[kind]
+            count = {"Movie": 6, "Series": 1, "Season": 2, "Episode": 4}[kind]
             runtime = 0 if rounds[0] == 0 else 60_000_000
             items = [{"RunTimeTicks": runtime, "MediaStreams": [{"Type": "Video", "Codec": "h264"}]}] * count
             return 200, json.dumps({"TotalRecordCount": count, "Items": items}).encode()
@@ -218,6 +218,27 @@ class PoCBootstrapTests(unittest.TestCase):
             bootstrap.wait_for_scan("test-token")
         self.assertEqual(rounds[0], 3)
         self.assertEqual(sleep.call_count, 2)
+
+    def test_TPOC_02_scan_requires_both_seasons_and_all_four_episodes(self):
+        rounds = [0]
+
+        def request(method, path, body=None, token=None, query=None):
+            if path == "/Library/Refresh":
+                return 204, b""
+            if path == "/ScheduledTasks":
+                rounds[0] += 1
+                return 200, b'[{"Key":"RefreshLibrary","State":"Idle"}]'
+            kind = query["IncludeItemTypes"]
+            count = {"Movie": 6, "Series": 1, "Season": 1 if rounds[0] == 0 else 2,
+                     "Episode": 3 if rounds[0] == 0 else 4}[kind]
+            items = [{"RunTimeTicks": 600_000_000, "MediaStreams": [{"Type": "Video", "Codec": "h264"}]}] * count
+            return 200, json.dumps({"TotalRecordCount": count, "Items": items}).encode()
+
+        with patch.dict(os.environ, {}, clear=True), patch.object(bootstrap, "request", side_effect=request), patch.object(
+                bootstrap.time, "sleep") as sleep, contextlib.redirect_stdout(io.StringIO()):
+            bootstrap.wait_for_scan("test-token")
+        self.assertEqual(rounds[0], 2)
+        self.assertEqual(sleep.call_count, 1)
 
     def test_TPOC_02_configuration_failures_are_not_ignored(self):
         with patch.object(bootstrap, "request", return_value=(403, b"")), contextlib.redirect_stderr(io.StringIO()):

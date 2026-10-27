@@ -96,7 +96,7 @@ PY
   username_file="$work/username"
   export GLASSFIN_INTEGRATION=1
   export GLASSFIN_SEED_ITEM_COUNT=6
-  export GLASSFIN_SEED_EPISODE_COUNT=3
+  export GLASSFIN_SEED_EPISODE_COUNT=4
   export GLASSFIN_TEST_USERNAME="glassfin-viewer"
   export GLASSFIN_TEST_PASSWORD="$(openssl rand -hex 24)"
   export GLASSFIN_SERVER_URL="http://127.0.0.1:${port}"

@@ -12,18 +12,21 @@ public struct PlaybackAPI: Sendable, CurrentUserProbing {
         let item = try ItemID.require(itemID).value
         let user = try ItemID.require(userID).value
         return try await client.send(
-            APIRequest(method: "GET", path: "/Users/\(user)/Items/\(item)"), as: BaseItemDTO.self
+            APIRequest(
+                method: "GET", path: "/Users/\(user)/Items/\(item)",
+                query: [URLQueryItem(name: "Fields", value: "MediaStreams")]
+            ), as: BaseItemDTO.self
         )
     }
 
     public func playbackInfo(
-        itemID: String, userID: String, start: Duration, maxBitrate: Int
+        itemID: String, userID: String, start: Duration, maxBitrate: Int, enableDirectPlay: Bool = true
     ) async throws(APIError) -> PlaybackInfoResponseDTO {
         let item = try ItemID.require(itemID).value
         let body = PlaybackInfoBody(
             UserId: try ItemID.require(userID).value,
             StartTimeTicks: Ticks.outboundPositionTicks(from: start),
-            MaxStreamingBitrate: max(1, maxBitrate)
+            MaxStreamingBitrate: max(1, maxBitrate), EnableDirectPlay: enableDirectPlay
         )
         return try await client.send(
             APIRequest(method: "POST", path: "/Items/\(item)/PlaybackInfo", body: try Self.encode(body)),
@@ -45,7 +48,7 @@ private struct PlaybackInfoBody: Encodable {
     let StartTimeTicks: Int64
     let MaxStreamingBitrate: Int
     let DeviceProfile = PlaybackDeviceProfile()
-    let EnableDirectPlay = true
+    let EnableDirectPlay: Bool
     let EnableDirectStream = true
     let EnableTranscoding = true
     let AllowVideoStreamCopy = true

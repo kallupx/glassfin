@@ -61,7 +61,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
         }
     }
 
-    func testT08P_14_queryVideoReasonsBlockBeforeStreamRequest() async throws {
+    func testT08P_89_queryVideoReasonsBlockBeforeStreamRequest() async throws {
         let metadata = try playbackItemFixture(from: playbackFixture())
         let rig = try rig(
             data: playbackFixture(
@@ -112,15 +112,15 @@ final class PlaybackCoordinatorTests: XCTestCase {
 
     /// T08P-71, TPOC-68 (policy): force loader failure; never load a query/header fallback.
     func testT08P_71_loaderFailureNeverUsesCredentialFallback() async throws {
-        let rig = try rig()
+        let rig = try retryRig()
         rig.engine.loadError = .network
         await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
         XCTAssertEqual(rig.coordinator.failure, .couldNotPlay)
         XCTAssertTrue(rig.engine.loads.isEmpty)
         let calls = await rig.client.calls
-        XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 1)
+        XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 2)
         let requests = await rig.origin.requests
-        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.count, 2)
         XCTAssertFalse(requests.contains { MediaCredentialQuery.contains($0.url) })
         if !HeaderFieldsKeyPolicy.isAllowedInCurrentBuild {
             let server = try XCTUnwrap(URL(string: "https://server.example"))
@@ -290,19 +290,25 @@ final class PlaybackCoordinatorTests: XCTestCase {
 
     /// T08P-42/T08P-43/T08P-45: duplicate media 401s stop once, probe once, never retry PlaybackInfo.
     func testT08P_42_43_45_mediaUnauthorizedChecksMeExactlyOnce() async throws {
-        for meError in [APIError.unauthorized, .network, .server(status: 500), .forbidden] {
-            try await checkMediaUnauthorized(meError: meError)
+        for remux in [false, true] {
+            for meError in [APIError.unauthorized, .network, .server(status: 500), .forbidden] {
+                try await checkMediaUnauthorized(meError: meError, remux: remux)
+            }
+            try await checkMediaUnauthorized(meError: nil, remux: remux)
         }
-        try await checkMediaUnauthorized(meError: nil)
     }
 
-    private func checkMediaUnauthorized(meError: APIError?) async throws {
-        let data = try playbackFixture()
-        let rig = try rig(handler: { request throws(APIError) in
-            if request.path.hasSuffix("PlaybackInfo") { return data }
-            if request.path == "/Users/Me", let meError { throw meError }
-            return Data()
-        })
+    private func checkMediaUnauthorized(meError: APIError?, remux: Bool) async throws {
+        let data = try playbackFixture(
+            container: remux ? "mkv" : "mp4", direct: !remux,
+            transcodingURL: remux ? "/master.m3u8" : nil)
+        let rig = try rig(
+            data: data,
+            handler: { request throws(APIError) in
+                if request.path.hasSuffix("PlaybackInfo") { return data }
+                if request.path == "/Users/Me", let meError { throw meError }
+                return Data()
+            })
         await started(rig)
         rig.engine.emit(.failed(.unauthorized))
         rig.engine.emit(.failed(.unauthorized))
@@ -366,7 +372,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
     /// T08P-23/T08P-31: terminal events send Stopped once, with Failed true only for an error.
     func testT08P_23_31_endAndErrorReportStoppedExactlyOnce() async throws {
         for event in [PlaybackEngineEvent.ended, .failed(.network)] {
-            let rig = try rig()
+            let rig = try rig(data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"))
             await started(rig)
             rig.engine.position = .seconds(3)
             rig.engine.emit(event)
@@ -427,8 +433,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
         }
     }
 
-    /// T08P-54/T08P-55: resolver failures and pinned HLS terminate before engine load.
-    func testT08P_54_55_resolverAndTrustRejections() async throws {
+    /// T08P-54/T08P-87: resolver failures and pinned HLS terminate before engine load.
+    func testT08P_54_87_resolverAndTrustRejections() async throws {
         for response in [
             OriginMediaResponse(status: 500),
             OriginMediaResponse(status: 302, location: URL(string: "https://evil.example/media")),
@@ -583,8 +589,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
             ])
     }
 
-    /// T08P-19/T08P-24/T08P-56: buffering, duplicate ready, repeated play and a negative resume warning.
-    func testT08P_19_24_56_engineStatesAndRepeatedPlay() async throws {
+    /// T08P-19/T08P-56: buffering, duplicate ready, repeated play and a negative resume warning.
+    func testT08P_19_56_engineStatesAndRepeatedPlay() async throws {
         let sink = PoCLogCapture()
         let rig = try rig(log: sink)
         XCTAssertEqual(rig.coordinator.state, .idle)
@@ -602,6 +608,424 @@ final class PlaybackCoordinatorTests: XCTestCase {
         XCTAssertEqual(
             sink.messages.filter { $0.contains("PlaybackPositionTicks") && $0.contains(pocItemID) }.count, 1)
     }
+    private func retryRig(audio: String = "aac", retryData: Data? = nil) throws -> Rig {
+        let first = try playbackFixture()
+        let second =
+            try retryData
+            ?? playbackFixture(
+                audio: audio, direct: true, transcodingURL: "/master.m3u8?TranscodeReasons=DirectPlayError",
+                playSessionID: "remux-session")
+        return try rig(handler: { request throws(APIError) in
+            if request.path.hasSuffix("PlaybackInfo") {
+                let direct = (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) ?? true
+                return direct ? first : second
+            }
+            return Data()
+        })
+    }
+
+    private func assertAttempts(_ rig: Rig, info: Int, streams: Int, file: StaticString = #filePath, line: UInt = #line)
+        async
+    {
+        let calls = await rig.client.calls
+        let requests = await rig.origin.requests
+        let negotiations = calls.filter { $0.path.hasSuffix("PlaybackInfo") }
+        XCTAssertEqual(negotiations.count, info, file: file, line: line)
+        XCTAssertEqual(requests.count, streams, file: file, line: line)
+        for (index, call) in negotiations.enumerated() {
+            let body = try? jsonBody(call.body)
+            XCTAssertEqual(body?["EnableDirectPlay"] as? Bool, index == 0, file: file, line: line)
+            XCTAssertEqual(body?["AllowVideoStreamCopy"] as? Bool, true, file: file, line: line)
+            XCTAssertEqual(body?["EnableTranscoding"] as? Bool, true, file: file, line: line)
+        }
+    }
+
+    /// T08P-17: failed item/loader/timeout events share one video-copy retry, with optional audio conversion.
+    func testT08P_17_directPlayFailureRetriesRemuxOnce() async throws {
+        for error in [APIError.network, .timeout, .server(status: 500)] {
+            for audio in ["aac", "dts"] {
+                let rig = try retryRig(audio: audio)
+                await started(rig, choice: .resume)
+                rig.engine.position = .seconds(20)
+                rig.engine.emit(.failed(error))
+                rig.engine.emit(.failed(error))
+                await settle { rig.engine.loads.count == 2 && rig.coordinator.state == .playing && rig.timer.isRunning }
+                XCTAssertNil(rig.coordinator.failure)
+                await assertAttempts(rig, info: 2, streams: 2)
+                let carrier = try XCTUnwrap(rig.engine.loads.last?.carrier)
+                let query = URLComponents(url: carrier.originURL, resolvingAgainstBaseURL: false)?.queryItems
+                XCTAssertEqual(query?.first { $0.name == "VideoCodec" }?.value, "copy")
+                XCTAssertEqual(query?.first { $0.name == "AudioCodec" }?.value, audio == "aac" ? "copy" : "aac")
+                XCTAssertEqual(rig.engine.loads.last?.start, .seconds(20))
+                let info = await rig.client.calls.filter { $0.path.hasSuffix("PlaybackInfo") }
+                XCTAssertEqual(try jsonBody(info.last?.body)["StartTimeTicks"] as? Int64, 200_000_000)
+                await rig.coordinator.stop()
+                let reports = try await rig.client.calls.filter { $0.path.hasPrefix("/Sessions/") }.map {
+                    try jsonBody($0.body)
+                }
+                XCTAssertEqual(
+                    reports.compactMap { $0["PlaySessionId"] as? String },
+                    ["play-session", "play-session", "remux-session", "remux-session"])
+                XCTAssertEqual(
+                    reports.compactMap { $0["PlayMethod"] as? String },
+                    ["DirectPlay", "DirectPlay", "DirectStream", "DirectStream"])
+                XCTAssertEqual(reports.compactMap { $0["Failed"] as? Bool }, [false, true, false, false])
+            }
+        }
+    }
+
+    func testT08P_17_startupLoaderAndPreparationFailureRetry() async throws {
+        for failure in ["loader", "http", "redirect"] {
+            let rig = try retryRig()
+            if failure == "loader" {
+                rig.engine.loadErrors = [.network, nil]
+            } else {
+                let response =
+                    failure == "http"
+                    ? OriginMediaResponse(status: 500)
+                    : OriginMediaResponse(status: 302, location: URL(string: "https://evil.example/media"))
+                await rig.origin.setResponses([response, OriginMediaResponse(status: 200)])
+            }
+            await started(rig, choice: .resume)
+            await assertAttempts(rig, info: 2, streams: 2)
+            XCTAssertEqual(rig.engine.loads.last?.start, .milliseconds(12_500))
+            let calls = await rig.client.calls
+            XCTAssertEqual(
+                calls.filter { $0.method == "POST" }.map(\.path),
+                [
+                    "/Items/\(pocItemID)/PlaybackInfo", "/Sessions/Playing/Stopped",
+                    "/Items/\(pocItemID)/PlaybackInfo", "/Sessions/Playing",
+                ])
+            let stopped = try jsonBody(calls.first { $0.path.hasSuffix("Stopped") }?.body)
+            XCTAssertEqual(stopped["Failed"] as? Bool, true)
+            XCTAssertEqual(stopped["PositionTicks"] as? Int64, 125_000_000)
+            await rig.coordinator.stop()
+        }
+    }
+
+    func testT08P_17_failureBeforeReadyRetriesWithoutPlayingReport() async throws {
+        let rig = try retryRig()
+        rig.engine.automaticallyReady = false
+        rig.engine.automaticallyPlaying = false
+        await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+        rig.engine.automaticallyReady = true
+        rig.engine.automaticallyPlaying = true
+        rig.engine.emit(.failed(.timeout))
+        await settle { rig.engine.loads.count == 2 && rig.timer.isRunning }
+        let reports = try await rig.client.calls.filter { $0.path == "/Sessions/Playing" }.map { try jsonBody($0.body) }
+        XCTAssertEqual(reports.compactMap { $0["PlaySessionId"] as? String }, ["remux-session"])
+        await rig.coordinator.stop()
+    }
+
+    func testT08P_92_bothAttemptsFailWithExactlyTwoStreams() async throws {
+        for startupFailure in [false, true] {
+            let rig = try retryRig()
+            if startupFailure {
+                rig.engine.loadError = .network
+                await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+            } else {
+                await started(rig)
+                rig.engine.emit(.failed(.network))
+                await settle { rig.engine.loads.count == 2 && rig.timer.isRunning }
+                rig.engine.emit(.failed(.server(status: 500)))
+                rig.engine.emit(.failed(.network))
+                await settle { rig.coordinator.failure == .couldNotPlay }
+            }
+            XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: PlaybackCopy.couldNotPlayKey))
+            await assertAttempts(rig, info: 2, streams: 2)
+            XCTAssertEqual(rig.engine.loadAttempts.count, 2)
+            let stopped = try await rig.client.calls.filter { $0.path.hasSuffix("Stopped") }.map {
+                try jsonBody($0.body)
+            }
+            XCTAssertEqual(stopped.compactMap { $0["PlaySessionId"] as? String }, ["play-session", "remux-session"])
+            XCTAssertEqual(stopped.compactMap { $0["Failed"] as? Bool }, [true, true])
+            XCTAssertFalse(rig.timer.isRunning)
+        }
+    }
+
+    func testT08P_92_remuxPlaylistFailureEndsChain() async throws {
+        for status in [404, 500] {
+            let rig = try retryRig()
+            await rig.origin.setResponses([OriginMediaResponse(status: 500), OriginMediaResponse(status: status)])
+            await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+            XCTAssertEqual(rig.coordinator.failure, .couldNotPlay)
+            await assertAttempts(rig, info: 2, streams: 2)
+            XCTAssertTrue(rig.engine.loads.isEmpty)
+        }
+    }
+
+    func testT08P_93_pinnedDirectPlayFailureNeverNegotiatesRemux() async throws {
+        for loaderFailure in [false, true] {
+            let rig = try retryRig()
+            rig.session.trust = .pinnedSelfSigned(fingerprintSHA256: String(repeating: "a", count: 64))
+            if loaderFailure {
+                rig.engine.loadError = .network
+                await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+            } else {
+                await started(rig)
+                rig.engine.emit(.failed(.network))
+                await settle { rig.coordinator.failure == .hlsSegmentsBypassPinnedTrust }
+            }
+            XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: "playback.selfSignedRemuxBlocked"))
+            await assertAttempts(rig, info: 1, streams: 1)
+            let calls = await rig.client.calls
+            XCTAssertEqual(try jsonBody(calls.last?.body)["Failed"] as? Bool, true)
+        }
+    }
+
+    func testT08P_99_retryVideoReasonBlocksBeforeStreamOrPlayer() async throws {
+        let retry = try playbackFixture(
+            container: "mkv", direct: false,
+            transcodingURL: "/master.m3u8?TranscodeReasons=ContainerNotSupported,VideoCodecNotSupported",
+            playSessionID: "remux-session")
+        let rig = try retryRig(retryData: retry)
+        await started(rig)
+        rig.engine.emit(.failed(.network))
+        await settle { rig.coordinator.failure == .unsupportedVideo }
+        XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: "playback.unsupportedVideoFormat"))
+        await assertAttempts(rig, info: 2, streams: 1)
+        XCTAssertEqual(rig.engine.loadAttempts.count, 1)
+        let calls = await rig.client.calls
+        XCTAssertEqual(calls.filter { $0.path.hasSuffix("Stopped") }.count, 1)
+        XCTAssertEqual(try jsonBody(calls.first { $0.path.hasSuffix("Stopped") }?.body)["Failed"] as? Bool, true)
+    }
+
+    func testT08P_31_initialRemuxFailureNeverRetries() async throws {
+        let rig = try rig(data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"))
+        await started(rig)
+        rig.engine.emit(.failed(.network))
+        await settle { rig.coordinator.failure == .couldNotPlay }
+        let calls = await rig.client.calls
+        XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 1)
+        let streams = await rig.origin.requests
+        XCTAssertEqual(streams.count, 1)
+        XCTAssertEqual(rig.engine.loadAttempts.count, 1)
+    }
+
+    func testT08P_17_56_retryWaitsForStoppedAndCanBeDismissed() async throws {
+        for dismiss in [false, true] {
+            let first = try playbackFixture()
+            let remux = try playbackFixture(
+                direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session")
+            let gate = PoCRequestGate()
+            let rig = try rig(handler: { request throws(APIError) in
+                if request.path.hasSuffix("Stopped"), (try? jsonBody(request.body)["Failed"] as? Bool) == true {
+                    await gate.wait()
+                }
+                if request.path.hasSuffix("PlaybackInfo") {
+                    return (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) == false ? remux : first
+                }
+                return Data()
+            })
+            await started(rig)
+            rig.engine.emit(.failed(.network))
+            await settle { await gate.isWaiting }
+            await assertAttempts(rig, info: 1, streams: 1)
+            XCTAssertFalse(rig.timer.isRunning)
+            if dismiss { await rig.coordinator.stop() }
+            await gate.release()
+            if dismiss {
+                await settle { rig.coordinator.state == .idle }
+                await assertAttempts(rig, info: 1, streams: 1)
+            } else {
+                await settle { rig.engine.loads.count == 2 && rig.timer.isRunning }
+                let paths = await rig.client.calls.filter { $0.method == "POST" }.map(\.path)
+                XCTAssertEqual(
+                    paths,
+                    [
+                        "/Items/\(pocItemID)/PlaybackInfo", "/Sessions/Playing",
+                        "/Sessions/Playing/Stopped", "/Items/\(pocItemID)/PlaybackInfo", "/Sessions/Playing",
+                    ])
+                await rig.coordinator.stop()
+            }
+        }
+    }
+
+    func testT08P_42_retry401NeverStartsThirdAttempt() async throws {
+        let rig = try retryRig()
+        await started(rig)
+        await rig.origin.setResponses([OriginMediaResponse(status: 401)])
+        rig.engine.emit(.failed(.network))
+        await settle { (await rig.client.calls).last?.path == "/Users/Me" }
+        await settle { rig.coordinator.failure == .couldNotPlay }
+        await assertAttempts(rig, info: 2, streams: 2)
+        XCTAssertEqual(rig.engine.loadAttempts.count, 1)
+        XCTAssertEqual(rig.session.expirationCount, 0)
+    }
+
+    func testT08P_42_44_stopped401PreventsRemuxRetry() async throws {
+        let fixture = try playbackFixture()
+        let rig = try rig(handler: { request throws(APIError) in
+            if request.path.hasSuffix("PlaybackInfo") { return fixture }
+            if request.path.hasSuffix("Stopped") { throw .unauthorized }
+            return Data()
+        })
+        await started(rig)
+        rig.engine.emit(.failed(.network))
+        await settle { rig.coordinator.failure == .couldNotPlay }
+        await assertAttempts(rig, info: 1, streams: 1)
+        let calls = await rig.client.calls
+        XCTAssertEqual(calls.filter { $0.path == "/Users/Me" }.count, 1)
+        XCTAssertEqual(calls.filter { $0.path.hasSuffix("Stopped") }.count, 1)
+    }
+
+    func testT08P_17_retryKeepsBackwardSeekPosition() async throws {
+        let rig = try retryRig()
+        await started(rig, choice: .resume)
+        await rig.coordinator.seek(to: .seconds(3))
+        rig.engine.emit(.failed(.network))
+        await settle { rig.engine.loads.count == 2 && rig.timer.isRunning }
+        XCTAssertEqual(rig.engine.loads.last?.start, .seconds(3))
+        await rig.coordinator.stop()
+    }
+
+    func testT08P_17_56_stopDuringRetryDiscardsLatePlaybackInfo() async throws {
+        let first = try playbackFixture()
+        let remux = try playbackFixture(direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session")
+        let gate = PoCRequestGate()
+        let rig = try rig(handler: { request throws(APIError) in
+            if request.path.hasSuffix("PlaybackInfo") {
+                if (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) == false {
+                    await gate.wait()
+                    return remux
+                }
+                return first
+            }
+            return Data()
+        })
+        await started(rig)
+        rig.engine.emit(.failed(.network))
+        await settle { await gate.isWaiting }
+        await rig.coordinator.stop()
+        await gate.release()
+        await settle { rig.coordinator.state == .idle }
+        await assertAttempts(rig, info: 2, streams: 1)
+        XCTAssertEqual(rig.engine.loadAttempts.count, 1)
+        XCTAssertFalse(rig.timer.isRunning)
+    }
+
+    func testT08P_17_56_cancellingStartupCancelsPendingRetry() async throws {
+        for cancelAtStopped in [false, true] {
+            let first = try playbackFixture()
+            let remux = try playbackFixture(
+                direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session")
+            let gate = PoCRequestGate()
+            let rig = try rig(handler: { request throws(APIError) in
+                if cancelAtStopped && request.path.hasSuffix("Stopped") { await gate.wait() }
+                if request.path.hasSuffix("PlaybackInfo") {
+                    if (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) == false {
+                        await gate.wait()
+                        return remux
+                    }
+                    return first
+                }
+                return Data()
+            })
+            rig.engine.loadErrors = [.network, nil]
+            let task = Task { await rig.coordinator.play(itemID: pocItemID, choice: .startOver) }
+            await settle { await gate.isWaiting }
+            task.cancel()
+            await gate.release()
+            await task.value
+            XCTAssertEqual(rig.coordinator.state, .idle)
+            await assertAttempts(rig, info: cancelAtStopped ? 1 : 2, streams: 1)
+            XCTAssertEqual(rig.engine.loadAttempts.count, 1)
+            XCTAssertFalse(rig.timer.isRunning)
+        }
+    }
+
+    func testT08P_17_retryRequiresNewPlaySessionID() async throws {
+        let rig = try retryRig(retryData: playbackFixture(direct: false, transcodingURL: "/master.m3u8"))
+        rig.engine.loadError = .network
+        await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+        XCTAssertEqual(rig.coordinator.failure, .couldNotPlay)
+        await assertAttempts(rig, info: 2, streams: 1)
+    }
+
+    func testT08P_94_95_96_97_defaultVideoPrecheck() async throws {
+        let audio: [String: Any] = ["Type": "Audio", "Codec": "aac", "IsDefault": true]
+        let cases: [([[String: Any]], PlaybackFailure?)] =
+            [
+                (
+                    [
+                        ["Type": "Video", "Codec": "mpeg2video"],
+                        ["Type": "Video", "Codec": "h264", "IsDefault": true],
+                    ], nil
+                ),
+                (
+                    [
+                        ["Type": "Video", "Codec": "h264"],
+                        ["Type": "Video", "Codec": "mpeg2video", "IsDefault": true],
+                    ], .unsupportedVideo
+                ),
+                (
+                    [audio, ["Type": "Video", "Codec": "mpeg2video"], ["Type": "Video", "Codec": "h264"]],
+                    .unsupportedVideo
+                ),
+                ([audio, ["Type": "Video", "Codec": "h264"], ["Type": "Video", "Codec": "mpeg2video"]], nil),
+                ([audio, ["Type": "Subtitle", "Codec": "srt"]], .couldNotPlay), ([], .couldNotPlay),
+            ]
+            + ["H264", "Hevc", "HEVC", "h264", "H265", "h265", "MPEG2VIDEO", "Vc1", "avc"].map { codec in
+                (
+                    [["Type": "Video", "Codec": codec]],
+                    ["MPEG2VIDEO", "Vc1", "avc"].contains(codec) ? .unsupportedVideo : nil
+                )
+            }
+        for (streams, expected) in cases {
+            let metadata = try JSONSerialization.data(withJSONObject: ["MediaStreams": streams])
+            let rig = try rig(itemData: metadata)
+            await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+            if let expected {
+                XCTAssertEqual(rig.coordinator.failure, expected)
+                XCTAssertTrue(rig.engine.loads.isEmpty)
+                let requests = await rig.origin.requests
+                XCTAssertTrue(requests.isEmpty)
+            } else {
+                await settle { rig.coordinator.state == .playing }
+            }
+            let calls = await rig.client.calls
+            XCTAssertEqual(calls.filter { $0.method == "GET" }.count, 1)
+            XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, expected == nil ? 1 : 0)
+            await rig.coordinator.stop()
+        }
+    }
+
+    func testT08P_98_missingStreamsRefetchExactlyOnce() async throws {
+        let supported = try playbackFixture()
+        let valid = try playbackItemFixture(from: supported)
+        let blocked = Data(#"{"MediaStreams":[{"Type":"Video","Codec":"mpeg2video"}]}"#.utf8)
+        for (refetched, expected) in [
+            (valid, nil), (Data("{}".utf8), PlaybackFailure.couldNotPlay),
+            (Data(#"{"MediaStreams":[]}"#.utf8), .couldNotPlay), (blocked, .unsupportedVideo),
+        ] {
+            let count = PoCReportAttempts()
+            let rig = try rig()
+            await rig.client.setHandler { request throws(APIError) in
+                if request.method == "GET" {
+                    return await count.next("item") == 1 ? Data("{}".utf8) : refetched
+                }
+                if request.path.hasSuffix("PlaybackInfo") { return supported }
+                return Data()
+            }
+            await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+            if let expected {
+                XCTAssertEqual(rig.coordinator.failure, expected)
+                XCTAssertTrue(rig.engine.loads.isEmpty)
+            } else {
+                await settle { rig.coordinator.state == .playing }
+            }
+            let calls = await rig.client.calls
+            let gets = calls.filter { $0.method == "GET" }
+            XCTAssertEqual(gets.count, 2)
+            for get in gets {
+                XCTAssertEqual(get.path, "/Users/\(pocUserID)/Items/\(pocItemID)")
+                XCTAssertTrue(get.query.contains { $0.name == "Fields" && $0.value == "MediaStreams" })
+            }
+            XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, expected == nil ? 1 : 0)
+            await rig.coordinator.stop()
+        }
+    }
+
 }
 
 private actor PoCRequestGate {

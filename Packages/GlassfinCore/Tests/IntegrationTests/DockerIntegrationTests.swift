@@ -20,7 +20,7 @@ final class LiveServerTests: XCTestCase {
         var password: String
     }
 
-    /// T08P-05/06/07/08/10/12/13/14: live negotiation and server-side HLS checks; AVPlayer is not involved.
+    /// T08P-05/09/11/12/80/81: live negotiation and server-side HLS checks; AVPlayer is not involved.
     func testT08P_05_seedMediaPlaybackDecisions() async throws {
         let target = try liveTarget()
         let session = try await signIn(target)
@@ -51,8 +51,7 @@ final class LiveServerTests: XCTestCase {
             let detail = try await api.item(itemID: item.Id, userID: session.session.userID)
             let metadata = detail.MediaSources?.first
             let supported = PlaybackDecision.supportsVideo(
-                streams: metadata?.MediaStreams ?? detail.MediaStreams,
-                defaultIndex: metadata?.DefaultVideoStreamIndex)
+                streams: detail.MediaStreams ?? metadata?.MediaStreams)
             if case .unsupported(let failure) = expected {
                 XCTAssertFalse(supported, filename)
                 XCTAssertEqual(failure.localizedKey, PlaybackCopy.unsupportedVideoKey)
@@ -83,7 +82,12 @@ final class LiveServerTests: XCTestCase {
                 XCTAssertFalse(MediaCredentialQuery.contains(url), filename)
                 XCTAssertFalse(VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl), filename)
                 let reasons = VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl)
-                if conversion == .audioTranscode { XCTAssertTrue(reasons.contains("AudioCodecNotSupported"), filename) }
+                if conversion == .audioTranscode {
+                    XCTAssertTrue(reasons.contains("AudioCodecNotSupported"), filename)
+                    XCTAssertTrue(reasons.allSatisfy { $0 == "ContainerNotSupported" || $0.hasPrefix("Audio") })
+                } else {
+                    XCTAssertEqual(reasons, ["ContainerNotSupported"], filename)
+                }
                 try await assertRemuxSession(
                     client: client, server: target.url, identity: identity,
                     itemID: item.Id, source: source, info: info, url: url, conversion: conversion)
@@ -171,7 +175,7 @@ final class LiveServerTests: XCTestCase {
         let TranscodingInfo: Transcode?
     }
 
-    /// TPOC-02/07/10 (server prerequisites): non-admin login, libraries, resume threshold and QC.
+    /// TPOC-02/24/38/39 (server seed prerequisites): non-admin login, libraries, resume threshold and QC.
     func testTPOC_02_seedConfigurationAndNonAdminUser() async throws {
         let target = try liveTarget()
         let admin = try await signIn(target)
@@ -204,7 +208,22 @@ final class LiveServerTests: XCTestCase {
                     URLQueryItem(name: "Recursive", value: "true"),
                     URLQueryItem(name: "IncludeItemTypes", value: "Episode"),
                 ]), as: QueryResultDTO.self)
-        XCTAssertEqual(episodes.TotalRecordCount, 3)
+        XCTAssertEqual(episodes.TotalRecordCount, 4)
+        let seasons = try await viewerClient.send(
+            APIRequest(
+                method: "GET", path: "/Items",
+                query: [
+                    URLQueryItem(name: "Recursive", value: "true"),
+                    URLQueryItem(name: "IncludeItemTypes", value: "Season"),
+                ]), as: QueryResultDTO.self)
+        XCTAssertEqual(seasons.TotalRecordCount, 2)
+        let seasonOne = (episodes.Items ?? []).filter { $0.ParentIndexNumber == 1 }
+        let seasonTwo = (episodes.Items ?? []).filter { $0.ParentIndexNumber == 2 }
+        XCTAssertEqual(seasonOne.compactMap(\.IndexNumber).sorted(), [1, 2, 3])
+        XCTAssertEqual(seasonTwo.compactMap(\.IndexNumber), [1])
+        for episode in seasonOne { XCTAssertEqual(episode.RunTimeTicks ?? 0, 600_000_000, accuracy: 10_000_000) }
+        XCTAssertGreaterThan(seasonTwo.first?.RunTimeTicks ?? 0, 0)
+        XCTAssertLessThan(seasonTwo.first?.RunTimeTicks ?? 0, 100_000_000)
     }
 
     private struct SeedConfiguration: Decodable, Sendable {

@@ -16,7 +16,7 @@ let pocSourceID = "22112233445566778899aabbccddeeff"
 
 func playbackFixture(
     container: String = "mp4", video: String = "h264", audio: String = "aac",
-    direct: Bool = true, transcodingURL: String? = nil
+    direct: Bool = true, transcodingURL: String? = nil, playSessionID: String = "play-session"
 ) throws -> Data {
     var source: [String: Any] = [
         "Id": pocSourceID, "Container": container, "SupportsDirectPlay": direct,
@@ -24,11 +24,12 @@ func playbackFixture(
         "MediaStreams": [["Type": "Video", "Codec": video], ["Type": "Audio", "Codec": audio]],
     ]
     source["TranscodingUrl"] = transcodingURL
-    return try JSONSerialization.data(withJSONObject: ["PlaySessionId": "play-session", "MediaSources": [source]])
+    return try JSONSerialization.data(withJSONObject: ["PlaySessionId": playSessionID, "MediaSources": [source]])
 }
 
 func playbackItemFixture(from info: Data) throws -> Data {
     var item = try JSONSerialization.jsonObject(with: info) as? [String: Any] ?? [:]
+    item["MediaStreams"] = (item["MediaSources"] as? [[String: Any]])?.first?["MediaStreams"]
     item["UserData"] = ["PlaybackPositionTicks": 125_000_000]
     return try JSONSerialization.data(withJSONObject: item)
 }
@@ -157,6 +158,10 @@ final class PlaybackPoCDecisionTests: XCTestCase {
         let url = root.appendingPathComponent("Sources/CoreNetworking/Localizable.xcstrings")
         let catalog = try jsonBody(Data(contentsOf: url))
         let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        XCTAssertEqual(PlaybackCopy.unsupportedVideoKey, "playback.unsupportedVideoFormat")
+        XCTAssertEqual(PlaybackCopy.pinnedHLSKey, "playback.selfSignedRemuxBlocked")
+        XCTAssertNil(strings["playback.error.unsupportedVideo"])
+        XCTAssertNil(strings["playback.error.pinnedHLS"])
         let exactTranslations = [
             PlaybackCopy.unsupportedVideoKey: [
                 "en": "This video format isn't supported yet", "fi": "Tätä videomuotoa ei vielä tueta",
