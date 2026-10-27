@@ -97,6 +97,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         self.init(
             server: server,
@@ -118,6 +119,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         self.init(
             server: server,
             identity: identity,

@@ -49,8 +49,29 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case navLibrary = "design.nav.library"
     case navDetail = "design.nav.detail"
 
+    case searchPrompt = "search.prompt"
+    case searchMovies = "search.movies"
+    case searchSeries = "search.series"
+    case searchEpisodes = "search.episodes"
+    case searchRecent = "search.recent"
+    case searchClearRecent = "search.clearRecent"
+    case searchEmpty = "search.empty"
+    case searchMinimum = "search.minimum"
+    case searchHistoryFailure = "search.historyFailure"
+    case searchBack = "search.back"
+
     var resource: LocalizedStringResource {
         switch self {
+        case .searchPrompt: LocalizedStringResource("search.prompt", bundle: .main)
+        case .searchMovies: LocalizedStringResource("search.movies", bundle: .main)
+        case .searchSeries: LocalizedStringResource("search.series", bundle: .main)
+        case .searchEpisodes: LocalizedStringResource("search.episodes", bundle: .main)
+        case .searchRecent: LocalizedStringResource("search.recent", bundle: .main)
+        case .searchClearRecent: LocalizedStringResource("search.clearRecent", bundle: .main)
+        case .searchEmpty: LocalizedStringResource("search.empty", bundle: .main)
+        case .searchMinimum: LocalizedStringResource("search.minimum", bundle: .main)
+        case .searchHistoryFailure: LocalizedStringResource("search.historyFailure", bundle: .main)
+        case .searchBack: LocalizedStringResource("search.back", bundle: .main)
         case .welcomeTitle: LocalizedStringResource("welcome.title", bundle: .main)
         case .welcomeConnect: LocalizedStringResource("welcome.connect", bundle: .main)
         case .welcomeDesignSystem: LocalizedStringResource("welcome.designSystem", bundle: .main)

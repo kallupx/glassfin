@@ -38,7 +38,8 @@ public enum DTOMapper {
         )
     }
 
-    public static func mediaItem(_ dto: BaseItemDTO, log: any GlassfinLog) -> MediaItem? {
+    public static func mediaItem(_ dto: BaseItemDTO, log: any GlassfinLog, literalMetadata: Bool = false) -> MediaItem?
+    {
         guard let id = dto.Id else { return nil }
         let positionTicks = dto.UserData?.PlaybackPositionTicks ?? 0
         let images = ImageSet(
@@ -58,8 +59,10 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: MetadataSanitizer.plainText(dto.Name ?? ""),
-            overview: dto.Overview.map(MetadataSanitizer.plainText),
+            name: literalMetadata ? MetadataPolicy.clean(dto.Name ?? "") : MetadataSanitizer.plainText(dto.Name ?? ""),
+            overview: literalMetadata
+                ? dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMaxCharacters) }
+                : dto.Overview.map(MetadataSanitizer.plainText),
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,

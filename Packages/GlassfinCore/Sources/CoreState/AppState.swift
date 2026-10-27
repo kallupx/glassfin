@@ -145,6 +145,7 @@ public final class AppState {
     public let userData: UserDataStore
     public let responses: ResponseCache
     public let snapshots: HomeSnapshotStore
+    public let imageDisk: DiskImageCache
     public let images: ImageStore
     public let recentSearches: any RecentSearchStoring
     public let scope: RequestScope
@@ -229,6 +230,7 @@ public final class AppState {
             directory: cacheRoot.appendingPathComponent("images", isDirectory: true),
             byteLimit: CacheBudget.imageDiskBytes
         )
+        self.imageDisk = disk
         let memory = MemoryImageCache(byteLimit: CacheBudget.imageMemoryBytes)
         self.images = ImageStore(memory: memory, disk: disk)
         self.scope = RequestScope()

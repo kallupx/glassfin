@@ -289,6 +289,9 @@ struct AuthRootView: View {
                 }
                 .defaultFocus($focused, flow.focus)
             }
+            Tab(Copy.string(.tabSearch), systemImage: "magnifyingglass", role: .search) {
+                SearchFeatureHost(flow: flow)
+            }
             Tab(AuthCopy.localized(.settings), systemImage: "gear") {
                 VStack(spacing: 16) {
                     Text(verbatim: flow.displayedName)

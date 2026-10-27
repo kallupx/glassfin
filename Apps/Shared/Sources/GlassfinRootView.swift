@@ -7,6 +7,8 @@ struct GlassfinRootView: View {
     var body: some View {
         #if DEBUG
             switch DesignSystemLaunch.screen {
+            case .search:
+                SearchUITestRoot()
             case .welcome:
                 AuthRootView(flow: flow)
             case .focus:
@@ -31,6 +33,7 @@ struct GlassfinRootView: View {
     enum DesignSystemLaunch {
         enum Screen {
             case welcome
+            case search
             case focus
             case error
             case tabs(Int)
@@ -39,6 +42,7 @@ struct GlassfinRootView: View {
 
         static var screen: Screen {
             let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-uitest-search") { return .search }
             if arguments.contains("-uitest-design-system-error") {
                 return .error
             }

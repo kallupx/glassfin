@@ -16,7 +16,9 @@ public struct ItemListDecode: Sendable, Equatable {
 public enum ResilientItemDecoder {
     /// Query results (`Items`) and bare arrays (`/Items/Latest`).
     /// The log line is a fixed sentence plus an index. The payload is not interpolated.
-    public static func mediaItems(from data: Data, log: any GlassfinLog) throws(APIError) -> ItemListDecode {
+    public static func mediaItems(from data: Data, log: any GlassfinLog, literalMetadata: Bool = false) throws(APIError)
+        -> ItemListDecode
+    {
         let json = try jsonObject(data)
         let rawItems: [Any]
         let total: Int?
@@ -32,7 +34,7 @@ public enum ResilientItemDecoder {
         var items: [MediaItem] = []
         var skipped = 0
         for (index, raw) in rawItems.enumerated() {
-            if let item = mediaItem(raw, log: log) {
+            if let item = mediaItem(raw, log: log, literalMetadata: literalMetadata) {
                 items.append(item)
             } else {
                 skipped += 1
@@ -42,7 +44,9 @@ public enum ResilientItemDecoder {
         return ItemListDecode(items: items, totalCount: total, skipped: skipped)
     }
 
-    public static func searchHints(from data: Data, log: any GlassfinLog) throws(APIError) -> [MediaItem] {
+    public static func searchHints(from data: Data, log: any GlassfinLog, literalMetadata: Bool = false)
+        throws(APIError) -> [MediaItem]
+    {
         let json = try jsonObject(data)
         guard let dict = dictionary(json) else { throw APIError.decoding }
         let rawItems = try itemArray(dict["SearchHints"])
@@ -60,7 +64,9 @@ public enum ResilientItemDecoder {
                 MediaItem(
                     id: id,
                     kind: MediaKind.from(serverType: hint.`Type` ?? ""),
-                    name: MetadataSanitizer.plainText(hint.Name ?? "")
+                    name: literalMetadata
+                        ? MetadataPolicy.clean(hint.Name ?? "") : MetadataSanitizer.plainText(hint.Name ?? ""),
+                    images: ImageSet(primaryTag: hint.PrimaryImageTag, thumbTag: hint.ThumbImageTag)
                 )
             )
         }
@@ -81,12 +87,12 @@ public enum ResilientItemDecoder {
         return array
     }
 
-    private static func mediaItem(_ raw: Any, log: any GlassfinLog) -> MediaItem? {
+    private static func mediaItem(_ raw: Any, log: any GlassfinLog, literalMetadata: Bool) -> MediaItem? {
         guard let object = dictionary(raw), JSONSerialization.isValidJSONObject(object),
             let encoded = try? JSONSerialization.data(withJSONObject: object),
             let dto = try? JSONDecoder().decode(BaseItemDTO.self, from: encoded)
         else { return nil }
-        return DTOMapper.mediaItem(dto, log: log)
+        return DTOMapper.mediaItem(dto, log: log, literalMetadata: literalMetadata)
     }
 
     private static func dictionary(_ raw: Any?) -> [String: Any]? {
