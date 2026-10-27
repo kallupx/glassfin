@@ -1164,7 +1164,10 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
         }
 
         fileprivate func assertPinnedLeafAllowsFetchAndMismatchCancels() async throws {
-            let openssl = ["/usr/bin/openssl", "/opt/homebrew/bin/openssl", "/usr/local/bin/openssl"].first {
+            let openssl = [
+                "/opt/homebrew/bin/openssl", "/opt/homebrew/opt/openssl@3/bin/openssl",
+                "/usr/local/bin/openssl", "/usr/local/opt/openssl@3/bin/openssl", "/usr/bin/openssl",
+            ].first {
                 FileManager.default.isExecutableFile(atPath: $0)
             }
             let binary = try XCTUnwrap(openssl, "openssl is required for the pinned leaf fetch")
@@ -1244,23 +1247,42 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
             cert: URL,
             key: URL
         ) async throws -> (process: Process, port: UInt16) {
+            var lastExitStatus: Int32 = 0
+            var lastStandardError = ""
             for _ in 0..<5 {
                 let port = try reservePort()
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: openssl)
                 process.arguments = [
-                    "s_server", "-accept", "127.0.0.1:\(port)", "-cert", cert.path, "-key", key.path,
-                    "-www", "-naccept", "3",
+                    "s_server", "-accept", "\(port)", "-cert", cert.path, "-key", key.path, "-www",
                 ]
                 process.standardOutput = FileHandle.nullDevice
-                process.standardError = FileHandle.nullDevice
+                let standardError = Pipe()
+                process.standardError = standardError
                 try process.run()
+                let errorReader = standardError.fileHandleForReading
+                // Drain throughout the server's lifetime, including after returning a ready process.
+                let errorOutput = Task.detached {
+                    errorReader.readDataToEndOfFile()
+                }
                 if await portAccepts(port, process: process) {
                     return (process, port)
                 }
                 if process.isRunning { process.terminate() }
+                process.waitUntilExit()
+                lastExitStatus = process.terminationStatus
+                let errorData = await errorOutput.value
+                let errorText = String(decoding: errorData, as: UTF8.self)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                lastStandardError = String(errorText.prefix(500))
             }
-            throw URLError(.cannotConnectToHost)
+            throw URLError(
+                .cannotConnectToHost,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "\(openssl) s_server failed after 5 attempts; last exit status: \(lastExitStatus); stderr: \(lastStandardError)"
+                ]
+            )
         }
 
         private func reservePort() throws -> UInt16 {
