@@ -87,9 +87,78 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
     }
 
-    private func launch() -> XCUIApplication {
+    func testT04_34_disabledQuickConnectSkipsMethodAndBackReturnsToAddress() {
+        let app = launch(arguments: ["-uitest-qc-disabled"])
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        field.tap()
+        field.typeText("example.com")
+        app.descendants(matching: .any)["address.continue"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["credentials.root"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["login.root"].exists)
+        save(app.screenshot(), name: "password-quick-connect-disabled")
+        app.descendants(matching: .any)["navigation.back"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["address.root"].waitForExistence(timeout: 10))
+    }
+
+    func testT04_40_expiredCodeOffersFocusedNewCodeButton() {
+        let app = launch(arguments: ["-uitest-qc-expired"])
+        openAddress(app)
+        let field = app.descendants(matching: .any)["address.field"]
+        field.tap()
+        field.typeText("example.com")
+        app.descendants(matching: .any)["address.continue"].tap()
+        let quick = app.descendants(matching: .any)["login.quickConnect"]
+        XCTAssertTrue(quick.waitForExistence(timeout: 10))
+        quick.tap()
+        let renew = app.descendants(matching: .any)["quickconnect.newCode"]
+        XCTAssertTrue(renew.waitForExistence(timeout: 10))
+        #if os(tvOS)
+            XCTAssertTrue(renew.hasFocus)
+        #endif
+        XCTAssertEqual(app.descendants(matching: .any)["address.error"].value as? String, "The code expired")
+        save(app.screenshot(), name: "quick-connect-expired")
+        renew.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["quickconnect.root"].waitForExistence(timeout: 10))
+    }
+
+    func testT04_68_settingsSignOutDefaultsToCancelAndKeepsServer() {
+        let app = launch()
+        openPassword(app)
+        let username = app.descendants(matching: .any)["credentials.username"]
+        username.tap()
+        username.typeText("Ada")
+        let password = app.secureTextFields["credentials.password"]
+        password.tap()
+        password.typeText("sample")
+        app.descendants(matching: .any)["credentials.signIn"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
+        // Settings is a catalog key used for the tab label on both platforms.
+        app.descendants(matching: .any).matching(identifier: "Settings").firstMatch.tap()
+        let signOut = app.descendants(matching: .any)["settings.signOut"]
+        XCTAssertTrue(signOut.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["settings.version"].exists)
+        save(app.screenshot(), name: "settings")
+        signOut.tap()
+        let cancel = app.descendants(matching: .any)["logout.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        #if os(tvOS)
+            XCTAssertTrue(cancel.hasFocus)
+        #endif
+        save(app.screenshot(), name: "sign-out-confirmation")
+        cancel.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
+        app.descendants(matching: .any).matching(identifier: "Settings").firstMatch.tap()
+        XCTAssertTrue(signOut.waitForExistence(timeout: 10))
+        signOut.tap()
+        app.descendants(matching: .any)["logout.confirm"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["login.serverName"].exists)
+    }
+
+    private func launch(arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments.append(contentsOf: ["-uitest-mock-server", "-uitest-reset"])
+        app.launchArguments.append(contentsOf: ["-uitest-mock-server", "-uitest-reset"] + arguments)
         app.launch()
         return app
     }

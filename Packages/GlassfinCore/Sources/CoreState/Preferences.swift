@@ -31,6 +31,7 @@ public struct StoredUser: Codable, Sendable, Equatable {
     public var isAdministrator: Bool
     public var audioLanguage: String?
     public var subtitleLanguage: String?
+    public var capabilitiesRetryPending: Bool?
 
     public init(
         serverID: String,

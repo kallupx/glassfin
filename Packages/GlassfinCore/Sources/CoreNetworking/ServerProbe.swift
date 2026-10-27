@@ -26,6 +26,7 @@ public enum ServerProbeOutcome: Sendable, Equatable {
     case unsupported(version: String, server: ServerInfo)
     case setupIncomplete(address: URL)
     case invalidAddress
+    case userinfoRejected
     case cancelled
 }
 
@@ -69,6 +70,8 @@ public enum ProbeErrorCopy {
             return .publicAddressRequiresHTTPS
         case .invalidAddress:
             return .invalidAddress
+        case .userinfoRejected:
+            return .userinfoRejected
         case .unsupported:
             return .unsupportedServer
         case .setupIncomplete:
@@ -85,14 +88,14 @@ public enum ProbeErrorCopy {
         case .notFound(let detail), .notJellyfin(let detail):
             return detail.httpSkippedByPolicy
         case .ready, .needsCleartext, .needsCertificate, .publicHTTPRejected, .unsupported, .setupIncomplete,
-            .invalidAddress, .cancelled:
+            .invalidAddress, .userinfoRejected, .cancelled:
             return false
         }
     }
 }
 
 /// Walks ``ServerAddressCandidates`` with a 5 second attempt cap and a 20 second overall cap.
-/// DNS and TLS stop the walk. Only connection refusal and timeout try the next candidate.
+/// DNS and TLS stop the walk. Connection refusal, timeout, and non-Jellyfin responses try the next candidate.
 /// HTTP to a public host is never requested.
 public struct ServerProbe: Sendable {
     public var client: any ServerCandidateClient
@@ -104,6 +107,7 @@ public struct ServerProbe: Sendable {
     }
 
     public func run(address: String) async -> ServerProbeOutcome {
+        if ServerAddressCandidates.containsUserinfo(address) { return .userinfoRejected }
         let plan = ServerAddressCandidates.expand(address)
         if plan.invalid { return .invalidAddress }
         if plan.explicitPublicHTTP { return .publicHTTPRejected }
@@ -145,7 +149,7 @@ public struct ServerProbe: Sendable {
             case .tls(let presentation):
                 return .needsCertificate(presentation, url: candidate.url)
             case .transportSecurity:
-                return .publicHTTPRejected
+                return .notFound(detail)
             case .cancelled:
                 return .cancelled
             }

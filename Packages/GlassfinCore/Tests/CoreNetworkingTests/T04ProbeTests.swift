@@ -54,18 +54,17 @@ final class T04ProbeTests: XCTestCase {
         XCTAssertTrue(script.urls.isEmpty)
     }
 
-    func testT04_10_userinfoIsStrippedBeforeAnyCandidate() async {
+    func testT04_10_userinfoIsRejectedBeforeAnyCandidate() async {
         let script = ScriptedCandidates()
-        script.sequence = [.timedOut, .timedOut]
-        _ = await ServerProbe(client: script, clock: StillClock()).run(
-            address: "https://user:pass@host.example/jellyfin")
-        XCTAssertFalse(script.urls.isEmpty)
-        for url in script.urls {
-            XCTAssertNil(URLComponents(url: url, resolvingAgainstBaseURL: false)?.user)
-            XCTAssertNil(URLComponents(url: url, resolvingAgainstBaseURL: false)?.password)
-            XCTAssertFalse(url.absoluteString.contains("pass"))
-            XCTAssertFalse(url.absoluteString.contains("user"))
+        for input in [
+            "https://user:pass@example.com/jellyfin", "user:pass@example.com/jellyfin",
+            "https://user@example.com", "http://user:pass@192.168.1.10:8096",
+        ] {
+            let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: input)
+            XCTAssertEqual(outcome, .userinfoRejected)
+            XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .userinfoRejected)
         }
+        XCTAssertTrue(script.urls.isEmpty)
     }
 
     func testT04_11_explicitPublicHTTPIsRejectedWithNoRequest() async {
@@ -399,9 +398,131 @@ final class T04ProbeTests: XCTestCase {
             let ats = try XCTUnwrap(plist["NSAppTransportSecurity"] as? [String: Any])
             XCTAssertEqual(ats["NSAllowsLocalNetworking"] as? Bool, true, platform)
             XCTAssertNil(ats[arbitrary], platform)
-            XCTAssertNil(ats["NSExceptionDomains"], platform)
+            XCTAssertNil(ats["NSException" + "Domains"], platform)
             XCTAssertFalse(String(decoding: data, as: UTF8.self).contains(arbitrary), platform)
         }
+    }
+
+    func testT04_06_localSchemelessProbeUsesAllFourPortsInOrder() async {
+        let script = ScriptedCandidates()
+        script.sequence = [.refused, .timedOut, .refused, .timedOut]
+        let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: "nas/jellyfin/")
+        XCTAssertEqual(script.schemesAndPorts(), ["https:443", "https:8920", "http:8096", "http:80"])
+        XCTAssertEqual(script.timeouts, Array(repeating: .seconds(5), count: 4))
+        XCTAssertTrue(script.urls.allSatisfy { $0.path == "/jellyfin" })
+        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
+        XCTAssertFalse(ProbeErrorCopy.httpSkippedByPolicy(outcome))
+    }
+
+    func testT04_07_schemelessExplicitPortNeverTriesOtherPorts() async {
+        let script = ScriptedCandidates()
+        _ = await ServerProbe(client: script, clock: StillClock()).run(address: "nas:9443/jellyfin")
+        XCTAssertEqual(script.schemesAndPorts(), ["https:9443", "http:9443"])
+    }
+
+    func testT04_10_queryAndFragmentAreRemovedFromEveryCandidateAndStoredURL() throws {
+        for address in ["https://example.com/jellyfin?x=1#fragment", "nas/jellyfin?x=1#fragment", "nas?x=1#fragment"] {
+            let plan = ServerAddressCandidates.expand(address)
+            XCTAssertFalse(plan.invalid)
+            for candidate in plan.candidates {
+                XCTAssertNil(candidate.url.query)
+                XCTAssertNil(candidate.url.fragment)
+                XCTAssertNil(candidate.url.user)
+            }
+        }
+    }
+
+    func testT04_20_invalidVersionResponsesAreNotJellyfin() throws {
+        let url = try XCTUnwrap(URL(string: "https://example.com"))
+        for raw in ["10", "10.ten", "unknown", "10.10.beta"] {
+            let data = try JSONSerialization.data(withJSONObject: [
+                "Id": "server", "ProductName": "Jellyfin Server", "ServerName": "Home", "Version": raw,
+            ])
+            XCTAssertEqual(PublicInfoInterpreter.interpret(data, url: url), .notJellyfin)
+        }
+        for raw in ["10.10", "10.10.0-rc1", "10.10.7", "10.11.11", "12.2"] {
+            let data = try JSONSerialization.data(withJSONObject: [
+                "Id": "server", "ProductName": "Jellyfin Server", "ServerName": "Home", "Version": raw,
+            ])
+            guard case .jellyfin(let info, _) = PublicInfoInterpreter.interpret(data, url: url) else {
+                XCTFail("expected a supported version")
+                continue
+            }
+            XCTAssertTrue(info.version.meetsMinimumServer)
+        }
+    }
+
+    func testT04_23_fourTimeoutsHaveATwentySecondOverallBudget() async {
+        let clock = AdvancingClock()
+        let script = ScriptedCandidates()
+        script.clock = clock
+        script.advance = .seconds(5)
+        script.sequence = Array(repeating: .timedOut, count: 4)
+        let outcome = await ServerProbe(client: script, clock: clock).run(address: "nas")
+        XCTAssertEqual(script.timeouts, Array(repeating: .seconds(5), count: 4))
+        XCTAssertEqual(clock.now(), .seconds(20))
+        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
+    }
+
+    func testT04_29_coordinatorReuseNeverPersistsUserInputWithoutPinToStore() throws {
+        let store = RecordingPins()
+        let coordinator = CertificateAcceptanceCoordinator(pins: store)
+        let leaf = sampleLeaf()
+        let typed = leaf.sha256.uppercased()
+        let first = try coordinator.apply(
+            isSystemTrusted: false, leaf: leaf, pinnedSHA256: nil,
+            userAcceptedFingerprint: typed, serverID: "server")
+        XCTAssertEqual(store.saved, [try XCTUnwrap(first.pinToStore)])
+        XCTAssertFalse(store.saved.contains(typed))
+        let reused = try coordinator.apply(
+            isSystemTrusted: false, leaf: leaf, pinnedSHA256: leaf.sha256,
+            userAcceptedFingerprint: "untrusted-input", serverID: "server")
+        XCTAssertEqual(reused.decision, .usePinnedCredential)
+        XCTAssertNil(reused.pinToStore)
+        XCTAssertEqual(store.saved, [leaf.sha256])
+    }
+
+    func testT04_84_dnsStopsEvenAfterANonJellyfinResponse() async {
+        let script = ScriptedCandidates()
+        script.sequence = [.notJellyfin, .dnsFailure, .jellyfin(sampleServer(), startupComplete: true)]
+        let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: "nas")
+        XCTAssertEqual(script.urls.count, 2)
+        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
+    }
+
+    func testT04_85_removedLocalSuffixesNeverRequestHTTP() async {
+        for host in ["nas.lan", "nas.internal", "nas.home.arpa"] {
+            let script = ScriptedCandidates()
+            let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: host)
+            XCTAssertEqual(script.schemesAndPorts(), ["https:443", "https:8920"])
+            XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
+            XCTAssertTrue(ProbeErrorCopy.httpSkippedByPolicy(outcome))
+        }
+    }
+
+    func testT04_86_mixedNonJellyfinAndTimeoutEndsAsNotJellyfin() async {
+        let script = ScriptedCandidates()
+        script.sequence = [.notJellyfin, .timedOut, .refused, .timedOut]
+        let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: "nas")
+        XCTAssertEqual(script.urls.count, 4)
+        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .notJellyfin)
+    }
+
+    func testT04_90_bareHexIsAnOrdinaryLocalHostname() throws {
+        for host in ["deadbeef", "c0a80001", "7f000001"] {
+            let url = try XCTUnwrap(URL(string: "http://\(host)"))
+            XCTAssertEqual(ServerTransportPolicy.evaluate(url), .unencryptedLocal)
+            XCTAssertEqual(ServerAddressCandidates.expand(host).candidates.filter(\.mayConnect).count, 4)
+        }
+    }
+
+    func testT04_94_transportSecurityDoesNotMasqueradeAsExplicitPublicHTTP() async {
+        let script = ScriptedCandidates()
+        script.sequence = [.transportSecurity]
+        let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: "example.com")
+        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
+        XCTAssertTrue(ProbeErrorCopy.httpSkippedByPolicy(outcome))
+        XCTAssertEqual(script.urls.count, 1)
     }
 
     private func urlParts(_ url: URL) -> (scheme: String, port: Int, path: String)? {

@@ -60,6 +60,7 @@ final class T02BehaviorTests: XCTestCase {
                 format: try englishCatalogText(for: key), "10.9.11", ServerVersionGate.dotted(.minimumJellyfin)))
         XCTAssertTrue(message.contains("10.9.11"))
         XCTAssertTrue(message.contains(ServerVersionGate.dotted(.minimumJellyfin)))
+        XCTAssertEqual(ServerVersionGate.dotted(.minimumJellyfin), "10.10.0")
         let serverVersionRange = try XCTUnwrap(message.range(of: "10.9.11"))
         let minimumVersionRange = try XCTUnwrap(message.range(of: ServerVersionGate.dotted(.minimumJellyfin)))
         XCTAssertLessThan(serverVersionRange.lowerBound, minimumVersionRange.lowerBound)

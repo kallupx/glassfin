@@ -19,6 +19,7 @@ search() {
 }
 
 search 'NSAllowsArbitraryLoads' 'NSAllowsArbitraryLoads is not allowed'
+search 'NSExceptionDomains' 'ATS exception domains are not allowed'
 search 'X-Emby-Token' 'legacy X-Emby-Token header'
 search 'X-Emby-Authorization' 'legacy X-Emby-Authorization header'
 search 'X-MediaBrowser-Token' 'legacy X-MediaBrowser-Token header'

@@ -56,9 +56,7 @@ final class TrustCapture: NSObject, URLSessionTaskDelegate, @unchecked Sendable 
     private var stored: CertificatePresentation?
 
     var leaf: CertificatePresentation? {
-        lock.lock()
-        defer { lock.unlock() }
-        return stored
+        lock.withLock { stored }
     }
 
     func urlSession(
@@ -73,9 +71,7 @@ final class TrustCapture: NSObject, URLSessionTaskDelegate, @unchecked Sendable 
                 return (.performDefaultHandling, nil)
             }
             if let presentation = Self.leaf(from: trust) {
-                lock.lock()
-                stored = presentation
-                lock.unlock()
+                lock.withLock { stored = presentation }
             }
             var error: CFError?
             if SecTrustEvaluateWithError(trust, &error) {
