@@ -5,7 +5,8 @@ import Foundation
 import XCTest
 
 final class T06ImageStoreTests: XCTestCase {
-    func testT06_21_diskFilenameIsTheStableSHA256AndBytesRoundTrip() async throws {
+    // T06-72: canonical spec/TESTPLAN-M06.md.
+    func testT06_72_diskFilenameIsTheStableSHA256AndBytesRoundTrip() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let resource = ImageResource(
@@ -22,7 +23,8 @@ final class T06ImageStoreTests: XCTestCase {
         XCTAssertTrue(resource.cacheKey.allSatisfy(\.isHexDigit))
     }
 
-    func testT06_22_loaderAndDiskRejectOversizedImageWithoutCaching() async throws {
+    // T06-82: canonical spec/TESTPLAN-M06.md.
+    func testT06_82_loaderAndDiskRejectOversizedImageWithoutCaching() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let resource = ImageResource(

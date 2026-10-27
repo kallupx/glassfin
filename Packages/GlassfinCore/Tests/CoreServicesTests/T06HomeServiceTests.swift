@@ -6,7 +6,8 @@ import GlassfinServices
 import XCTest
 
 final class T06HomeServiceTests: XCTestCase {
-    func testT06_01_homeEndpointParametersMatchSpec() async throws {
+    // T06-06, T06-07, T06-08: canonical endpoint parameters.
+    func testT06_06_homeEndpointParametersMatchSpec() async throws {
         let client = MockAPIClient { _ in Data("[]".utf8) }
         let service = JellyfinLibraryService(client: client)
         _ = try await service.resume(limit: 20)

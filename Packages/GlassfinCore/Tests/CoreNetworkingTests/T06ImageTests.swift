@@ -13,7 +13,8 @@ final class T06ImageTests: XCTestCase {
         serverID: "server", itemID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", type: .primary,
         tag: "a&b?#", width: 250, height: 375)
 
-    func testT06_20_imageURLHasNoCredentialQueryAndRequestHasAuthorization() throws {
+    // T06-71: canonical spec/TESTPLAN-M06.md.
+    func testT06_71_imageURLHasNoCredentialQueryAndRequestHasAuthorization() throws {
         let client = HTTPJellyfinClient(
             server: try XCTUnwrap(URL(string: "https://media.example/jellyfin")),
             identity: ClientIdentity(deviceName: "TV", deviceID: "device", version: "1", token: "secret"))
@@ -27,7 +28,8 @@ final class T06ImageTests: XCTestCase {
         XCTAssertEqual(client.session.configuration.urlCache, nil)
     }
 
-    func testT06_20_inheritedCredentialQueriesAreRejected() throws {
+    // T06-71: canonical spec/TESTPLAN-M06.md.
+    func testT06_71_inheritedCredentialQueriesAreRejected() throws {
         for name in ["token", "Token", "ApiKey", "api" + "_key"] {
             let server = try XCTUnwrap(URL(string: "https://media.example?\(name)=secret"))
             let client = HTTPJellyfinClient(
@@ -37,7 +39,8 @@ final class T06ImageTests: XCTestCase {
         }
     }
 
-    func testT06_21_imageCacheKeyIsStableSHA256OfIdentityTuple() {
+    // T06-72: canonical spec/TESTPLAN-M06.md.
+    func testT06_72_imageCacheKeyIsStableSHA256OfIdentityTuple() {
         let expected = CertificateFingerprint.sha256Hex(
             Data("6:server32:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7:Primary5:a&b?#3:2503:375".utf8))
         XCTAssertEqual(resource.cacheKey, expected)
@@ -48,7 +51,8 @@ final class T06ImageTests: XCTestCase {
         XCTAssertNotEqual(resource.cacheKey, other.cacheKey)
     }
 
-    func testT06_22_imageByteLimitRejectsOversize() throws {
+    // T06-82: canonical spec/TESTPLAN-M06.md.
+    func testT06_82_imageByteLimitRejectsOversize() throws {
         try ImageDataPolicy.validate(Data(count: MetadataPolicy.imageMaxBytes))
         XCTAssertThrowsError(try ImageDataPolicy.validate(Data(count: MetadataPolicy.imageMaxBytes + 1))) {
             XCTAssertEqual($0 as? ImageDataError, .oversized)

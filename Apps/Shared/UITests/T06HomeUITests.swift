@@ -2,7 +2,8 @@ import XCTest
 
 @MainActor
 final class T06HomeUITests: XCTestCase {
-    func testT06_01_allRowsAndLibraryTabsExist() {
+    // T06-09: canonical spec/TESTPLAN-M06.md.
+    func testT06_09_allRowsAndLibraryTabsExist() {
         let app = launch()
         require(element(app, "home.resume"))
         require(element(app, "home.nextUp"))
@@ -18,20 +19,23 @@ final class T06HomeUITests: XCTestCase {
         save(app, name: "home-latest")
     }
 
-    func testT06_03_emptyLibraryHasGuidanceAndRetry() {
+    // T06-04: canonical spec/TESTPLAN-M06.md.
+    func testT06_04_emptyLibraryHasGuidanceAndRetry() {
         let app = launch("-uitest-home-empty")
         require(element(app, "home.empty"))
         require(element(app, "home.empty.retry"))
     }
 
-    func testT06_04_partialErrorKeepsOtherRowsAndHasSectionRetry() {
+    // T06-13: canonical spec/TESTPLAN-M06.md.
+    func testT06_13_partialErrorKeepsOtherRowsAndHasSectionRetry() {
         let app = launch("-uitest-home-partial")
         require(element(app, "home.resume.retry"))
         require(element(app, "home.nextUp"))
         XCTAssertFalse(element(app, "home.error").exists)
     }
 
-    func testT06_13_cachedServerDownKeepsCardsAndNonFocusableBanner() {
+    // T06-56: canonical spec/TESTPLAN-M06.md.
+    func testT06_56_cachedServerDownKeepsCardsAndNonFocusableBanner() {
         let app = launch("-uitest-home-cached-down")
         require(element(app, "home.resume.item.00000000000000000000000000000001"))
         require(element(app, "home.banner"))
@@ -42,7 +46,8 @@ final class T06HomeUITests: XCTestCase {
         save(app, name: "home-cached-down")
     }
 
-    func testT06_14_serverDownStillAllowsSettingsAndSignOut() {
+    // T06-46: canonical spec/TESTPLAN-M06.md.
+    func testT06_46_serverDownStillAllowsSettingsAndSignOut() {
         let app = launch("-uitest-home-down")
         require(element(app, "home.error"))
         activate(element(app, "design.tab.settings"), in: app)
@@ -52,7 +57,8 @@ final class T06HomeUITests: XCTestCase {
     }
 
     #if os(tvOS)
-        func testT06_09_resumeFirstCardHasDefaultFocusAndDetailBackRestoresIt() {
+        // T06-01, T06-31: default focus and detail/back navigation.
+        func testT06_01_resumeFirstCardHasDefaultFocusAndDetailBackRestoresIt() {
             let app = launch()
             let first = element(app, "home.resume.item.00000000000000000000000000000001")
             focused(first)
@@ -65,12 +71,14 @@ final class T06HomeUITests: XCTestCase {
             focused(second)
         }
 
-        func testT06_09_nextUpGetsDefaultFocusWhenResumeIsEmpty() {
+        // T06-02: canonical spec/TESTPLAN-M06.md.
+        func testT06_02_nextUpGetsDefaultFocusWhenResumeIsEmpty() {
             let app = launch("-uitest-home-next-only")
             focused(element(app, "home.nextUp.item.00000000000000000000000000000015"))
         }
 
-        func testT06_09_backgroundRefreshKeepsTheFocusedItem() {
+        // T06-64: canonical spec/TESTPLAN-M06.md.
+        func testT06_64_backgroundRefreshKeepsTheFocusedItem() {
             let app = launch("-uitest-home-refresh")
             let first = element(app, "home.resume.item.00000000000000000000000000000001")
             focused(first)
@@ -81,7 +89,8 @@ final class T06HomeUITests: XCTestCase {
             focused(second)
         }
 
-        func testT06_10_playPauseUsesFocusedResumePosition() {
+        // T06-32: canonical spec/TESTPLAN-M06.md.
+        func testT06_32_playPauseUsesFocusedResumePosition() {
             let app = launch()
             focused(element(app, "home.resume.item.00000000000000000000000000000001"))
             XCUIRemote.shared.press(.playPause)
@@ -90,7 +99,8 @@ final class T06HomeUITests: XCTestCase {
             XCTAssertEqual(target.value as? String, "1200000000")
         }
 
-        func testT06_17_longPressShowsContextActions() {
+        // T06-34: canonical spec/TESTPLAN-M06.md.
+        func testT06_34_longPressShowsContextActions() {
             let app = launch()
             focused(element(app, "home.resume.item.00000000000000000000000000000001"))
             XCUIRemote.shared.press(.select, forDuration: 1.5)
@@ -102,7 +112,8 @@ final class T06HomeUITests: XCTestCase {
         }
     #endif
 
-    func testT06_19_accessibilityScreenshots() {
+    // T06-70: canonical spec/TESTPLAN-M06.md.
+    func testT06_70_accessibilityScreenshots() {
         let app = launch("-uitest-home-reduce-transparency", "-uitest-home-cached-down")
         require(element(app, "home.banner"))
         save(app, name: "home-reduce-transparency")

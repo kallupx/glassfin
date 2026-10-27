@@ -7,7 +7,8 @@ import XCTest
 
 @MainActor
 final class T06HomeSnapshotTests: XCTestCase {
-    func testT06_19_homeDefaultAndOpaqueBannerAt1080And4K() async throws {
+    // T06-70: canonical spec/TESTPLAN-M06.md.
+    func testT06_70_homeDefaultAndOpaqueBannerAt1080And4K() async throws {
         let secure = InMemorySecureStore()
         let settings = InMemorySettingsStore()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

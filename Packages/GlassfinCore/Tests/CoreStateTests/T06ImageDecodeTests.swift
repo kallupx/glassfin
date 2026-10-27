@@ -7,7 +7,8 @@
     import XCTest
 
     final class T06ImageDecodeTests: XCTestCase {
-        func testT06_22_decoderDownsamplesToDisplayedPixelSize() async throws {
+        // T06-80: canonical spec/TESTPLAN-M06.md.
+        func testT06_80_decoderDownsamplesToDisplayedPixelSize() async throws {
             let context = try XCTUnwrap(
                 CGContext(
                     data: nil, width: 1600, height: 800, bitsPerComponent: 8, bytesPerRow: 0,

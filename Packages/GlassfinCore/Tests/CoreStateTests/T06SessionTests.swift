@@ -6,7 +6,8 @@ import XCTest
 
 @MainActor
 final class T06SessionTests: XCTestCase {
-    func testT06_16_image401CancelsOtherRequestsAndDoesNotRetry() async throws {
+    // T06-51: canonical spec/TESTPLAN-M06.md.
+    func testT06_51_image401CancelsOtherRequestsAndDoesNotRetry() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()

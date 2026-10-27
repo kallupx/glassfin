@@ -95,8 +95,8 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
-    /// T06-01, T06-17. Home endpoints and reset-position semantics on the disposable server.
-    func testT06_01_homeEndpointsAndResetPosition() async throws {
+    // T06-37: canonical spec/TESTPLAN-M06.md.
+    func testT06_37_homeEndpointsAndResetPosition() async throws {
         let target = try liveTarget()
         let auth = try await signIn(target)
         let identity = ClientIdentity(

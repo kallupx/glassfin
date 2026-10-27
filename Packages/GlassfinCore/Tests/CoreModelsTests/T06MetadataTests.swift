@@ -2,13 +2,15 @@ import CoreModels
 import XCTest
 
 final class T06MetadataTests: XCTestCase {
-    func testT06_23_metadataPreservesLiteralMarkupAndEntities() {
+    // T06-73: canonical spec/TESTPLAN-M06.md.
+    func testT06_73_metadataPreservesLiteralMarkupAndEntities() {
         let source = "\u{202e}<b>x</b>&amp;<script>x</script>\u{0007}"
         XCTAssertEqual(MetadataPolicy.clean(source, limit: MetadataPolicy.nameMax), "<b>x</b>&amp;<script>x</script>")
         XCTAssertEqual(MetadataSanitizer.plainText(source), "<b>x</b>&amp;<script>x</script>")
     }
 
-    func testT06_24_limitsCountCleanedGraphemeClusters() {
+    // T06-73: canonical spec/TESTPLAN-M06.md.
+    func testT06_73_limitsCountCleanedGraphemeClusters() {
         let pair = "👩‍👩‍👧‍👦e\u{0301}"
         for limit in [
             MetadataPolicy.nameMax, MetadataPolicy.overviewMax, MetadataPolicy.taglineMax,

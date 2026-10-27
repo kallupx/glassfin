@@ -4,7 +4,8 @@ import Foundation
 import XCTest
 
 final class T06SocketTests: XCTestCase {
-    func testT06_16_socket401StopsWithoutReconnect() async throws {
+    // T06-51: canonical spec/TESTPLAN-M06.md.
+    func testT06_51_socket401StopsWithoutReconnect() async throws {
         let sockets = UnauthorizedSocketFactory()
         let request = try SocketRequestBuilder.make(
             server: try XCTUnwrap(URL(string: "https://media.example")),

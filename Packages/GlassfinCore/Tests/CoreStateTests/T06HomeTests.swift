@@ -7,7 +7,8 @@ import XCTest
 
 @MainActor
 final class T06HomeTests: XCTestCase {
-    func testT06_01_videoLibrariesKeepServerOrderAndSeparateLatestRows() async throws {
+    // T06-08: canonical spec/TESTPLAN-M06.md.
+    func testT06_08_videoLibrariesKeepServerOrderAndSeparateLatestRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -29,7 +30,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(home.nextUp.value?.count, 1)
     }
 
-    func testT06_02_slowResumeDoesNotBlockOtherRows() async throws {
+    // T06-12: canonical spec/TESTPLAN-M06.md.
+    func testT06_12_slowResumeDoesNotBlockOtherRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -45,7 +47,8 @@ final class T06HomeTests: XCTestCase {
         await waitUntil { !home.resume.isLoading }
     }
 
-    func testT06_03_emptyAndUnknownLibraries() async throws {
+    // T06-04: canonical spec/TESTPLAN-M06.md.
+    func testT06_04_emptyAndUnknownLibraries() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -57,7 +60,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertFalse(HomeMetadata.isVideoLibrary(Library(id: Sample.library, name: "", collectionType: "books")))
     }
 
-    func testT06_04_sectionFailureAndTargetedRetryLeaveOtherRowsVisible() async throws {
+    // T06-14: canonical spec/TESTPLAN-M06.md.
+    func testT06_14_sectionFailureAndTargetedRetryLeaveOtherRowsVisible() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -77,7 +81,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(h.library.nextCallCount(), calls)
     }
 
-    func testT06_04_latestFailureIsIsolatedToItsLibrary() async throws {
+    // T06-13: canonical spec/TESTPLAN-M06.md.
+    func testT06_13_latestFailureIsIsolatedToItsLibrary() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -94,7 +99,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(home.latestRows[1].state.value?.first?.id, Sample.movie)
     }
 
-    func testT06_03_decodeFailureFinishesWithoutAnEndlessSkeleton() async throws {
+    // T06-19: canonical spec/TESTPLAN-M06.md.
+    func testT06_19_decodeFailureFinishesWithoutAnEndlessSkeleton() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -105,7 +111,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertTrue(home.isEmpty)
     }
 
-    func testT06_05_playbackStopProjectsImmediatelyAndRefetchesPersonalRows() async throws {
+    // T06-57: canonical spec/TESTPLAN-M06.md.
+    func testT06_57_playbackStopProjectsImmediatelyAndRefetchesPersonalRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -122,7 +129,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertLessThan(started.duration(to: .now), .seconds(2))
     }
 
-    func testT06_06_remoteUserDataProjectsOnAllRows() async throws {
+    // T06-60: canonical spec/TESTPLAN-M06.md.
+    func testT06_60_remoteUserDataProjectsOnAllRows() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -144,7 +152,8 @@ final class T06HomeTests: XCTestCase {
         events.stop()
     }
 
-    func testT06_07_foregroundRefreshOnlyAfterSixtySeconds() async throws {
+    // T06-62: canonical spec/TESTPLAN-M06.md.
+    func testT06_62_foregroundRefreshOnlyAfterSixtySeconds() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -158,7 +167,8 @@ final class T06HomeTests: XCTestCase {
         await waitUntil { h.library.resumeCallCount() == 2 }
     }
 
-    func testT06_08_libraryChangeIsDebouncedAndRefetchesLatestOnly() async throws {
+    // T06-61: canonical spec/TESTPLAN-M06.md.
+    func testT06_61_libraryChangeIsDebouncedAndRefetchesLatestOnly() async throws {
         let h = Harness.make(suspendingClock: true)
         defer { h.cleanup() }
         try h.signIn()
@@ -175,7 +185,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(h.library.resumeCallCount(), 1)
     }
 
-    func testT06_09_focusRemainsOnSameItemOrSameRowNeighbor() {
+    // T06-65: canonical spec/TESTPLAN-M06.md.
+    func testT06_65_focusRemainsOnSameItemOrSameRowNeighbor() {
         let a = Sample.movie()
         let b = Sample.movie(id: Sample.other)
         let c = Sample.movie(id: Sample.season)
@@ -185,7 +196,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertNil(HomeFocus.restoredID(a.id, old: [a], new: []))
     }
 
-    func testT06_10_playRequestUsesSafeResumePosition() {
+    // T06-32: canonical spec/TESTPLAN-M06.md.
+    func testT06_32_playRequestUsesSafeResumePosition() {
         var item = Sample.movie()
         item.userData.playbackPosition = .seconds(120)
         XCTAssertEqual(HomePlaybackRequest(item: item).position, .seconds(120))
@@ -193,7 +205,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(HomePlaybackRequest(item: item).position, .zero)
     }
 
-    func testT06_11_cancelledLoadCannotPublishLateResults() async throws {
+    // T06-66: canonical spec/TESTPLAN-M06.md.
+    func testT06_66_cancelledLoadCannotPublishLateResults() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -208,7 +221,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertNil(home.resume.value)
     }
 
-    func testT06_11_disappearanceAlsoCancelsSectionRetry() async throws {
+    // T06-66: canonical spec/TESTPLAN-M06.md.
+    func testT06_66_disappearanceAlsoCancelsSectionRetry() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -223,7 +237,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertNil(home.resume.value)
     }
 
-    func testT06_12_snapshotPreservesLibraryGroupingAndRejectsOtherUser() async throws {
+    // T06-44: canonical spec/TESTPLAN-M06.md.
+    func testT06_44_snapshotPreservesLibraryGroupingAndRejectsOtherUser() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -246,7 +261,8 @@ final class T06HomeTests: XCTestCase {
         h.library.gate?.releaseAll()
     }
 
-    func testT06_13_serverDownRetainsVisibleContentAndBanner() async throws {
+    // T06-49: canonical spec/TESTPLAN-M06.md.
+    func testT06_49_serverDownRetainsVisibleContentAndBanner() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -263,7 +279,8 @@ final class T06HomeTests: XCTestCase {
         guard case .signedIn = h.app.phase else { return XCTFail("network error ended session") }
     }
 
-    func testT06_14_noContentUsesExistingServerDownTitleKey() async throws {
+    // T06-46: canonical spec/TESTPLAN-M06.md.
+    func testT06_46_noContentUsesExistingServerDownTitleKey() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -275,7 +292,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertNotNil(try h.secure.data(for: Sample.account()))
     }
 
-    func testT06_15_pingRecoversAndKeepsCachedContent() async throws {
+    // T06-48: canonical spec/TESTPLAN-M06.md.
+    func testT06_48_pingRecoversAndKeepsCachedContent() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -290,7 +308,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertTrue(home.hasContent)
     }
 
-    func testT06_15_automaticPingRunsAtTenSecondsAndRecovers() async throws {
+    // T06-48: canonical spec/TESTPLAN-M06.md.
+    func testT06_48_automaticPingRunsAtTenSecondsAndRecovers() async throws {
         let h = Harness.make(automaticPing: true, suspendingClock: true)
         defer { h.cleanup() }
         try h.signIn()
@@ -302,7 +321,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(h.pinger.calls(), 1)
     }
 
-    func testT06_16_latest401EndsSessionOnceEvenWhenOtherRowsSucceed() async throws {
+    // T06-51: canonical spec/TESTPLAN-M06.md.
+    func testT06_51_latest401EndsSessionOnceEvenWhenOtherRowsSucceed() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -313,7 +333,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(h.secure.removed().count, 1)
     }
 
-    func testT06_17_actionsCommitAndFailedEditsRestoreTheRow() async throws {
+    // T06-41: canonical spec/TESTPLAN-M06.md.
+    func testT06_41_actionsCommitAndFailedEditsRestoreTheRow() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -334,7 +355,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(home.resume.value, [])
     }
 
-    func testT06_05_playedItemStaysRemovedDuringAStaleServerResponse() async throws {
+    // T06-57: canonical spec/TESTPLAN-M06.md.
+    func testT06_57_playedItemStaysRemovedDuringAStaleServerResponse() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -347,7 +369,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(home.resume.value, [])
     }
 
-    func testT06_23_metadataIsCleanedThroughLiveAndCachedViewModels() async throws {
+    // T06-73: canonical spec/TESTPLAN-M06.md.
+    func testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
@@ -376,7 +399,8 @@ final class T06HomeTests: XCTestCase {
         h.library.gate?.releaseAll()
     }
 
-    func testT06_26_backdropDebouncePublishesOnlyTheLastFocusAndCancels() async {
+    // T06-24: canonical spec/TESTPLAN-M06.md.
+    func testT06_24_backdropDebouncePublishesOnlyTheLastFocusAndCancels() async {
         let clock = SuspendingClock()
         let backdrop = HomeBackdropModel(clock: clock)
         backdrop.focus(Sample.movie())
@@ -396,7 +420,8 @@ final class T06HomeTests: XCTestCase {
         XCTAssertEqual(HomePolicy.backdropFade(reduceMotion: false), HomePolicy.backdropFade)
     }
 
-    func testT06_25_rowsAreBoundedAndDuplicateIDsAreRemoved() async throws {
+    // T06-16: canonical spec/TESTPLAN-M06.md.
+    func testT06_16_rowsAreBoundedAndDuplicateIDsAreRemoved() async throws {
         let h = Harness.make()
         defer { h.cleanup() }
         try h.signIn()
