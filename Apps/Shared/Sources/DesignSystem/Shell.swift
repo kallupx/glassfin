@@ -152,11 +152,18 @@ struct NavigationPrototype: View {
         }
     }
 
+    @ViewBuilder
     private func navScreen(_ key: CopyKey, identifier: String) -> some View {
-        Copy.text(key)
+        let screen = Copy.text(key)
             .font(.largeTitle)
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityIdentifier(identifier)
+        #if os(tvOS)
+            // Menu commands need a focus target inside the navigation stack.
+            screen.focusable()
+        #else
+            screen
+        #endif
     }
 }
