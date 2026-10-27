@@ -9,7 +9,11 @@ import Foundation
 /// below). A credential query is only a fallback, and any URL that contains one must be
 /// redacted before logging. ADR M08-2 tries the resource loader first, then this key.
 public struct ResolvedMediaURL: Sendable, Equatable, CustomStringConvertible {
-    public static let httpHeaderFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
+    #if DEBUG
+        public static let httpHeaderFieldsKey = "AVURLAssetHTTPHeaderFieldsKey"
+    #else
+        public static let httpHeaderFieldsKey = ""
+    #endif
 
     public var url: URL
     public var headerFields: [String: String]

@@ -129,15 +129,27 @@ public enum MediaCarrier: Sendable, Equatable, CustomStringConvertible, CustomDe
     public var debugDescription: String { kindName }
 }
 
+public enum HeaderFieldsKeyPolicy {
+    public static func isAllowed(buildIsDebug: Bool) -> Bool { buildIsDebug }
+
+    public static var isAllowedInCurrentBuild: Bool {
+        #if DEBUG
+            isAllowed(buildIsDebug: true)
+        #else
+            isAllowed(buildIsDebug: false)
+        #endif
+    }
+}
+
 public struct MediaOpenOptions: Sendable, Equatable, CustomStringConvertible, CustomDebugStringConvertible {
     public var trust: ServerTrustClass
-    public var headerFieldsKeyAvailable: Bool
+    public private(set) var headerFieldsKeyAvailable: Bool
     /// Opt-in media URL that already contains `ApiKey`. Descriptions never print it.
     public var apiKeyFallbackURL: URL?
 
     public init(trust: ServerTrustClass, headerFieldsKeyAvailable: Bool, apiKeyFallbackURL: URL? = nil) {
         self.trust = trust
-        self.headerFieldsKeyAvailable = headerFieldsKeyAvailable
+        self.headerFieldsKeyAvailable = headerFieldsKeyAvailable && HeaderFieldsKeyPolicy.isAllowedInCurrentBuild
         self.apiKeyFallbackURL = apiKeyFallbackURL
     }
 

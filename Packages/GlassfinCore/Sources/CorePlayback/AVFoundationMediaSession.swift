@@ -31,20 +31,24 @@
         private let origin: any MediaOriginClient
         private let authorizationHeader: String
         private let trust: ServerTrustClass
-        private let allowedHost: String
+        private let allowedOrigin: URL
+        private let onFailure: (@Sendable (APIError) -> Void)?
+        private let failures = LoaderFailures()
         private let queue: DispatchQueue
         private let tasks = LoaderTasks()
 
         public init?(
             carrier: ResourceLoaderCarrier,
             origin: any MediaOriginClient,
-            gate: PlaybackFetchGate = PlaybackFetchGate()
+            gate: PlaybackFetchGate = PlaybackFetchGate(),
+            onFailure: (@Sendable (APIError) -> Void)? = nil
         ) {
-            guard let host = carrier.originURL.host else { return nil }
+            guard MediaOrigin.matches(carrier.originURL, carrier.originURL) else { return nil }
             self.origin = origin
             self.authorizationHeader = carrier.authorizationHeader
             self.trust = carrier.trust
-            self.allowedHost = host
+            self.allowedOrigin = carrier.originURL
+            self.onFailure = onFailure
             self.gate = gate
             self.queue = DispatchQueue(label: "org.glassfin.media-loader")
             self.asset = AVURLAsset(url: carrier.assetURL)
@@ -69,29 +73,25 @@
                     authorizationHeader: authorizationHeader,
                     trust: trust,
                     range: range,
-                    allowedHost: allowedHost
+                    allowedOrigin: allowedOrigin
                 )
             else {
                 loadingRequest.finishLoading(with: URLError(.badURL))
                 return true
             }
             let boxed = LoaderBox(loadingRequest)
+            let id = ObjectIdentifier(loadingRequest)
             let task = Task { [weak self] in
                 guard let self else { return }
-                if self.gate.isCancelled {
-                    boxed.request.finishLoading(with: URLError(.cancelled))
-                    return
-                }
-                do {
-                    let response = try await self.origin.fetch(request)
-                    self.finish(boxed.request, response: response, url: request.url)
-                } catch {
-                    boxed.request.finishLoading(with: error)
-                }
+                defer { self.tasks.remove(id) }
+                await self.load(boxed, request: request, range: range)
             }
-            tasks.store(task, for: ObjectIdentifier(loadingRequest))
+            tasks.store(task, for: id)
             return true
         }
+
+        /// Q8-2-09: route `.unauthorized` through `MediaUnauthorizedPolicy` before deciding to log out.
+        public var lastFailure: APIError? { failures.last }
 
         public func resourceLoader(
             _ resourceLoader: AVAssetResourceLoader,
@@ -100,33 +100,60 @@
             tasks.cancel(ObjectIdentifier(loadingRequest))
         }
 
-        private func finish(_ loadingRequest: AVAssetResourceLoadingRequest, response: OriginMediaResponse, url: URL) {
-            let decision = MediaStatusPolicy.decide(status: response.status)
-            queue.async {
-                switch decision {
-                case .bytes:
-                    guard let reply = PlayerResponseBuilder.build(origin: response, requestURL: url) else {
-                        loadingRequest.finishLoading(with: URLError(.cannotDecodeContentData))
+        private func load(_ boxed: LoaderBox, request: OriginMediaRequest, range: HTTPByteRange?) async {
+            do {
+                try await ChunkedMediaLoader.load(
+                    request: request,
+                    range: range,
+                    client: origin,
+                    isCancelled: { self.gate.isCancelled },
+                    receive: { (reply: PlayerByteReply) async throws(APIError) in
+                        try await self.respond(boxed, reply: reply)
+                    }
+                )
+                await complete(boxed, error: nil)
+            } catch {
+                await complete(boxed, error: error)
+            }
+        }
+
+        private func respond(_ boxed: LoaderBox, reply: PlayerByteReply) async throws(APIError) {
+            let delivered = await withCheckedContinuation { continuation in
+                queue.async {
+                    guard !self.gate.isCancelled, !boxed.request.isCancelled else {
+                        continuation.resume(returning: false)
                         return
                     }
-                    if let info = loadingRequest.contentInformationRequest {
+                    if let info = boxed.request.contentInformationRequest {
                         info.contentType = reply.contentTypeUTI
                         info.contentLength = reply.contentLength
                         info.isByteRangeAccessSupported = reply.isByteRangeAccessSupported
                     }
-                    loadingRequest.dataRequest?.respond(with: reply.data)
-                    loadingRequest.finishLoading()
-                case .checkCurrentUser, .failed:
-                    loadingRequest.finishLoading(with: URLError(.badServerResponse))
+                    boxed.request.dataRequest?.respond(with: reply.data)
+                    continuation.resume(returning: true)
+                }
+            }
+            if !delivered { throw .cancelled }
+        }
+
+        private func complete(_ boxed: LoaderBox, error: APIError?) async {
+            await withCheckedContinuation { continuation in
+                queue.async {
+                    let failure = self.gate.isCancelled || boxed.request.isCancelled ? .cancelled : error
+                    if let failure {
+                        self.failures.record(failure)
+                        boxed.request.finishLoading(with: failure)
+                        self.onFailure?(failure)
+                    } else {
+                        boxed.request.finishLoading()
+                    }
+                    continuation.resume()
                 }
             }
         }
 
         private static func byteRange(_ dataRequest: AVAssetResourceLoadingDataRequest?) -> HTTPByteRange? {
-            guard let dataRequest else { return nil }
-            if dataRequest.requestedOffset == 0 && dataRequest.requestsAllDataToEndOfResource {
-                return nil
-            }
+            guard let dataRequest else { return HTTPByteRange(start: 0, end: 1) }
             let end: Int64?
             if dataRequest.requestsAllDataToEndOfResource {
                 end = nil
@@ -149,8 +176,12 @@
     public enum AVPlayerAssetBuilder {
         /// Undocumented header key. Does not apply a certificate pin.
         public static func asset(url: URL, authorizationHeader: String) -> AVURLAsset {
-            let headers = ["Authorization": authorizationHeader]
-            return AVURLAsset(url: url, options: [ResolvedMediaURL.httpHeaderFieldsKey: headers])
+            #if DEBUG
+                let headers = ["Authorization": authorizationHeader]
+                return AVURLAsset(url: url, options: [ResolvedMediaURL.httpHeaderFieldsKey: headers])
+            #else
+                return AVURLAsset(url: url)
+            #endif
         }
     }
 
@@ -184,20 +215,31 @@
                 urlRequest.setValue(range.headerValue, forHTTPHeaderField: "Range")
             }
             do {
-                let (data, response) = try await session.data(for: urlRequest)
+                let (bytes, response) = try await session.bytes(for: urlRequest)
+                defer { bytes.task.cancel() }
                 guard let http = response as? HTTPURLResponse else { throw APIError.network }
                 let location = http.value(forHTTPHeaderField: "Location").flatMap { raw in
                     URL(string: raw, relativeTo: request.url)?.absoluteURL
                 }
+                let contentType = http.value(forHTTPHeaderField: "Content-Type")
+                var body = BoundedMediaBody(contentType: contentType, url: request.url, range: request.range)
+                if request.method != "HEAD", (200..<300).contains(http.statusCode) {
+                    for try await byte in bytes {
+                        try Task.checkCancellation()
+                        try body.append(byte)
+                    }
+                }
+                let data = body.data
                 let total =
                     ContentRangeHeader.totalLength(of: http.value(forHTTPHeaderField: "Content-Range"))
-                    ?? ((200..<300).contains(http.statusCode) ? Int64(data.count) : nil)
+                    ?? (http.statusCode == 200
+                        ? (request.method == "HEAD" ? http.expectedContentLength : Int64(data.count)) : nil)
                 return OriginMediaResponse(
                     status: http.statusCode,
                     location: location,
-                    contentType: http.value(forHTTPHeaderField: "Content-Type"),
+                    contentType: contentType,
                     body: data,
-                    totalLength: total
+                    totalLength: total.flatMap { $0 >= 0 ? $0 : nil }
                 )
             } catch let error as APIError {
                 throw error
@@ -269,6 +311,23 @@
         init(_ request: AVAssetResourceLoadingRequest) { self.request = request }
     }
 
+    private final class LoaderFailures: @unchecked Sendable {
+        private let lock = NSLock()
+        private var failure: APIError?
+
+        var last: APIError? {
+            lock.lock()
+            defer { lock.unlock() }
+            return failure
+        }
+
+        func record(_ error: APIError) {
+            lock.lock()
+            failure = error
+            lock.unlock()
+        }
+    }
+
     private final class LoaderTasks: @unchecked Sendable {
         private let lock = NSLock()
         private var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]
@@ -276,6 +335,12 @@
         func store(_ task: Task<Void, Never>, for id: ObjectIdentifier) {
             lock.lock()
             tasks[id] = task
+            lock.unlock()
+        }
+
+        func remove(_ id: ObjectIdentifier) {
+            lock.lock()
+            tasks.removeValue(forKey: id)
             lock.unlock()
         }
 

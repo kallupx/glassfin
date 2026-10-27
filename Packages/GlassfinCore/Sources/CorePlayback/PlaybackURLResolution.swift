@@ -65,6 +65,7 @@ public struct PlaybackURLResolver: Sendable {
                     method: verb,
                     url: current,
                     authorizationHeader: header,
+                    range: retriedMethod ? HTTPByteRange(start: 0, end: 1) : nil,
                     trust: trust
                 )
             else {

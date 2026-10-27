@@ -92,23 +92,24 @@ public protocol MediaOriginClient: Sendable {
 }
 
 public enum ResourceLoadPlanner {
-    /// Maps a `glassfin-media` URL back to an origin request on `allowedHost` only.
+    /// Maps a `glassfin-media` URL back to the allowed HTTP(S) origin only.
     public static func originRequest(
         assetURL: URL,
         authorizationHeader: String,
         trust: ServerTrustClass,
         range: HTTPByteRange?,
-        allowedHost: String
+        allowedOrigin: URL
     ) -> OriginMediaRequest? {
         guard let origin = MediaAssetScheme.unwrap(assetURL) else { return nil }
-        guard origin.host?.lowercased() == allowedHost.lowercased() else { return nil }
+        guard MediaOrigin.matches(origin, allowedOrigin) else { return nil }
         let scheme = origin.scheme?.lowercased()
         guard scheme == "https" || scheme == "http" else { return nil }
         return OriginMediaRequest(
             method: "GET",
             url: origin,
             authorizationHeader: authorizationHeader,
-            range: range,
+            range: PlaylistSniffer.isPlaylistURL(origin)
+                ? nil : ChunkedRangePlanner.next(range: range, received: 0, totalLength: nil),
             trust: trust
         )
     }
@@ -129,6 +130,10 @@ public struct PlayerByteReply: Sendable, Equatable {
 }
 
 public enum PlaylistSniffer {
+    public static func isPlaylistURL(_ url: URL) -> Bool {
+        url.pathExtension.lowercased() == "m3u8"
+    }
+
     public static func isPlaylist(contentType: String?, body: Data) -> Bool {
         if let contentType {
             let lower = contentType.lowercased()
@@ -152,7 +157,9 @@ public enum PlayerResponseBuilder {
     public static func build(origin: OriginMediaResponse, requestURL: URL) -> PlayerByteReply? {
         guard (200..<300).contains(origin.status) else { return nil }
         if PlaylistSniffer.isPlaylist(contentType: origin.contentType, body: origin.body) {
-            guard let text = String(data: origin.body, encoding: .utf8) else { return nil }
+            guard origin.body.count <= MediaLoaderLimits.playlistBytes,
+                let text = String(data: origin.body, encoding: .utf8)
+            else { return nil }
             guard case .success(let rewrite) = HLSPlaylistRewriter.rewrite(playlist: text, baseURL: requestURL) else {
                 return nil
             }

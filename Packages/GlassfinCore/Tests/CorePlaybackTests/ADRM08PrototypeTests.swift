@@ -10,6 +10,7 @@ import XCTest
 #endif
 
 #if os(macOS)
+    import Darwin
     import Network
     import Security
 #endif
@@ -46,7 +47,7 @@ final class ADRM08PrototypeTests: XCTestCase {
                 authorizationHeader: header,
                 trust: .publiclyTrusted,
                 range: HTTPByteRange(start: 0, end: 1),
-                allowedHost: "media.example"
+                allowedOrigin: origin
             )
         )
         XCTAssertEqual(request.method, "GET")
@@ -60,7 +61,7 @@ final class ADRM08PrototypeTests: XCTestCase {
                 authorizationHeader: header,
                 trust: .publiclyTrusted,
                 range: nil,
-                allowedHost: "other.example"
+                allowedOrigin: mediaURL("https://other.example")
             )
         )
         let response = OriginMediaResponse(
@@ -613,6 +614,7 @@ final class ADRM08PrototypeTests: XCTestCase {
         )
         guard case .resolved = retried else { return XCTFail("405 retry did not resolve") }
         XCTAssertEqual(retry.requests().map(\.method), ["HEAD", "GET"])
+        XCTAssertEqual(retry.requests().map(\.range), [nil, HTTPByteRange(start: 0, end: 1)])
         let notImplemented = ScriptedOrigin([ok(501), ok(405)])
         let second = try await PlaybackURLResolver(client: notImplemented, log: SilentLog()).resolve(
             start: prepared.url,
@@ -1186,7 +1188,9 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
             let der = try certificateDER(openssl: binary, cert: cert)
             let pin = leafPin(der)
             let started = try await startCertificateServer(openssl: binary, cert: cert, key: key)
-            defer { started.process.terminate() }
+            defer {
+                if started.process.isRunning { started.process.terminate() }
+            }
             let url = mediaURL("https://127.0.0.1:\(started.port)/")
             let header = try playbackHeader()
             let trust = ServerTrustClass.pinnedSelfSigned(fingerprintSHA256: pin)
@@ -1204,7 +1208,7 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
             do {
                 _ = try await rejected.fetch(badRequest)
                 XCTFail("mismatched pin completed the fetch")
-            } catch let error as APIError {
+            } catch {
                 let failed = error == .tls || error == .network || error == .cancelled
                 XCTAssertTrue(failed, "mismatched pin produced \(error)")
             }
@@ -1241,12 +1245,12 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
             key: URL
         ) async throws -> (process: Process, port: UInt16) {
             for _ in 0..<5 {
-                let port = try await reservePort()
+                let port = try reservePort()
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: openssl)
                 process.arguments = [
                     "s_server", "-accept", "127.0.0.1:\(port)", "-cert", cert.path, "-key", key.path,
-                    "-www", "-naccept", "2",
+                    "-www", "-naccept", "3",
                 ]
                 process.standardOutput = FileHandle.nullDevice
                 process.standardError = FileHandle.nullDevice
@@ -1254,62 +1258,71 @@ private final class ScriptedProbe: CurrentUserProbing, @unchecked Sendable {
                 if await portAccepts(port, process: process) {
                     return (process, port)
                 }
-                process.terminate()
+                if process.isRunning { process.terminate() }
             }
             throw URLError(.cannotConnectToHost)
         }
 
-        private func reservePort() async throws -> UInt16 {
-            let listener = try NWListener(using: .tcp, on: .any)
-            let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
-                let once = ResumeOnce()
-                listener.stateUpdateHandler = { state in
-                    switch state {
-                    case .ready:
-                        once.run { continuation.resume(returning: listener.port?.rawValue ?? 0) }
-                    case .failed(let error):
-                        once.run { continuation.resume(throwing: error) }
-                    default:
-                        break
-                    }
+        private func reservePort() throws -> UInt16 {
+            let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+            guard descriptor >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+            defer { Darwin.close(descriptor) }
+            var address = loopbackAddress(port: 0)
+            let bound = withUnsafePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
                 }
-                listener.start(queue: .global())
             }
-            listener.cancel()
-            if port == 0 { throw URLError(.cannotConnectToHost) }
+            guard bound == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+            var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+            let result = withUnsafeMutablePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    Darwin.getsockname(descriptor, $0, &length)
+                }
+            }
+            guard result == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+            let port = UInt16(bigEndian: address.sin_port)
+            guard port != 0 else { throw URLError(.cannotConnectToHost) }
             return port
         }
 
+        private func loopbackAddress(port: UInt16) -> sockaddr_in {
+            var address = sockaddr_in()
+            address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+            address.sin_family = sa_family_t(AF_INET)
+            address.sin_port = port.bigEndian
+            address.sin_addr = in_addr(s_addr: UInt32(INADDR_LOOPBACK).bigEndian)
+            return address
+        }
+
         private func portAccepts(_ port: UInt16, process: Process) async -> Bool {
-            let endpoint = NWEndpoint.Port(rawValue: port) ?? .any
-            let deadline = Date().addingTimeInterval(3)
-            while Date() < deadline {
-                if !process.isRunning { return false }
-                if await probe(endpoint) { return true }
+            let deadline = ContinuousClock.now + .seconds(3)
+            while ContinuousClock.now < deadline {
+                if Task.isCancelled || !process.isRunning { return false }
+                if probe(port) { return true }
                 try? await Task.sleep(for: .milliseconds(50))
             }
             return false
         }
 
-        private func probe(_ port: NWEndpoint.Port) async -> Bool {
-            let connection = NWConnection(host: "127.0.0.1", port: port, using: .tcp)
-            return await withCheckedContinuation { continuation in
-                let once = ResumeOnce()
-                connection.stateUpdateHandler = { state in
-                    switch state {
-                    case .ready:
-                        once.run {
-                            connection.cancel()
-                            continuation.resume(returning: true)
-                        }
-                    case .failed, .cancelled:
-                        once.run { continuation.resume(returning: false) }
-                    default:
-                        break
-                    }
+        private func probe(_ port: UInt16) -> Bool {
+            let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+            guard descriptor >= 0 else { return false }
+            defer { Darwin.close(descriptor) }
+            guard Darwin.fcntl(descriptor, F_SETFL, O_NONBLOCK) == 0 else { return false }
+            var address = loopbackAddress(port: port)
+            let connected = withUnsafePointer(to: &address) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    Darwin.connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
                 }
-                connection.start(queue: .global())
             }
+            if connected == 0 { return true }
+            guard errno == EINPROGRESS else { return false }
+            var event = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+            guard Darwin.poll(&event, 1, 100) > 0 else { return false }
+            var error: Int32 = 0
+            var length = socklen_t(MemoryLayout<Int32>.size)
+            return Darwin.getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &error, &length) == 0 && error == 0
         }
     }
 

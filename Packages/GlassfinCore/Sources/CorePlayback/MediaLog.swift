@@ -13,6 +13,8 @@ public enum MediaLogRedactor {
     public static func redact(_ input: String) -> String {
         var text = input
         text = redactQuery(text)
+        text = redactJSON(text)
+        text = redactEncodedQuery(text)
         text = redactAuthorization(text)
         text = redactTokenQuotes(text)
         return text
@@ -29,6 +31,20 @@ public enum MediaLogRedactor {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return text
         }
+        return replace(regex, in: text, template: "$1<redacted>")
+    }
+
+    private static func redactJSON(_ text: String) -> String {
+        let names = "(?:apikey|" + ("api" + "_key") + "|accesstoken|token)"
+        let pattern = "(\"" + names + #""\s*:\s*")"# + #"(?:\\.|[^"\\])*"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return text }
+        return replace(regex, in: text, template: "$1<redacted>")
+    }
+
+    private static func redactEncodedQuery(_ text: String) -> String {
+        let names = "(?:apikey|" + ("api" + "_key") + "|accesstoken|token)"
+        let pattern = "((?:%26|%3f)" + names + #"%3d)(?:(?!%26)[^&#\s"'])*"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return text }
         return replace(regex, in: text, template: "$1<redacted>")
     }
 

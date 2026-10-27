@@ -75,7 +75,7 @@ public enum MediaUnauthorizedPolicy {
         do {
             _ = try await probe.currentUser()
             return .playbackError
-        } catch let error as APIError {
+        } catch {
             if case .unauthorized = error {
                 return .logOut
             }

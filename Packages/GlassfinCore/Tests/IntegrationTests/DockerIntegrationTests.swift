@@ -190,6 +190,39 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
+    /// Test ID TBD: the exported plans do not assign an ID to the legacy header check.
+    func testLegacyEmbyTokenHeaderIsRejectedOnJellyfin12() async throws {
+        let target = try liveTarget()
+        let session = try await signIn(target)
+        let identity = ClientIdentity(
+            deviceName: "Glassfin CI", deviceID: "glassfin-integration", version: "0.1.0", token: session.accessToken)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieStorage = nil
+        configuration.urlCache = nil
+        let urlSession = URLSession(configuration: configuration, delegate: StopRedirects(), delegateQueue: nil)
+        defer { urlSession.invalidateAndCancel() }
+        let endpoint = target.url.appendingPathComponent("Users/Me")
+        var legacy = URLRequest(url: endpoint)
+        legacy.setValue(session.accessToken, forHTTPHeaderField: "X-Emby-" + "Token")
+        XCTAssertNil(legacy.value(forHTTPHeaderField: "Authorization"))
+        let (_, legacyResponse) = try await urlSession.data(for: legacy)
+        let legacyStatus = try XCTUnwrap(legacyResponse as? HTTPURLResponse).statusCode
+        if target.version.hasPrefix("12") {
+            XCTAssertEqual(legacyStatus, 401, "Jellyfin 12 accepted the legacy token header")
+        } else {
+            let record = "Jellyfin \(target.version): legacy token header HTTP \(legacyStatus)\n"
+            FileHandle.standardOutput.write(Data(record.utf8))
+        }
+        var authorized = URLRequest(url: endpoint)
+        authorized.setValue(try identity.authorizationHeader(), forHTTPHeaderField: "Authorization")
+        XCTAssertNil(authorized.value(forHTTPHeaderField: "X-Emby-" + "Token"))
+        let (_, authorizedResponse) = try await urlSession.data(for: authorized)
+        let authorizedStatus = try XCTUnwrap(authorizedResponse as? HTTPURLResponse).statusCode
+        XCTAssertEqual(authorizedStatus, 200, "Jellyfin \(target.version) rejected the Authorization header")
+    }
+
     private func signIn(_ target: Target) async throws -> AuthenticatedSession {
         let anonymous = ClientIdentity(
             deviceName: "Glassfin CI", deviceID: "glassfin-integration", version: "0.1.0")
