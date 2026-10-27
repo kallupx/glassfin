@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import GlassfinCore
 import ImageIO
 import XCTest
 

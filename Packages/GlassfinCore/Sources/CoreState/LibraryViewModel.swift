@@ -84,7 +84,7 @@ public final class LibraryViewModel {
             return
         }
         let sameQuery = self.libraryID == libraryID && self.query == query
-        // TODO(Q7-19): keep the previous query visible on failure while showing the shared banner.
+        // Retain the previous query on failure while showing the shared banner.
         let previous = self.libraryID == libraryID ? state.value : nil
         self.libraryID = libraryID
         self.query = query

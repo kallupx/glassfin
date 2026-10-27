@@ -8,6 +8,109 @@ import XCTest
 
 @MainActor
 final class T07DetailTests: XCTestCase {
+    /// T07-68: forbidden actions roll back optimistic state and keep the signed-in session.
+    func testT07_68_forbiddenActionRollsBackAndUsesTheCatalogKey() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let gate = T07GatedClient(error: .forbidden)
+        let actions = LibraryUserActions(service: JellyfinLibraryService(client: gate), app: rig.app)
+        let item = Sample.movie()
+        let edit = Task { await actions.togglePlayed(item) }
+        await gate.waitForRequest()
+        XCTAssertTrue(actions.visible(item).userData.played)
+        await gate.release()
+        await edit.value
+        XCTAssertFalse(actions.visible(item).userData.played)
+        XCTAssertEqual(actions.lastError.flatMap(AppErrorMessage.key), .forbidden)
+        guard case .signedIn = rig.app.phase else { return XCTFail("Forbidden action signed out") }
+        XCTAssertNil(rig.app.sessionNoticeKey)
+    }
+
+    /// T07-63: movie detail retains its content and the shared server-unreachable banner.
+    func testT07_63_movieDetailRetainsContentWhenTheServerBecomesUnreachable() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let fixture = LibraryFixtureClient()
+        let client = MockAPIClient { request async throws(APIError) -> Data in try await fixture.send(request) }
+        let model = ItemDetailViewModel(library: JellyfinLibraryService(client: client), app: rig.app)
+        await model.load(id: LibraryFixtureClient.id(100))
+        let previous = try XCTUnwrap(model.state.value)
+        await client.setHandler { _ async throws(APIError) -> Data in throw .network }
+        await model.load(id: previous.id)
+        XCTAssertEqual(model.state.value, previous)
+        XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.key), .serverUnreachable)
+        XCTAssertEqual(rig.app.connectivity, .serverUnreachable)
+        XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
+    }
+
+    /// T07-64: no detail content means the same key is used by the blocking error component.
+    func testT07_64_emptyDetailUsesTheSharedServerDownKey() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let client = MockAPIClient { _ async throws(APIError) -> Data in throw .network }
+        let model = ItemDetailViewModel(library: JellyfinLibraryService(client: client), app: rig.app)
+        await model.load(id: Sample.movie)
+        XCTAssertNil(model.state.value)
+        XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.key), .serverUnreachable)
+    }
+
+    /// T07-42/T07-43: five seasons; only the selected season's episodes are requested and displayed.
+    func testT07_43_fiveSeasonsFetchAndShowOnlyTheSelectedSeason() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let client = T07SeasonClient()
+        let model = SeriesViewModel(
+            library: JellyfinLibraryService(client: client), userData: rig.app.userData, app: rig.app)
+        await model.load(seriesID: LibraryFixtureClient.series)
+        XCTAssertEqual(model.seasons.value?.count, 5)
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
+        XCTAssertEqual(Set(model.episodes.value?.compactMap(\.seasonID) ?? []), [LibraryFixtureClient.seasonTwo])
+        let initial = await client.requests
+        let episodes = initial.filter { $0.path.hasSuffix("/Episodes") }
+        XCTAssertEqual(episodes.count, 1)
+        XCTAssertEqual(episodes.first?.query.first { $0.name == "seasonId" }?.value, LibraryFixtureClient.seasonTwo)
+        XCTAssertEqual(episodes.first?.query.first { $0.name == "fields" }?.value, "Overview,PrimaryImageAspectRatio")
+        XCTAssertEqual(episodes.first?.query.first { $0.name == "enableUserData" }?.value, "true")
+        let next = try XCTUnwrap(initial.first { $0.path == "/Shows/NextUp" })
+        XCTAssertEqual(next.query.first { $0.name == "seriesId" }?.value, LibraryFixtureClient.series)
+        XCTAssertEqual(next.query.first { $0.name == "enableResumable" }?.value, "true")
+        let fifth = LibraryFixtureClient.id(2005)
+        await model.select(seasonID: fifth)
+        XCTAssertEqual(Set(model.episodes.value?.compactMap(\.seasonID) ?? []), [fifth])
+        let final = await client.requests.filter { $0.path.hasSuffix("/Episodes") }
+        XCTAssertEqual(
+            final.compactMap { $0.query.first { $0.name == "seasonId" }?.value },
+            [LibraryFixtureClient.seasonTwo, fifth])
+    }
+
+    /// T07-44: switching cancels an in-flight request; completed rows are cached for this view.
+    func testT07_44_switchingSeasonCancelsPreviousRequestAndReusesCachedRows() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let client = T07SeasonClient(blockSeasonOne: true)
+        let model = SeriesViewModel(
+            library: JellyfinLibraryService(client: client), userData: rig.app.userData, app: rig.app)
+        await model.load(seriesID: LibraryFixtureClient.series)
+        let first = Task { await model.select(seasonID: LibraryFixtureClient.seasonOne) }
+        await client.waitForBlockedRequest()
+        await model.select(seasonID: LibraryFixtureClient.id(2003))
+        await first.value
+        let cancelled = await client.cancelledSeasonIDs
+        XCTAssertEqual(cancelled, [LibraryFixtureClient.seasonOne])
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.id(2003))
+        XCTAssertEqual(Set(model.episodes.value?.compactMap(\.seasonID) ?? []), [LibraryFixtureClient.id(2003)])
+        await model.select(seasonID: LibraryFixtureClient.seasonTwo)
+        let calls = await client.requests.filter { $0.path.hasSuffix("/Episodes") }
+        XCTAssertEqual(calls.count, 3)
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
+        XCTAssertEqual(Set(model.episodes.value?.compactMap(\.seasonID) ?? []), [LibraryFixtureClient.seasonTwo])
+    }
+
     /// T07-45: canonical spec/TESTPLAN-M07.md.
     func testT07_45_seriesOpensAtInProgressSeasonTwoEpisodeFiveAndSpecialsLast() async throws {
         let rig = Harness.make()
@@ -24,7 +127,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-50: canonical spec/TESTPLAN-M07.md.
-
     func testT07_50_seasonFocusDebouncesAndLatestSelectionWinsWithoutMovingToEpisodes() async throws {
         let rig = Harness.make(suspendingClock: true)
         defer { rig.cleanup() }
@@ -45,7 +147,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-48: canonical spec/TESTPLAN-M07.md.
-
     func testT07_48_downTargetsFirstUnplayedAndUpReturnsToSelectedSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -62,7 +163,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-51: canonical spec/TESTPLAN-M07.md.
-
     func testT07_51_playbackReturnKeepsEpisodeOrAdvancesToNextUnplayed() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -78,7 +178,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-51: canonical spec/TESTPLAN-M07.md.
-
     func testT07_51_finishedLastEpisodeCanAdvanceToTheNextSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -92,7 +191,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-52: canonical spec/TESTPLAN-M07.md.
-
     func testT07_52_selectedOverviewFollowsFocusedEpisodeAsLiteralText() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -104,7 +202,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
-
     func testT07_63_episodeFailureKeepsPreviousSeasonAndContent() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -127,7 +224,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-27: canonical spec/TESTPLAN-M07.md.
-
     func testT07_27_playedIsOptimisticAndFailureRollsBackAndShowsAKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -152,7 +248,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-28: canonical spec/TESTPLAN-M07.md.
-
     func testT07_28_favoriteAndPlayedTogglesUsePOSTAndDELETE() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -176,7 +271,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-21: canonical spec/TESTPLAN-M07.md.
-
     func testT07_21_movieSeriesSeasonAndEpisodeDetailRequests() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -194,7 +288,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-09: canonical spec/TESTPLAN-M07.md.
-
     func testT07_09_staleQueryResponseCannotReplaceNewQuery() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -214,7 +307,6 @@ final class T07DetailTests: XCTestCase {
     }
 
     /// T07-29: canonical spec/TESTPLAN-M07.md.
-
     func testT07_29_storeRefreshAndReloadPreserveEpisodeFocusAndSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -237,6 +329,47 @@ final class T07DetailTests: XCTestCase {
         SeriesViewModel(
             library: JellyfinLibraryService(client: LibraryFixtureClient()), userData: rig.app.userData, app: rig.app,
             clock: clock)
+    }
+}
+
+private actor T07SeasonClient: JellyfinAPIClient {
+    private let fixture = LibraryFixtureClient()
+    private let blockSeasonOne: Bool
+    private var blocked = false
+    private var observers: [CheckedContinuation<Void, Never>] = []
+    var requests: [APIRequest] = []
+    var cancelledSeasonIDs: [String] = []
+
+    init(blockSeasonOne: Bool = false) { self.blockSeasonOne = blockSeasonOne }
+
+    func send(_ request: APIRequest) async throws(APIError) -> Data {
+        requests.append(request)
+        if request.path.hasSuffix("/Seasons") {
+            let seasons = (1...5).map {
+                ["Id": LibraryFixtureClient.id(2000 + $0), "Type": "Season", "IndexNumber": $0] as [String: Any]
+            }
+            return (try? JSONSerialization.data(withJSONObject: ["Items": seasons, "TotalRecordCount": 5])) ?? Data()
+        }
+        if request.path.hasSuffix("/Episodes") {
+            guard let season = request.query.first(where: { $0.name == "seasonId" })?.value else {
+                throw .decoding
+            }
+            if blockSeasonOne, season == LibraryFixtureClient.seasonOne {
+                blocked = true
+                for observer in observers { observer.resume() }
+                observers.removeAll()
+                do { try await Task.sleep(for: .seconds(60)) } catch {
+                    cancelledSeasonIDs.append(season)
+                    throw .cancelled
+                }
+            }
+        }
+        return try await fixture.send(request)
+    }
+
+    func waitForBlockedRequest() async {
+        if blocked { return }
+        await withCheckedContinuation { observers.append($0) }
     }
 }
 

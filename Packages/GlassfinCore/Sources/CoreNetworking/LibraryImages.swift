@@ -65,7 +65,7 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
         self.trust = TrustCapture(certificatePin: certificatePin)
     }
 
-    func run(_ request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func run(_ request: URLRequest, protocolClasses: [AnyClass]? = nil) async throws -> (Data, URLResponse, Int?) {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 lock.lock()
@@ -76,7 +76,9 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
                 }
                 self.continuation = continuation
                 let configuration = URLSessionConfiguration.ephemeral
+                if let protocolClasses { configuration.protocolClasses = protocolClasses }
                 configuration.urlCache = nil
+                configuration.httpCookieStorage = nil
                 configuration.httpShouldSetCookies = false
                 configuration.timeoutIntervalForRequest = 15
                 let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
@@ -109,6 +111,8 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive chunk: Data) {
         lock.lock()
+        // Content-Length is only an early rejection hint. This count is the guarantee,
+        // including chunked, compressed, missing-length and dishonest responses.
         let tooLarge = chunk.count > limit - data.count
         if !tooLarge, !stopped { data.append(chunk) }
         lock.unlock()

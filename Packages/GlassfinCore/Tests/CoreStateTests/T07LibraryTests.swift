@@ -49,7 +49,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-13: canonical spec/TESTPLAN-M07.md.
-
     func testT07_13_choicesPersistPerServerUserAndLibraryAndAllSortsMap() {
         let settings = InMemorySettingsStore()
         let store = LibraryChoicesStore(settings: settings, serverID: "s", userID: "u")
@@ -71,7 +70,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-05: canonical spec/TESTPLAN-M07.md.
-
     func testT07_05_pagesTwoThousandItemsAtTenRemainingWithoutDuplicateRequests() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -94,7 +92,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-07: canonical spec/TESTPLAN-M07.md.
-
     func testT07_07_cacheIncludesTheQueryAndUserAndStopsAtShortPage() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -126,7 +123,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-71: canonical spec/TESTPLAN-M07.md.
-
     func testT07_71_malformedRecordsAdvanceServerOffsetAndDuplicatesAreRemoved() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -160,7 +156,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
-
     func testT07_63_downMidBrowseKeepsContentBannerAndTenSecondRecovery() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -184,7 +179,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
-
     func testT07_63_filterFailureKeepsPreviousQueryContent() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -208,7 +202,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-63: canonical spec/TESTPLAN-M07.md.
-
     func testT07_63_automaticTenSecondPingRecoversAndKeepsContent() async throws {
         let rig = Harness.make(automaticPing: true, suspendingClock: true)
         defer { rig.cleanup() }
@@ -228,7 +221,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-64: canonical spec/TESTPLAN-M07.md.
-
     func testT07_64_downWithoutContentUsesTheExistingServerDownKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -243,7 +235,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-25: canonical spec/TESTPLAN-M07.md.
-
     func testT07_25_viewModelsSanitizeProtocolValuesAndDetailCanResumeAndStartOver() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
@@ -259,7 +250,13 @@ final class T07LibraryTests: XCTestCase {
         await detail.load(id: LibraryFixtureClient.id(100))
         XCTAssertTrue(detail.state.value?.overview?.contains("<b>") == true)
         XCTAssertEqual(detail.playbackIntent()?.start, .seconds(1930))
+        // T07-26: starting over creates a zero-position intent without changing UserData.
+        let previous = detail.state.value?.userData
+        let storedBefore = await rig.app.userData.state(for: LibraryFixtureClient.id(100))
         XCTAssertEqual(detail.playbackIntent(startOver: true)?.start, .zero)
+        XCTAssertEqual(detail.state.value?.userData, previous)
+        let storedAfter = await rig.app.userData.state(for: LibraryFixtureClient.id(100))
+        XCTAssertEqual(storedAfter, storedBefore)
         detail.audioStreamIndex = 1
         detail.subtitleStreamIndex = -1
         XCTAssertEqual(detail.playbackIntent()?.audioStreamIndex, 1)
@@ -268,7 +265,6 @@ final class T07LibraryTests: XCTestCase {
     }
 
     /// T07-01: canonical spec/TESTPLAN-M07.md.
-
     func testT07_01_directTabsAndOverflowAndSanitizedLibraryNames() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }

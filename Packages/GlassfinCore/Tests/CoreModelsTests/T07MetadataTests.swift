@@ -3,6 +3,45 @@ import Foundation
 import XCTest
 
 final class T07MetadataTests: XCTestCase {
+    /// T07-77: clean before truncating at limit-1, limit and limit+1, in grapheme clusters.
+    func testT07_77_metadataBoundariesAndDisplayNamesUseTheSharedConstants() throws {
+        let url = try XCTUnwrap(URL(string: "https://media.example"))
+        let version = SemVer(major: 12, minor: 2, patch: 0)
+        for glyph in ["👩‍👩‍👧‍👦", "e\u{0301}"] {
+            for limit in [
+                MetadataPolicy.overviewMax, MetadataPolicy.taglineMax, MetadataPolicy.genreMax, MetadataPolicy.nameMax,
+                MetadataPolicy.displayNameMax,
+            ] {
+                for count in [limit - 1, limit, limit + 1] {
+                    let raw = String(repeating: glyph + "\u{0000}\u{202E}\u{200F}", count: count)
+                    let expected = String(repeating: glyph, count: min(count, limit))
+                    XCTAssertEqual(MetadataPolicy.clean(raw, limit: limit), expected)
+                    if limit == MetadataPolicy.displayNameMax {
+                        XCTAssertEqual(ServerInfo(id: "s", name: raw, url: url, version: version).name, expected)
+                        XCTAssertEqual(PublicUser(id: "u", name: raw).name, expected)
+                    }
+                    if limit == MetadataPolicy.nameMax {
+                        let item = MediaItem(id: "item", kind: .episode, name: raw, officialRating: raw)
+                            .cleanedForDisplay()
+                        XCTAssertEqual(item.name, expected)
+                        XCTAssertEqual(item.officialRating, expected)
+                        XCTAssertEqual(ItemPerson(name: raw, role: raw).role, expected)
+                        XCTAssertEqual(ItemMetadata(studios: [raw]).studios, [expected])
+                        XCTAssertEqual(ItemStream(id: 0, kind: "Video", title: raw).title, expected)
+                    }
+                }
+            }
+        }
+        let literal = "<b>x</b> <script>y</script> &amp; **x** [x](https://example.com)"
+        let metadata = ItemMetadata(
+            taglines: Array(repeating: literal, count: 15), genres: Array(repeating: literal, count: 40))
+        XCTAssertEqual(metadata.taglines, Array(repeating: literal, count: MetadataPolicy.taglinesMax))
+        XCTAssertEqual(metadata.genres, Array(repeating: literal, count: MetadataPolicy.genresMax))
+        XCTAssertEqual(MetadataSanitizer.plainText(literal), literal)
+        XCTAssertEqual(MetadataPolicy.recentSearchesMax, 20)
+        XCTAssertEqual(MetadataPolicy.imageMaxBytes, 20 * 1024 * 1024)
+    }
+
     /// T07-77: canonical spec/TESTPLAN-M07.md.
     func testT07_77_metadataKeepsMarkupLiteralAndStripsControlsAndBidi() throws {
         let dto = try JSONDecoder().decode(
@@ -19,7 +58,6 @@ final class T07MetadataTests: XCTestCase {
     }
 
     /// T07-77: canonical spec/TESTPLAN-M07.md.
-
     func testT07_77_limitsCountExtendedGraphemesAfterCleaning() {
         let glyph = "👩‍👩‍👧‍👦e\u{0301}"
         let long = String(repeating: glyph + "\u{202E}\u{0007}", count: MetadataPolicy.overviewMax)
@@ -45,7 +83,6 @@ final class T07MetadataTests: XCTestCase {
     }
 
     /// T07-35: canonical spec/TESTPLAN-M07.md.
-
     func testT07_35_technicalFixtureShowsHDRDVAndLosslessAudio() throws {
         let dto = try JSONDecoder().decode(
             BaseItemDTO.self,

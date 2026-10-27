@@ -429,6 +429,10 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
         return items
     }
 
+    func nextUp(series: MediaItem.ID) async throws(APIError) -> MediaItem? {
+        try await nextUp(limit: 1).first { $0.seriesID == series }
+    }
+
     func latest(in library: Library.ID, limit: Int) async throws(APIError) -> [MediaItem] {
         let result = value { () -> Result<[MediaItem], APIError> in
             latestIDs.append(library)

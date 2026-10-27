@@ -37,6 +37,7 @@ public protocol LibraryService: Sendable {
     func items(in library: Library.ID, query: ItemQuery, page: PageRequest) async throws(APIError) -> Page<MediaItem>
     func resume(limit: Int) async throws(APIError) -> [MediaItem]
     func nextUp(limit: Int) async throws(APIError) -> [MediaItem]
+    func nextUp(series: MediaItem.ID) async throws(APIError) -> MediaItem?
     func latest(in library: Library.ID, limit: Int) async throws(APIError) -> [MediaItem]
     func seasons(series: MediaItem.ID) async throws(APIError) -> [MediaItem]
     func episodes(series: MediaItem.ID, season: MediaItem.ID?) async throws(APIError) -> [MediaItem]
@@ -236,6 +237,19 @@ public struct JellyfinLibraryService: LibraryService {
                 URLQueryItem(name: "limit", value: String(limit)),
             ]
         )
+    }
+
+    /// A series-scoped play target avoids downloading episodes from unselected seasons.
+    public func nextUp(series: MediaItem.ID) async throws(APIError) -> MediaItem? {
+        try await list(
+            path: "/Shows/NextUp",
+            query: [
+                URLQueryItem(name: "seriesId", value: try validatedItemID(series)),
+                URLQueryItem(name: "enableResumable", value: "true"),
+                URLQueryItem(name: "enableUserData", value: "true"),
+                URLQueryItem(name: "limit", value: "1"),
+            ]
+        ).first
     }
 
     public func latest(in library: Library.ID, limit: Int) async throws(APIError) -> [MediaItem] {

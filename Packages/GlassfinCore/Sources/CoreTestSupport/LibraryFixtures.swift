@@ -54,6 +54,9 @@
             if request.path.hasSuffix("/Seasons") {
                 return json(["Items": [season(0), season(1), season(2)], "TotalRecordCount": 3])
             }
+            if request.path == "/Shows/NextUp" {
+                return json(["Items": [episode(season: 2, number: 5)], "TotalRecordCount": 1])
+            }
             if request.path.hasSuffix("/Episodes") {
                 let number = query["seasonId"].flatMap { Int($0, radix: 16) }.map { $0 - 2000 }
                 let episodes = (number.map { [$0] } ?? [1, 2, 0]).flatMap { season in

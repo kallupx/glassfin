@@ -1,36 +1,5 @@
 import GlassfinCore
-import ImageIO
 import SwiftUI
-
-struct DecodedLibraryImage: @unchecked Sendable {
-    let value: CGImage
-}
-
-enum LibraryArtworkDecoder {
-    /// ImageIO creates and immediately decodes only the requested thumbnail off the main actor.
-    nonisolated static func downsample(_ data: Data, pixels: Int) async -> DecodedLibraryImage? {
-        let job = Task.detached(priority: .utility) { () -> DecodedLibraryImage? in
-            guard !Task.isCancelled, data.count <= MetadataPolicy.imageMaxBytes,
-                let source = CGImageSourceCreateWithData(
-                    data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
-            else { return nil }
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceThumbnailMaxPixelSize: max(1, pixels),
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-            ]
-            guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary), !Task.isCancelled
-            else { return nil }
-            return DecodedLibraryImage(value: image)
-        }
-        return await withTaskCancellationHandler {
-            await job.value
-        } onCancel: {
-            job.cancel()
-        }
-    }
-}
 
 struct LibraryArtwork: View {
     var item: MediaItem

@@ -32,6 +32,8 @@ public final class SeriesViewModel {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var selectionGeneration = 0
     @ObservationIgnored private var selectionTask: Task<Void, Never>?
+    @ObservationIgnored private var episodeTask: Task<Void, Never>?
+    @ObservationIgnored private var episodeCache: [String: [MediaItem]] = [:]
 
     public init(
         library: any LibraryService, userData: UserDataStore, app: AppState, log: any GlassfinLog = SilentLog(),
@@ -61,11 +63,16 @@ public final class SeriesViewModel {
         let expected = generation
         let sessionGeneration = app.requestGeneration
         let wasLoaded = self.seriesID == seriesID && seasons.value != nil
+        selectionTask?.cancel()
+        episodeTask?.cancel()
+        selectionGeneration += 1
+        if self.seriesID != seriesID { episodeCache.removeAll() }
         let previousSeason = wasLoaded ? selectedSeasonID : nil
         let previousEpisode = wasLoaded ? focusedEpisodeID : nil
         self.seriesID = seriesID
         seasons = .loading(previous: seasons.value)
         do {
+            async let next = library.nextUp(series: seriesID)
             let loaded = try await library.seasons(series: seriesID)
             let ordered = loaded.sorted {
                 let lhs = $0.indexNumber == 0 ? Int.max : ($0.indexNumber ?? Int.max - 1)
@@ -75,22 +82,20 @@ public final class SeriesViewModel {
             let projected = await userData.project(ordered.map { $0.cleanedForDisplay() })
             guard expected == generation, sessionGeneration == app.requestGeneration, !Task.isCancelled else { return }
             seasons = .loaded(projected)
-            // Fetch all episode metadata once to find an in-progress episode in any season.
-            // The visible row still contains only the selected season.
-            let all = await userData.project(try await library.episodes(series: seriesID, season: nil))
-                .map { $0.cleanedForDisplay() }
+            let candidate = try await next
+            let target = await userData.project(candidate.map { [$0.cleanedForDisplay()] } ?? []).first
             guard expected == generation, sessionGeneration == app.requestGeneration, !Task.isCancelled else { return }
-            let chronological = all.sorted {
-                let lhs = $0.parentIndexNumber == 0 ? Int.max : ($0.parentIndexNumber ?? 1)
-                let rhs = $1.parentIndexNumber == 0 ? Int.max : ($1.parentIndexNumber ?? 1)
-                return lhs == rhs ? ($0.indexNumber ?? 0) < ($1.indexNumber ?? 0) : lhs < rhs
-            }
-            let candidates = seasonID.map { id in chronological.filter { $0.seasonID == id } } ?? chronological
-            playTarget =
-                candidates.first { !$0.userData.played && $0.userData.playbackPosition > .zero }
-                ?? candidates.first { !$0.userData.played } ?? candidates.first
-            let targetSeason = seasonID ?? previousSeason ?? playTarget?.seasonID ?? projected.first?.id
+            playTarget = target
+            let nextSeason = target?.seasonID.flatMap { id in projected.first { $0.id == id }?.id }
+            let targetSeason = seasonID ?? previousSeason ?? nextSeason ?? projected.first?.id
             if let targetSeason { await select(seasonID: targetSeason) } else { episodes = .loaded([]) }
+            guard expected == generation, sessionGeneration == app.requestGeneration, !Task.isCancelled else { return }
+            if playTarget == nil || seasonID != nil {
+                let items = episodes.value ?? []
+                playTarget =
+                    items.first { !$0.userData.played && $0.userData.playbackPosition > .zero }
+                    ?? items.first { !$0.userData.played } ?? items.first
+            }
             initialEpisodeID = playTarget?.seasonID == selectedSeasonID ? playTarget?.id : preferredEpisodeID
             if let previousEpisode, episodes.value?.contains(where: { $0.id == previousEpisode }) == true {
                 focusedEpisodeID = previousEpisode
@@ -112,8 +117,9 @@ public final class SeriesViewModel {
         guard ItemID(id) != nil else { return }
         focus = .season(id)
         selectionTask?.cancel()
+        episodeTask?.cancel()
         selectionGeneration += 1
-        guard id != selectedSeasonID else { return }
+        guard id != selectedSeasonID || episodes.isLoading else { return }
         let expected = selectionGeneration
         let task = Task { @MainActor in
             do { try await clock.sleep(for: Self.seasonDebounce) } catch { return }
@@ -130,6 +136,7 @@ public final class SeriesViewModel {
             return
         }
         selectionGeneration += 1
+        episodeTask?.cancel()
         let expected = selectionGeneration
         let sessionGeneration = app.requestGeneration
         let previous = episodes.value ?? lastEpisodes
@@ -137,12 +144,37 @@ public final class SeriesViewModel {
         let sameSeason = selectedSeasonID == seasonID
         selectedSeasonID = seasonID
         episodes = .loading(previous: sameSeason ? previous : nil)
+        let task = Task { @MainActor in
+            await self.loadSeason(
+                seasonID, expected: expected, sessionGeneration: sessionGeneration,
+                previous: previous, previousSeasonID: previousSeasonID)
+        }
+        episodeTask = task
+        app.scope.track(task)
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func loadSeason(
+        _ seasonID: String, expected: Int, sessionGeneration: Int,
+        previous: [MediaItem]?, previousSeasonID: String?
+    ) async {
         do {
-            let items = await userData.project(try await library.episodes(series: seriesID, season: seasonID))
+            let raw: [MediaItem]
+            if let cached = episodeCache[seasonID] {
+                raw = cached
+            } else {
+                raw = try await library.episodes(series: seriesID, season: seasonID)
+            }
+            let items = await userData.project(raw)
             guard expected == selectionGeneration, sessionGeneration == app.requestGeneration, !Task.isCancelled else {
                 return
             }
             let cleaned = items.map { $0.cleanedForDisplay() }
+            episodeCache[seasonID] = cleaned
             episodes = .loaded(cleaned)
             lastEpisodes = cleaned
             lastSeasonID = seasonID
@@ -204,9 +236,11 @@ public final class SeriesViewModel {
         generation += 1
         selectionGeneration += 1
         selectionTask?.cancel()
+        episodeTask?.cancel()
     }
 
-    private func map(_ error: APIError) -> AppError {
-        AppErrorMapping.map(error, context: .authenticated, deviceOffline: app.connectivity == .offline)
+    private func map(_ error: any Error) -> AppError {
+        let api = (error as? APIError) ?? (error is CancellationError ? .cancelled : .network)
+        return AppErrorMapping.map(api, context: .authenticated, deviceOffline: app.connectivity == .offline)
     }
 }
