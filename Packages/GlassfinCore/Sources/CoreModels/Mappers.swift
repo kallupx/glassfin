@@ -58,7 +58,7 @@ public enum DTOMapper {
         return MediaItem(
             id: id,
             kind: MediaKind.from(serverType: dto.`Type` ?? ""),
-            name: MetadataPolicy.clean(dto.Name ?? "", limit: MetadataPolicy.nameMax),
+            name: MetadataSanitizer.displayText(dto.Name ?? "", limit: MetadataPolicy.nameMax),
             overview: dto.Overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) },
             seriesID: dto.SeriesId,
             seasonID: dto.SeasonId,
@@ -66,7 +66,7 @@ public enum DTOMapper {
             parentIndexNumber: dto.ParentIndexNumber,
             runtime: Ticks.runtimeDuration(from: dto.RunTimeTicks),
             productionYear: dto.ProductionYear,
-            officialRating: dto.OfficialRating.map { MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax) },
+            officialRating: dto.OfficialRating.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) },
             communityRating: dto.CommunityRating,
             images: images,
             userData: userData,
@@ -155,7 +155,7 @@ public enum DTOMapper {
         (chapters ?? []).map { chapter in
             ChapterMark(
                 name: chapter.Name.map {
-                    MetadataPolicy.clean($0, limit: MetadataPolicy.nameMax)
+                    MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax)
                 },
                 start: Ticks.positionDuration(from: chapter.StartPositionTicks ?? 0, log: log)
             )

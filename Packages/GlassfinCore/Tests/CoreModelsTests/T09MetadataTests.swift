@@ -43,5 +43,19 @@ final class T09MetadataTests: XCTestCase {
             DTOMapper.mediaItem(JSONDecoder().decode(BaseItemDTO.self, from: data), log: SilentLog()))
         XCTAssertEqual(item.name, "<b>x</b>&amp;")
         XCTAssertEqual(item.overview, "<p>text</p>&lt;")
+
+        let longName = "\u{202E}\u{0000}" + literal + String(repeating: "e\u{301}👩🏽‍🚀", count: 200)
+        let expected = MetadataSanitizer.displayText(longName, limit: MetadataPolicy.nameMax)
+        let resultData = try JSONSerialization.data(withJSONObject: ["Id": "id", "Name": longName])
+        let result = try XCTUnwrap(
+            DTOMapper.mediaItem(JSONDecoder().decode(BaseItemDTO.self, from: resultData), log: SilentLog()))
+        let hintData = try JSONSerialization.data(withJSONObject: [
+            "SearchHints": [["ItemId": "id", "Name": longName, "Type": "Movie"]]
+        ])
+        let hint = try XCTUnwrap(ResilientItemDecoder.searchHints(from: hintData, log: SilentLog()).first)
+        for name in [result.name, hint.name, MediaItem(id: "id", kind: .movie, name: longName).searchDisplayItem.name] {
+            XCTAssertEqual(name, expected)
+            XCTAssertEqual(name.count, 200)
+        }
     }
 }
