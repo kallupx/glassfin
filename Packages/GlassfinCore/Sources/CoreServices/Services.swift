@@ -163,7 +163,7 @@ public struct JellyfinAuthenticationService: AuthenticationService {
         let dto = try await client.send(APIRequest(method: "GET", path: "/Users/Public"), as: [UserDTO].self)
         return dto.compactMap { user in
             guard let id = user.Id else { return nil }
-            return PublicUser(id: id, name: user.Name ?? "")
+            return PublicUser(id: id, name: user.Name ?? "", host: server.host ?? "")
         }
     }
 

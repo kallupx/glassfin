@@ -80,7 +80,7 @@ public enum RedirectPolicy {
     }
 
     /// Scheme, host, and port. Default ports are filled in so `:443` matches an omitted HTTPS port.
-    private static func originsMatch(_ lhs: URL, _ rhs: URL) -> Bool {
+    public static func originsMatch(_ lhs: URL, _ rhs: URL) -> Bool {
         guard let left = origin(lhs), let right = origin(rhs) else { return false }
         return left == right
     }

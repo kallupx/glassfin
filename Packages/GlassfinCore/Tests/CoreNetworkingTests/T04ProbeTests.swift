@@ -517,12 +517,97 @@ final class T04ProbeTests: XCTestCase {
     }
 
     func testT04_94_transportSecurityDoesNotMasqueradeAsExplicitPublicHTTP() async {
+        XCTAssertEqual(
+            ProbeTransportError.classify(URLError(.appTransportSecurityRequiresSecureConnection), leaf: nil),
+            .transportSecurity)
+        for address in ["example.com", "https://example.com"] {
+            let script = ScriptedCandidates()
+            script.sequence = [.transportSecurity]
+            let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: address)
+            XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
+            XCTAssertTrue(ProbeErrorCopy.httpSkippedByPolicy(outcome))
+            XCTAssertEqual(script.urls.count, 1)
+        }
         let script = ScriptedCandidates()
         script.sequence = [.transportSecurity]
-        let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: "example.com")
-        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .serverNotFound)
-        XCTAssertTrue(ProbeErrorCopy.httpSkippedByPolicy(outcome))
-        XCTAssertEqual(script.urls.count, 1)
+        let outcome = await ServerProbe(client: script, clock: StillClock()).run(address: "http://example.com")
+        XCTAssertEqual(outcome, .publicHTTPRejected)
+        XCTAssertEqual(ProbeErrorCopy.key(for: outcome), .publicAddressRequiresHTTPS)
+        XCTAssertFalse(ProbeErrorCopy.httpSkippedByPolicy(outcome))
+        XCTAssertTrue(script.urls.isEmpty)
+    }
+
+    func testS46_publicInfoRefusesRedirectsForEveryOriginAndDowngrades() {
+        for target in [
+            "https://media.example/path", "https://other.example", "https://media.example:8920",
+            "http://media.example", "http://nas",
+        ] {
+            XCTAssertNil(TrustCapture.redirectRequest(URLRequest(url: URL(string: target)!)))
+        }
+    }
+
+    func testS44_cancelledProbeWithTrustedChainRemainsCancelled() {
+        let capture = TrustCapture()
+        capture.record(sampleLeaf(), isSystemTrusted: true)
+        XCTAssertNil(capture.leaf)
+        XCTAssertEqual(ProbeTransportError.classify(URLError(.cancelled), leaf: capture.leaf), .cancelled)
+        capture.record(sampleLeaf(), isSystemTrusted: false)
+        XCTAssertEqual(ProbeTransportError.classify(URLError(.cancelled), leaf: capture.leaf), .tls(sampleLeaf()))
+        capture.record(sampleLeaf(), isSystemTrusted: true)
+        XCTAssertNil(capture.leaf)
+    }
+
+    func testS44_pinIsBoundToFullHTTPSOrigin() {
+        let pin = OriginCertificatePin(url: URL(string: "https://media.example")!, sha256: sampleLeaf().sha256)
+        for target in ["https://MEDIA.example:443/path", "https://media.example/other"] {
+            XCTAssertEqual(pin.fingerprint(for: URL(string: target)!), sampleLeaf().sha256)
+        }
+        for target in ["https://other.example", "https://media.example:8920", "http://media.example:443"] {
+            XCTAssertNil(pin.fingerprint(for: URL(string: target)!))
+        }
+    }
+
+    func testS44_serverProbePassesPinOnlyToMatchingCandidateOrigin() async {
+        let script = ScriptedCandidates()
+        let pin = OriginCertificatePin(url: URL(string: "https://nas:8920")!, sha256: sampleLeaf().sha256)
+        _ = await ServerProbe(client: script, clock: StillClock()).run(address: "nas", certificatePin: pin)
+        XCTAssertEqual(script.pins, [nil, pin, nil, nil])
+    }
+
+    func testS14_productionVaultAndKeychainStoreUseTheSameAccessGroup() throws {
+        let secure = AttributeSecureStore()
+        let settings = InMemorySettingsStore()
+        let vault = CredentialVault(secureStore: secure, settings: settings)
+        XCTAssertEqual(vault.attributes, KeychainAttributes.production)
+        #if canImport(Security)
+            let keychain = KeychainSecureStore()
+            let productionVault = CredentialVault(secureStore: keychain, settings: settings)
+            XCTAssertEqual(productionVault.attributes.accessGroup, keychain.attributes.accessGroup)
+        #endif
+        // A resolved app bundle group must survive the production attributes-to-vault assembly.
+        let production = KeychainAttributes.production(info: [
+            KeychainAccessGroup.infoDictionaryKey: "TEAMID.org.glassfin.app"
+        ])
+        let configured = CredentialVault(secureStore: secure, settings: settings, accessGroup: production.accessGroup)
+        let server = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        let user = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        let profile = StoredSessionProfile(
+            serverID: server, serverName: "Home", serverURL: "https://media.example",
+            userID: user, userName: "Ada", isAdministrator: false)
+        try configured.save(token: "sample-value", serverID: server, userID: user, profile: profile)
+        let account = try CredentialVault.tokenAccount(serverID: server, userID: user)
+        XCTAssertEqual(secure.attributes(for: account)?.accessGroup, production.accessGroup)
+        XCTAssertEqual(try configured.loadToken(serverID: server, userID: user), "sample-value")
+        try configured.deleteToken(serverID: server, userID: user)
+        XCTAssertNil(try configured.loadToken(serverID: server, userID: user))
+    }
+
+    func testQ416_discoveryUsesSharedSanitizerAndWhitespaceHostFallback() throws {
+        let packet = try JSONSerialization.data(withJSONObject: [
+            "Address": "https://media.example", "Id": "server", "Name": " \u{061C}\u{0085}",
+        ])
+        XCTAssertEqual(DiscoveryPolicy.parse(packet, storedURL: nil, publicInfoID: nil)?.name, "media.example")
+        XCTAssertEqual(DiscoveryPolicy.displayName("**Home**\u{061C}\u{0085}"), "**Home**")
     }
 
     private func urlParts(_ url: URL) -> (scheme: String, port: Int, path: String)? {
@@ -555,14 +640,18 @@ private final class ScriptedCandidates: ServerCandidateClient, @unchecked Sendab
     var sequence: [ServerCandidateResult] = []
     var urls: [URL] = []
     var timeouts: [Duration] = []
+    var pins: [OriginCertificatePin?] = []
     var clock: AdvancingClock?
     var advance: Duration = .zero
     var hold = false
     private var continuation: CheckedContinuation<ServerCandidateResult, Never>?
     private var started: CheckedContinuation<Void, Never>?
 
-    func fetchPublicInfo(url: URL, timeout: Duration) async -> ServerCandidateResult {
+    func fetchPublicInfo(url: URL, timeout: Duration, certificatePin: OriginCertificatePin?) async
+        -> ServerCandidateResult
+    {
         urls.append(url)
+        pins.append(certificatePin)
         timeouts.append(timeout)
         if let clock, advance > .zero {
             clock.advance(by: advance)

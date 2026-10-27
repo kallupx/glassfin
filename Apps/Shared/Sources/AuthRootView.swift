@@ -89,17 +89,17 @@ struct AuthRootView: View {
                 logoutConfirm
             }
             if let notice = flow.noticeKey {
-                Text(AuthCopy.localized(notice))
+                Text(verbatim: AuthCopy.localized(notice))
                     .accessibilityIdentifier("auth.notice")
                     .accessibilityValue(notice.rawValue)
             }
             if let error = flow.inlineError {
-                Text(AuthCopy.localized(error))
+                Text(verbatim: AuthCopy.localized(error))
                     .accessibilityIdentifier("address.error")
                     .accessibilityValue(error.rawValue)
             }
             if flow.httpSkippedByPolicy {
-                Text(AuthCopy.localized(.httpOnlyOnLocalNetwork))
+                Text(verbatim: AuthCopy.localized(.httpOnlyOnLocalNetwork))
                     .accessibilityIdentifier("address.httpSkipped")
             }
         }
@@ -115,7 +115,7 @@ struct AuthRootView: View {
 
     private var welcome: some View {
         VStack(spacing: 24) {
-            Text(AuthCopy.localized(.glassfin))
+            Text(verbatim: AuthCopy.localized(.glassfin))
                 .font(.largeTitle)
                 .accessibilityIdentifier("welcome.root")
             Button(AuthCopy.localized(.connectToServer)) { flow.connect() }
@@ -140,9 +140,9 @@ struct AuthRootView: View {
                 .accessibilityIdentifier("address.continue")
                 .focused($focused, equals: .continueButton)
             if !flow.displayedName.isEmpty {
-                Text(flow.displayedName)
+                Text(verbatim: flow.displayedName)
                     .accessibilityIdentifier("address.serverName")
-                Text(flow.displayedVersion)
+                Text(verbatim: flow.displayedVersion)
                     .accessibilityIdentifier("address.serverVersion")
             }
         }
@@ -151,7 +151,7 @@ struct AuthRootView: View {
 
     private var cleartext: some View {
         VStack(spacing: 16) {
-            Text(AuthCopy.localized(.connectionNotEncrypted))
+            Text(verbatim: AuthCopy.localized(.connectionNotEncrypted))
                 .accessibilityIdentifier("cleartext.root")
             Button(AuthCopy.localized(.continueUnencrypted)) { Task { await flow.acceptCleartext() } }
                 .accessibilityIdentifier("cleartext.accept")
@@ -163,20 +163,24 @@ struct AuthRootView: View {
 
     private var certificate: some View {
         VStack(spacing: 12) {
-            Text(flow.certificate?.sha256 ?? flow.mismatchPresented?.sha256 ?? "")
+            Text(verbatim: flow.displayedName)
+                .accessibilityIdentifier("certificate.serverName")
+            Text(verbatim: flow.certificate?.sha256 ?? flow.mismatchPresented?.sha256 ?? "")
                 .accessibilityIdentifier("certificate.fingerprint")
-            Text(flow.certificate?.subject ?? flow.mismatchPresented?.subject ?? "")
+            Text(verbatim: flow.certificate?.subject ?? flow.mismatchPresented?.subject ?? "")
                 .accessibilityIdentifier("certificate.subject")
             if let previous = flow.mismatchPrevious {
-                Text(previous)
+                Text(verbatim: previous)
                     .accessibilityIdentifier("certificate.previous")
             }
-            Text(AuthCopy.localized(.certificateChanged))
-            Button(AuthCopy.localized(.accept)) {
-                guard let leaf = flow.certificate else { return }
-                try? flow.acceptCertificate(userAcceptedFingerprint: leaf.sha256)
+            Text(verbatim: AuthCopy.localized(.certificateChanged))
+            if flow.canAcceptCertificate {
+                Button(AuthCopy.localized(.accept)) {
+                    guard let leaf = flow.certificate else { return }
+                    try? flow.acceptCertificate(userAcceptedFingerprint: leaf.sha256)
+                }
+                .accessibilityIdentifier("certificate.accept")
             }
-            .accessibilityIdentifier("certificate.accept")
             Button(AuthCopy.localized(.cancel)) { flow.rejectCertificate() }
                 .accessibilityIdentifier("certificate.cancel")
                 .focused($focused, equals: .cancel)
@@ -186,7 +190,8 @@ struct AuthRootView: View {
 
     private var setup: some View {
         VStack(spacing: 16) {
-            Text(AuthCopy.setupIncomplete(address: flow.setupAddress?.absoluteString ?? ""))
+            Text(verbatim: flow.displayedName)
+            Text(verbatim: AuthCopy.setupIncomplete(address: flow.setupAddress?.absoluteString ?? ""))
                 .accessibilityIdentifier("setup.root")
             Button(AuthCopy.localized(.tryAgain)) { flow.retrySetup() }
                 .accessibilityIdentifier("setup.retry")
@@ -196,8 +201,8 @@ struct AuthRootView: View {
 
     private var loginMethod: some View {
         VStack(spacing: 16) {
-            Text(flow.displayedName).accessibilityIdentifier("login.serverName")
-            Text(flow.displayedVersion).accessibilityIdentifier("login.serverVersion")
+            Text(verbatim: flow.displayedName).accessibilityIdentifier("login.serverName")
+            Text(verbatim: flow.displayedVersion).accessibilityIdentifier("login.serverVersion")
             if flow.quickConnectEnabled {
                 Button(AuthCopy.localized(.quickConnect)) { Task { await flow.chooseQuickConnect() } }
                     .accessibilityIdentifier("login.quickConnect")
@@ -212,10 +217,10 @@ struct AuthRootView: View {
 
     private var quickConnect: some View {
         VStack(spacing: 16) {
-            Text(flow.quickConnectCode ?? "")
+            Text(verbatim: flow.quickConnectCode ?? "")
                 .font(.largeTitle)
                 .accessibilityIdentifier("quickconnect.code")
-            Text(AuthCopy.localized(.quickConnectInstruction))
+            Text(verbatim: AuthCopy.localized(.quickConnectInstruction))
                 .accessibilityIdentifier("quickconnect.instruction")
             if flow.quickConnectExpired || flow.inlineError != nil {
                 Button(AuthCopy.localized(.getNewCode)) { Task { await flow.getNewQuickConnectCode() } }
@@ -229,11 +234,15 @@ struct AuthRootView: View {
 
     private var userPicker: some View {
         VStack(spacing: 12) {
-            Text(flow.displayedName)
+            Text(verbatim: flow.displayedName)
             ForEach(Array(flow.publicUsers.enumerated()), id: \.element.id) { index, user in
-                Button(user.name) { flow.selectUser(user) }
-                    .accessibilityIdentifier("users.\(user.id)")
-                    .focused($focused, equals: index == 0 ? .continueButton : nil)
+                Button {
+                    flow.selectUser(user)
+                } label: {
+                    Text(verbatim: user.name)
+                }
+                .accessibilityIdentifier("users.\(user.id)")
+                .focused($focused, equals: index == 0 ? .continueButton : nil)
             }
         }
         .accessibilityIdentifier("users.root")
@@ -264,18 +273,18 @@ struct AuthRootView: View {
         TabView {
             Tab(AuthCopy.localized(.home), systemImage: "house") {
                 VStack(spacing: 16) {
-                    Text(AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
+                    Text(verbatim: AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
                     if let key = flow.bannerKey {
-                        Text(AuthCopy.localized(key)).accessibilityIdentifier("home.banner")
+                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.banner")
                     }
                     if let key = flow.homeErrorKey {
-                        Text(AuthCopy.localized(key)).accessibilityIdentifier("home.error")
+                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.error")
                         Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryHome() } }
                             .accessibilityIdentifier("home.retry")
                             .focused($focused, equals: .tryAgain)
                     } else if let snapshot = flow.cachedHome {
                         ForEach(snapshot.resume + snapshot.nextUp + snapshot.latest, id: \.id) { item in
-                            Text(item.name)
+                            Text(verbatim: item.name)
                         }
                     }
                 }
@@ -283,10 +292,15 @@ struct AuthRootView: View {
             }
             Tab(AuthCopy.localized(.settings), systemImage: "gear") {
                 VStack(spacing: 16) {
+                    Text(verbatim: flow.displayedName)
+                        .accessibilityIdentifier("settings.serverName")
                     Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
                         .accessibilityIdentifier("settings.signOut")
-                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-                        .accessibilityIdentifier("settings.version")
+                    Text(
+                        verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                            ?? ""
+                    )
+                    .accessibilityIdentifier("settings.version")
                 }
                 .accessibilityIdentifier("settings.root")
             }
@@ -295,7 +309,7 @@ struct AuthRootView: View {
 
     private var logoutConfirm: some View {
         VStack(spacing: 16) {
-            Text(AuthCopy.localized(.signOutConfirm))
+            Text(verbatim: AuthCopy.localized(.signOutConfirm))
                 .accessibilityIdentifier("logout.root")
             Button(AuthCopy.localized(.signOut)) { Task { await flow.confirmLogout() } }
                 .accessibilityIdentifier("logout.confirm")
@@ -313,8 +327,8 @@ struct AuthRootView: View {
 
     private func message(_ title: String, detail: String) -> some View {
         VStack(spacing: 12) {
-            Text(title)
-            Text(detail)
+            Text(verbatim: title)
+            Text(verbatim: detail)
         }
     }
 }
@@ -334,7 +348,9 @@ enum AuthAssembly {
         #endif
         let secure = KeychainSecureStore()
         let settings = UserDefaultsSettingsStore(defaults: .standard)
-        return assemble(backend: LiveAuthBackend(secureStore: secure), secure: secure, settings: settings)
+        return assemble(
+            backend: LiveAuthBackend(secureStore: secure, pins: SettingsCertificatePinStore(settings: settings)),
+            secure: secure, settings: settings)
     }
 
     @MainActor
@@ -351,7 +367,8 @@ enum AuthAssembly {
             pinger: AuthAssemblyPinger(backend: backend, settings: settings, secure: secure),
             cacheRoot: root
         )
-        let vault = CredentialVault(secureStore: secure, settings: settings, accessGroup: "")
+        let vault = CredentialVault(
+            secureStore: secure, settings: settings, accessGroup: KeychainAttributes.production.accessGroup)
         return AuthFlow(
             app: app,
             backend: backend,
@@ -372,12 +389,11 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         guard let stored = prefs.activeServer(), let user = prefs.activeUser(),
             let version = SemVer(parsing: stored.version)
         else { return .failed(.serverUnreachable) }
-        let vault = CredentialVault(secureStore: secure, settings: settings, accessGroup: "")
-        let legacy = try? secure.data(for: SessionCredential.account(serverID: stored.id, userID: user.userID))
-        let token =
-            (try? vault.loadToken(serverID: stored.id, userID: user.userID))
-            ?? legacy.map { String(decoding: $0, as: UTF8.self) }
-        guard let token else { return .failed(.serverUnreachable) }
+        let vault = CredentialVault(
+            secureStore: secure, settings: settings, accessGroup: KeychainAttributes.production.accessGroup)
+        guard let token = try? vault.loadToken(serverID: stored.id, userID: user.userID) else {
+            return .failed(.serverUnreachable)
+        }
         let server = ServerInfo(id: stored.id, name: stored.name, url: stored.url, version: version)
         do {
             _ = try await backend.currentUser(on: server, token: token)
@@ -398,7 +414,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
     }
 
     struct UITestAuthBackend: AuthBackend {
-        func probe(_ address: String) async -> ServerProbeOutcome {
+        func probe(_ address: String, certificatePin: OriginCertificatePin?) async -> ServerProbeOutcome {
             let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("http://"), !trimmed.contains("192.168."), !trimmed.contains("10."),
                 !trimmed.contains(".local")

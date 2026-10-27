@@ -69,9 +69,10 @@ protocol RequestTransport: Sendable {
 struct URLSessionRequestTransport: RequestTransport {
     var session: URLSession
     var redirects: RedirectSessionDelegate
+    var certificatePin: OriginCertificatePin? = nil
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
-        let proxy = RedirectTaskProxy(owner: redirects)
+        let proxy = RedirectTaskProxy(owner: redirects, certificatePin: certificatePin)
         let (data, response) = try await session.data(for: request, delegate: proxy)
         return (data, response, proxy.capturedTaskIdentifier())
     }
@@ -81,11 +82,17 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
     public var server: URL
     public var identity: ClientIdentity
     public var session: URLSession
+    public var certificatePin: OriginCertificatePin? {
+        (transport as? URLSessionRequestTransport)?.certificatePin
+    }
     public var redirectDelegate: RedirectSessionDelegate
     public var log: any GlassfinLog
     var transport: any RequestTransport
 
-    public init(server: URL, identity: ClientIdentity, log: any GlassfinLog = SilentLog()) {
+    public init(
+        server: URL, identity: ClientIdentity, log: any GlassfinLog = SilentLog(),
+        certificatePin: OriginCertificatePin? = nil
+    ) {
         let delegate = RedirectSessionDelegate()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
@@ -97,7 +104,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             session: session,
             redirectDelegate: delegate,
             log: log,
-            transport: URLSessionRequestTransport(session: session, redirects: delegate)
+            transport: URLSessionRequestTransport(session: session, redirects: delegate, certificatePin: certificatePin)
         )
     }
 
@@ -231,8 +238,17 @@ private final class RedirectTaskProxy: NSObject, URLSessionTaskDelegate, @unchec
     private let lock = NSLock()
     private var identifier: Int?
 
-    init(owner: RedirectSessionDelegate) {
+    private let trust: TrustCapture
+
+    init(owner: RedirectSessionDelegate, certificatePin: OriginCertificatePin?) {
         self.owner = owner
+        self.trust = TrustCapture(certificatePin: certificatePin)
+    }
+
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge
+    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        await trust.urlSession(session, task: task, didReceive: challenge)
     }
 
     func capturedTaskIdentifier() -> Int? {

@@ -200,7 +200,7 @@ final class T02FoundationTests: XCTestCase {
         var preferences = AppPreferences.empty
         for index in 0..<10 {
             let server = StoredServer(
-                id: "s\(index)",
+                id: String(format: "%032x", index + 1),
                 name: "Server \(index)",
                 url: Sample.url("https://s\(index).example:8096/jellyfin"),
                 version: "10.11.11",
@@ -209,11 +209,12 @@ final class T02FoundationTests: XCTestCase {
             preferences = try preferences.upserting(server: server)
             preferences = preferences.upserting(
                 user: StoredUser(
-                    serverID: "s\(index)", userID: "u\(index)", userName: "User \(index)", isAdministrator: index == 0,
+                    serverID: String(format: "%032x", index + 1), userID: String(format: "%032x", index + 101),
+                    userName: "User \(index)", isAdministrator: index == 0,
                     audioLanguage: "fi", subtitleLanguage: "sv"))
         }
-        preferences.activeServerID = "s0"
-        preferences.activeUserID = "u0"
+        preferences.activeServerID = String(format: "%032x", 1)
+        preferences.activeUserID = String(format: "%032x", 101)
         let bytes = try XCTUnwrap(PreferencesRepository.encodedByteCount(preferences))
         XCTAssertLessThan(bytes, CacheBudget.userDefaultsBytes)
         XCTAssertLessThan(bytes, 50 * 1_024)
@@ -223,7 +224,7 @@ final class T02FoundationTests: XCTestCase {
         let saved = repository.load()
         XCTAssertEqual(saved.servers.count, 10)
         XCTAssertEqual(saved.users.count, 10)
-        XCTAssertEqual(saved.activeServer()?.id, "s0")
+        XCTAssertEqual(saved.activeServer()?.id, String(format: "%032x", 1))
         XCTAssertEqual(saved.activeUser()?.userName, "User 0")
         let json = store.string(forKey: PreferencesRepository.storageKey) ?? ""
         XCTAssertFalse(json.contains(Sample.token))
@@ -268,13 +269,21 @@ final class T02FoundationTests: XCTestCase {
 
         let replaced = try preferences.upserting(
             server: StoredServer(
-                id: "s0", name: "Renamed", url: Sample.url("https://s0.example:8096/jellyfin"), version: "12.0.0"))
-        XCTAssertEqual(replaced.servers.first { $0.id == "s0" }?.name, "Renamed")
-        let (removed, accounts) = replaced.removing(serverID: "s0")
-        XCTAssertEqual(accounts, [SessionCredential.account(serverID: "s0", userID: "u0")])
+                id: String(format: "%032x", 1), name: "Renamed", url: Sample.url("https://s0.example:8096/jellyfin"),
+                version: "12.0.0"))
+        XCTAssertEqual(replaced.servers.first { $0.id == String(format: "%032x", 1) }?.name, "Renamed")
+        let (removed, accounts) = replaced.removing(serverID: String(format: "%032x", 1))
+        XCTAssertEqual(
+            accounts,
+            [
+                try CredentialVault.tokenAccount(
+                    serverID: String(format: "%032x", 1), userID: String(format: "%032x", 101))
+            ])
         XCTAssertNil(removed.activeServerID)
-        XCTAssertFalse(removed.servers.contains { $0.id == "s0" })
-        XCTAssertFalse(SessionCredential.account(serverID: "s0", userID: "u0").contains(Sample.token))
+        XCTAssertFalse(removed.servers.contains { $0.id == String(format: "%032x", 1) })
+        XCTAssertFalse(
+            try CredentialVault.tokenAccount(serverID: String(format: "%032x", 1), userID: String(format: "%032x", 101))
+                .contains(Sample.token))
 
         let defaults = UserDefaults(suiteName: "org.glassfin.tests.\(UUID().uuidString)")
         let userDefaults = UserDefaultsSettingsStore(defaults: defaults ?? .standard)
