@@ -215,7 +215,7 @@
                 urlRequest.setValue(range.headerValue, forHTTPHeaderField: "Range")
             }
             do {
-                let (bytes, response) = try await session.bytes(for: urlRequest)
+                let (bytes, response) = try await session.bytes(for: urlRequest, delegate: delegate)
                 defer { bytes.task.cancel() }
                 guard let http = response as? HTTPURLResponse else { throw APIError.network }
                 let location = http.value(forHTTPHeaderField: "Location").flatMap { raw in
@@ -263,6 +263,22 @@
         func urlSession(
             _ session: URLSession,
             didReceive challenge: URLAuthenticationChallenge,
+            completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+            handleChallenge(challenge, completionHandler: completionHandler)
+        }
+
+        func urlSession(
+            _ session: URLSession,
+            task: URLSessionTask,
+            didReceive challenge: URLAuthenticationChallenge,
+            completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+            handleChallenge(challenge, completionHandler: completionHandler)
+        }
+
+        private func handleChallenge(
+            _ challenge: URLAuthenticationChallenge,
             completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
         ) {
             guard challenge.previousFailureCount == 0,
