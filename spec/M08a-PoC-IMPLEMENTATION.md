@@ -70,10 +70,10 @@ and its documenting test are unchanged.
   contradictions with the merged PoC codec, profile, reason-parser, retry,
   pinning, string, reporting or token rules. Native validation remains pending.
 
-## Complete test-plan mapping (updated Follow-up 4)
+## Complete test-plan mapping (updated Follow-up 5)
 
 Authoritative plans re-read on 2026-10-27: `/workspace/jellyfin-tvos/test/TESTPLAN-M08a-PoC.md`
-(T08P-01–99) and `TESTPLAN-PoC-ACCEPTANCE.md` (TPOC-01–82). Every ID appears below.
+(T08P-01–100) and `TESTPLAN-PoC-ACCEPTANCE.md` (TPOC-01–82). Every ID appears below.
 L denotes locally run Linux model/unit coverage, I denotes opt-in live tests
 (skipped without GLASSFIN_INTEGRATION), and K denotes a script. A Linux model
 counterpart does not establish an X/U/S/M result. Pending portions are explicit;
@@ -182,6 +182,7 @@ this table is traceability, not a claim of PoC acceptance.
 | T08P-97 | [`testT08P_94_95_96_97_defaultVideoPrecheck`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L case-insensitive canonical codec names; h265/H265 and avc rejected per merged SPEC §3a. |
 | T08P-98 | [`testT08P_98_missingStreamsRefetchExactlyOnce`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L item refetch exactly once with Fields=MediaStreams; success/missing/empty/unsupported outcomes; HTTP-mock X pending. |
 | T08P-99 | [`testT08P_99_retryVideoReasonBlocksBeforeStreamOrPlayer`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L retry video reason: unsupported key, no remux stream/player/job, no third attempt; native X pending. |
+| T08P-100 | [`PlaybackCoordinatorTests.testT08P_100_userPasswordSegmentRejectedBeforePlayerDelivery`, `testT08P_100_userOnlySegmentRejectedBeforePlayerDelivery`, `testT08P_100_userInfoKeyRejectedBeforePlayerDelivery`, `testT08P_100_userInfoMasterURLFailsBeforeMediaRequest`, `testT08P_100_cleanPlaylistPlays`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift)<br>[`MediaUserInfoSecurityTests.testT08P_100_userInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery`, `testT08P_100_userInfoInitialAndResolvedURLsNeverReachTransportOrPlayer`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift)<br>[`AVFoundationMediaSessionTests.testT08P_100_userInfoPlaylistsRejectBeforeAVPlayerDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/AVFoundationMediaSessionTests.swift) | L Debug/Release: all four same-origin placements reject with `PlaybackCopy.couldNotPlayKey` (`playback.error.couldNotPlay`); unsafe playlists deliver zero bytes, unsafe master URLs make zero media requests; request logs contain no userinfo, query credentials or Basic authorization. The same clean playlist reaches `.playing` and sends Playing. Native session test checks zero AVPlayer sink replies on rejection and a delivered clean control; Apple X execution pending. |
 
 ### TPOC
 
@@ -270,28 +271,55 @@ this table is traceability, not a claim of PoC acceptance.
 | TPOC-81 | — | Pending per-journey xcresult + recording + redacted API/session logs. |
 | TPOC-82 | — | Pending mock-only single-season focusable picker; two-season seed is intentionally not used. |
 
-## Follow-up 4 security traceability
+## Follow-up 5 XCTest isolation audit
 
-The plans under `/workspace/jellyfin-tvos/test` were checked again. They have
-no dedicated userinfo rejection row. T08-2-52/53 are in merged main's plan but
-absent from that external snapshot; T08-2-52 documents origin comparison, not
-playback rejection. The supplemental cases are therefore recorded as gaps
-related to the existing origin/token rows. All new userinfo tests below run
-in both Debug and Release.
+Audited every test and helper in CorePlaybackTests, CoreServicesTests and
+Apps/Shared/UITests for synchronous XCTest entry into MainActor/async code,
+`MainActor.assumeIsolated`, blocking semaphores, synchronous expectation waits
+and MainActor tasks launched by synchronous tests. Converted these two methods:
 
-| ID / gap | Matching coverage | Scope |
+- `PlaybackCoordinatorTests.testT08P_73_74_playerAndReportingLogRedaction`: the
+  class is MainActor-isolated, so its final synchronous test also needs XCTest's
+  async entry path to avoid the Apple XCTest signal-6 pattern.
+- `WelcomeSmokeTests.testWelcomeScreenAppears`: the UI test class is
+  MainActor-isolated and invokes XCUIApplication; it now uses an async entry.
+
+Every coordinator test was already async except the log test. CoreServicesTests'
+only synchronous test uses nonisolated URL/handoff builders; its actor/Task work
+is already awaited by async tests. AVFoundation session tests already awaited
+loader completion. No `wait(for:)`, `waitForExpectations`, semaphore or
+`MainActor.assumeIsolated` call was found in the audited tests, so no expectation
+wait needed replacement with `await fulfillment(of:)`. The UI element's
+`waitForExistence` is an XCUITest element wait, not a blocking wait for MainActor
+work scheduled by the test. Apple XCTest/UI execution remains runner validation.
+
+## Userinfo security traceability (updated Follow-up 5)
+
+The updated external plan assigns T08P-100 to the Follow-up 4 userinfo decision.
+The portable coordinator tests connect the production URL planner, chunked loader
+and playlist rewriter to a recording player boundary, asserting the user-facing
+`PlaybackCopy.couldNotPlayKey` (`playback.error.couldNotPlay`) for every placement.
+The master is rejected before
+engine load; credential-bearing segments/keys reject the entire playlist before
+any bytes reach the player. Only clean playlist GETs reach the mock transport.
+The native session test also exercises its real load/completion path with a
+recording AVPlayer request sink. The clean control reaches `.playing` in the
+coordinator model; these tests do not establish actual AVPlayer decoding.
+Portable cases run in Debug and Release; native X execution is pending.
+
+| ID | Matching coverage | Scope |
 | --- | --- | --- |
 | T08P-14/97 | `PlaybackPoCDecisionTests.testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`, `PlaybackCoordinatorTests.testT08P_94_95_96_97_defaultVideoPrecheck` | Canonical codecs still accept mixed case; h265/H265 now reject before negotiation/media. |
 | T08-2-14 | `ADRM08PrototypeTests.testT08_2_14_headerPathStripsCredentialQueriesIgnoringCase` | Query stripping remains covered; userinfo playback stripping is superseded by rejection. |
 | T08P-70/88; T08-2-50 | `MediaLoaderSecurityTests.testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin`, existing cross-origin URI tests | Existing header, segment-query-token and origin/downgrade regressions retained. |
 | T08-2-52/53 (merged plan) | `MediaOriginTests`, `MediaFailurePrecedenceTests` | Existing origin/userinfo documentation and loader failure precedence retained unchanged. |
-| Gap: userinfo segment/key rejection (related T08P-88 / T08-2-50) | [`MediaUserInfoSecurityTests.testUserInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Reject complete fetched playlists with credential-bearing media, map, part or key URLs; no bytes delivered; mock log contains only the clean playlist request. |
-| Gap: userinfo variant rejection (related T08P-70 / T08-2-50) | [`MediaUserInfoSecurityTests.testUserInfoVariantPlaylistsRejectServerMasterBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Plain/scheme-relative variants, audio rendition and I-frame URI attributes reject before handoff. |
-| Gap: userinfo TranscodingUrl / resolved URL (related T08P-54/69/70) | [`MediaUserInfoSecurityTests.testUserInfoTranscodingURLsAndServerURLsAreRejected`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift), `testUserInfoInitialAndResolvedURLsNeverReachTransportOrPlayer`, `testUserInfoRedirectNeverReachesTransport`, [`PlaybackCoordinatorTests.testUserInfoTranscodingURLFailsBeforeMediaRequest`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | Builders, initial/master URL, absolute/scheme-relative TranscodingUrl, resolver redirects and planner block; initial failures send zero media requests, redirects send only the clean first request. |
-| Gap: loader request credentials (related T08P-69/70) | [`MediaUserInfoSecurityTests.testUserInfoLoaderRequestsAreRejectedEvenAfterMutation`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift), `testAtSignInPathAndQueryDoesNotRejectSafePlayback` | Direct wrapper/planner and mutable request bypass attempts reject with an empty mock request log; harmless path/query @ still works. Request-log assertions inspect URLComponents.user/password directly. |
+| T08P-100 (segment/key) | [`MediaUserInfoSecurityTests.testT08P_100_userInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Reject complete fetched playlists with credential-bearing media, map, part or key URLs; no bytes delivered; mock log contains only the clean playlist request, no Basic authorization. |
+| T08P-100 (supplemental variants) | [`MediaUserInfoSecurityTests.testUserInfoVariantPlaylistsRejectServerMasterBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Plain/scheme-relative variants, audio rendition and I-frame URI attributes reject before handoff. |
+| T08P-100 (master/resolved URL) | [`MediaUserInfoSecurityTests.testUserInfoTranscodingURLsAndServerURLsAreRejected`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift), `testT08P_100_userInfoInitialAndResolvedURLsNeverReachTransportOrPlayer`, `testUserInfoRedirectNeverReachesTransport`, [`PlaybackCoordinatorTests.testT08P_100_userInfoMasterURLFailsBeforeMediaRequest`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | Builders, initial/master URL, absolute/scheme-relative TranscodingUrl, resolver redirects and planner block; initial failures send zero media requests, redirects send only the clean first request; coordinator asserts the couldNotPlay key. |
+| T08P-100 (supplemental loader validation) | [`MediaUserInfoSecurityTests.testUserInfoLoaderRequestsAreRejectedEvenAfterMutation`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift), `testAtSignInPathAndQueryDoesNotRejectSafePlayback` | Direct wrapper/planner and mutable request bypass attempts reject with an empty mock request log; harmless path/query @ still works. Request-log assertions inspect URLComponents.user/password directly. |
 
 The matrix includes nonempty, empty and percent-encoded user/password fields:
-`user:password@`, `user@`, `:password@`, `@`, `:@`, `user:@`, `%75ser:%70w@`.
+`user:pw@`, `user@`, `:password@`, `@`, `:@`, `user:@`, `%75ser:%70w@`.
 
 ## Generated media and bootstrap
 
@@ -330,11 +358,11 @@ subtitle rendering, trickplay, media segments, next-up, buffering timeout UI,
 Ping and reconnect delivery of failed Stopped reports.
 Video transcoding is deliberately excluded from this PoC.
 
-## Local verification (Follow-up 4)
+## Local verification (Follow-up 5)
 
 - Linux Swift 6.4.1 `swift build`, `swift test` and `swift test -c release` passed.
-  Debug: 253 tests; Release: 252 tests; each has seven gated live-server skips
-  and zero failures. Coverage's native test run passed 253 tests with seven skips.
+  Debug: 257 tests; Release: 256 tests; each has seven gated live-server skips
+  and zero failures. Coverage's native test run passed 257 tests with seven skips.
 - `scripts/coverage-gate.sh`: 92.95% line coverage (4180/4497), threshold 80%.
 - All lint commands from `ci.yml` passed: SwiftLint 0.65.1, strict recursive
   swift-format, license checks and self-test, source greps, entitlements,
@@ -343,6 +371,8 @@ Video transcoding is deliberately excluded from this PoC.
   `ci-grep.sh` passed independently. Path filter and shell syntax also passed.
 - All 16 combined bootstrap Python tests passed, including 12.2 recovery and
   the two-season/four-episode scan requirements. `git diff --check` passed.
+- All seven portable T08P-100 tests passed in both configurations. The added
+  native session test and the async UI smoke test require the Apple runner.
 - `MediaOrigin.swift` and `MediaOriginTests.swift` have no diff from merged main.
   Main's chunked body reader/appender and failure precedence remain intact.
 
@@ -352,7 +382,6 @@ were not run on Linux. The model tests do not establish simulator acceptance.
 
 ## Open questions
 
-- Test-plan gap: assign dedicated IDs for the new userinfo rejection cases.
 - Q8P-04: audio output preference/channel policy; current profile keeps AAC/EAC3
   and current video-copy URL chooses AAC for audio conversion.
 - Q8P-07: whether remux requires Ping; Q8P-09: report-401/auth handling and pending

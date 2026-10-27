@@ -32,6 +32,7 @@ public final class MockPlaybackEngine: PlaybackEngine {
     public var canSeek = true
     public var loadError: APIError?
     public var loadErrors: [APIError?] = []
+    public var loadHandler: (@Sendable (ResourceLoaderCarrier) async throws(APIError) -> Void)?
     public var automaticallyReady = true
     public var automaticallyPlaying = true
     public private(set) var loadAttempts: [ResourceLoaderCarrier] = []
@@ -54,6 +55,7 @@ public final class MockPlaybackEngine: PlaybackEngine {
         } else if let loadError {
             throw loadError
         }
+        try await loadHandler?(carrier)
         loads.append((carrier, startAt))
         position = startAt
         if automaticallyReady { emit(.ready) }

@@ -454,7 +454,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
     }
 
     /// T08P-73/T08P-74: captured report/player diagnostics redact all credential spellings.
-    func testT08P_73_74_playerAndReportingLogRedaction() {
+    func testT08P_73_74_playerAndReportingLogRedaction() async {
         let sink = PoCLogCapture()
         let log = PlaybackLog(sink: sink)
         let secrets = [
@@ -990,9 +990,9 @@ final class PlaybackCoordinatorTests: XCTestCase {
         }
     }
 
-    /// Follow-up 4: userinfo is a test-plan gap adjacent to T08P-70/88.
-    func testUserInfoTranscodingURLFailsBeforeMediaRequest() async throws {
-        for credentials in ["user:password@", "user@", ":password@", "@", ":@", "user:@"] {
+    /// T08P-100 (d): reject the master URL before transport or player creation.
+    func testT08P_100_userInfoMasterURLFailsBeforeMediaRequest() async throws {
+        for credentials in ["user:pw@", "user@", ":password@", "@", ":@", "user:@", "%75ser:%70w@"] {
             for prefix in ["https:", ""] {
                 let fixture = try playbackFixture(
                     container: "mkv", direct: false,
@@ -1000,6 +1000,9 @@ final class PlaybackCoordinatorTests: XCTestCase {
                 let rig = try rig(data: fixture)
                 await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
                 XCTAssertEqual(rig.coordinator.failure, .insecureRedirect)
+                XCTAssertEqual(rig.coordinator.failure?.localizedKey, PlaybackCopy.couldNotPlayKey)
+                XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: PlaybackCopy.couldNotPlayKey))
+                XCTAssertTrue(rig.engine.loadAttempts.isEmpty)
                 XCTAssertTrue(rig.engine.loads.isEmpty)
                 let requests = await rig.origin.requests
                 XCTAssertTrue(requests.isEmpty)
@@ -1009,6 +1012,105 @@ final class PlaybackCoordinatorTests: XCTestCase {
                 await rig.coordinator.stop()
             }
         }
+    }
+
+    /// T08P-100 (a): a same-origin segment with a user and password never reaches the player.
+    func testT08P_100_userPasswordSegmentRejectedBeforePlayerDelivery() async throws {
+        try await assertT08P100Playlist(
+            segment: "https://user:pw@server.example/jellyfin/segment.m4s", rejected: true)
+    }
+
+    /// T08P-100 (b): a username alone is also userinfo.
+    func testT08P_100_userOnlySegmentRejectedBeforePlayerDelivery() async throws {
+        try await assertT08P100Playlist(
+            segment: "https://user@server.example/jellyfin/segment.m4s", rejected: true)
+    }
+
+    /// T08P-100 (c): key attributes are validated before any playlist bytes leave the loader.
+    func testT08P_100_userInfoKeyRejectedBeforePlayerDelivery() async throws {
+        try await assertT08P100Playlist(
+            key: "https://user:pw@server.example/jellyfin/key", rejected: true)
+    }
+
+    /// T08P-100 control: removing userinfo from the same playlist permits playback.
+    func testT08P_100_cleanPlaylistPlays() async throws {
+        try await assertT08P100Playlist(rejected: false)
+    }
+
+    private func assertT08P100Playlist(
+        segment: String = "https://server.example/jellyfin/segment.m4s",
+        key: String = "https://server.example/jellyfin/key", rejected: Bool,
+        file: StaticString = #filePath, line: UInt = #line
+    ) async throws {
+        let playlist = """
+            #EXTM3U
+            #EXT-X-TARGETDURATION:6
+            #EXT-X-KEY:METHOD=AES-128,URI="\(key)"
+            #EXTINF:6,
+            \(segment)
+            #EXT-X-ENDLIST
+            """
+        let rig = try rig(
+            data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"),
+            originResponse: OriginMediaResponse(
+                status: 200, contentType: "application/vnd.apple.mpegurl", body: Data(playlist.utf8)))
+        let delivered = PoCPlaylistDelivery()
+        // Replace only the player boundary: use the production planner, loader and rewriter.
+        rig.engine.loadHandler = { [origin = rig.origin] carrier throws(APIError) in
+            guard
+                let request = ResourceLoadPlanner.originRequest(
+                    assetURL: carrier.assetURL, authorizationHeader: carrier.authorizationHeader,
+                    trust: carrier.trust, range: nil, allowedOrigin: carrier.originURL)
+            else { throw .invalidURL }
+            try await ChunkedMediaLoader.load(
+                request: request, range: nil, client: origin, isCancelled: { false },
+                receive: { reply async throws(APIError) in await delivered.receive(reply) })
+        }
+        for uri in [segment, key] {
+            let target = try XCTUnwrap(URL(string: uri), file: file, line: line)
+            XCTAssertTrue(MediaOrigin.matches(target, rig.session.serverURL), file: file, line: line)
+        }
+        await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+        if rejected {
+            XCTAssertEqual(rig.coordinator.failure, .couldNotPlay, file: file, line: line)
+            XCTAssertEqual(
+                rig.coordinator.state, .failed(localizedKey: PlaybackCopy.couldNotPlayKey), file: file, line: line)
+            XCTAssertTrue(rig.engine.loads.isEmpty, file: file, line: line)
+        } else {
+            await settle { rig.coordinator.state == .playing }
+            XCTAssertNil(rig.coordinator.failure, file: file, line: line)
+            XCTAssertEqual(rig.engine.loads.count, 1, file: file, line: line)
+        }
+        let replies = await delivered.replies
+        XCTAssertEqual(replies.count, rejected ? 0 : 1, file: file, line: line)
+        if !rejected {
+            let reply = try XCTUnwrap(replies.first, file: file, line: line)
+            let keyURL = try XCTUnwrap(URL(string: key), file: file, line: line)
+            let wrappedKey = try XCTUnwrap(MediaAssetScheme.wrap(keyURL), file: file, line: line)
+            let expected = playlist.replacingOccurrences(of: "URI=\"\(key)\"", with: "URI=\"\(wrappedKey)\"")
+            XCTAssertEqual(String(decoding: reply.data, as: UTF8.self), expected, file: file, line: line)
+        }
+        let requests = await rig.origin.requests
+        // One resolver GET and one loader GET; no segment or key fetch, including for safe URLs.
+        XCTAssertEqual(requests.count, 2, file: file, line: line)
+        for request in requests {
+            XCTAssertEqual(request.method, "GET", file: file, line: line)
+            XCTAssertEqual(request.url.path, "/jellyfin/master.m3u8", file: file, line: line)
+            let components = try XCTUnwrap(
+                URLComponents(url: request.url, resolvingAgainstBaseURL: true), file: file, line: line)
+            XCTAssertNil(components.user, file: file, line: line)
+            XCTAssertNil(components.password, file: file, line: line)
+            XCTAssertFalse(MediaCredentialQuery.contains(request.url), file: file, line: line)
+            XCTAssertEqual(
+                request.authorizationHeader, try rig.session.identity.authorizationHeader(), file: file, line: line)
+            XCTAssertFalse(
+                request.authorizationHeader?.lowercased().hasPrefix("basic ") == true, file: file, line: line)
+        }
+        let calls = await rig.client.calls
+        XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 1, file: file, line: line)
+        XCTAssertEqual(
+            calls.filter { $0.path == "/Sessions/Playing" }.count, rejected ? 0 : 1, file: file, line: line)
+        await rig.coordinator.stop()
     }
 
     func testT08P_98_missingStreamsRefetchExactlyOnce() async throws {
@@ -1047,6 +1149,11 @@ final class PlaybackCoordinatorTests: XCTestCase {
         }
     }
 
+}
+
+private actor PoCPlaylistDelivery {
+    private(set) var replies: [PlayerByteReply] = []
+    func receive(_ reply: PlayerByteReply) { replies.append(reply) }
 }
 
 private actor PoCRequestGate {

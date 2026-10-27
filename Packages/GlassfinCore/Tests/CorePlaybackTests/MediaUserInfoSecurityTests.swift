@@ -4,13 +4,12 @@ import CorePlayback
 import Foundation
 import XCTest
 
-/// Follow-up 4 security decision. The plans have no dedicated userinfo rejection row.
-/// Related origin/token rows: T08P-54/69/70/88 and T08-2-50/52 (origin identity is unchanged).
+/// T08P-100: userinfo rejection is separate from RFC 6454 origin identity (T08-2-52).
 final class MediaUserInfoSecurityTests: XCTestCase {
     private let base = URL(string: "https://example.invalid/master.m3u8")!
-    private let userInfo = ["user:password@", "user@", ":password@", "@", ":@", "user:@", "%75ser:%70w@"]
+    private let userInfo = ["user:pw@", "user@", ":password@", "@", ":@", "user:@", "%75ser:%70w@"]
 
-    func testUserInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery() async throws {
+    func testT08P_100_userInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery() async throws {
         for credentials in userInfo {
             let target = "https://\(credentials)example.invalid/segment.m4s"
             for line in [
@@ -64,7 +63,7 @@ final class MediaUserInfoSecurityTests: XCTestCase {
         }
     }
 
-    func testUserInfoInitialAndResolvedURLsNeverReachTransportOrPlayer() async throws {
+    func testT08P_100_userInfoInitialAndResolvedURLsNeverReachTransportOrPlayer() async throws {
         for credentials in userInfo {
             let target = try XCTUnwrap(URL(string: "https://\(credentials)example.invalid/master.m3u8"))
             for delivery in [MediaDelivery.directFile, .serverHLS] {
@@ -172,6 +171,8 @@ final class MediaUserInfoSecurityTests: XCTestCase {
             XCTAssertNotNil(components, file: file, line: lineNumber)
             XCTAssertNil(components?.user, file: file, line: lineNumber)
             XCTAssertNil(components?.password, file: file, line: lineNumber)
+            XCTAssertFalse(
+                request.authorizationHeader?.lowercased().hasPrefix("basic ") == true, file: file, line: lineNumber)
         }
     }
 }
