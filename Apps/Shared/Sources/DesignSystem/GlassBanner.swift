@@ -17,7 +17,7 @@ struct GlassBanner: View {
         .padding(.vertical, SpacingToken.s)
         .ownGlassSurface(in: Capsule())
         .focusable(false)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
 }

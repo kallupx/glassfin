@@ -124,6 +124,7 @@ struct DesignSystemFocusDemo: View {
             }
         }
         .modifier(PlayPauseHook(target: $playbackTarget, current: focusedItemID))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.root")
         .background {
             Text(verbatim: playbackTarget)
@@ -279,6 +280,7 @@ struct BrowseGridProbe: View {
             }
         }
         .frame(width: 1920, height: 1080)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.grid.root")
     }
 }

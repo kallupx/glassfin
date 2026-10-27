@@ -22,6 +22,7 @@ struct LibraryTabShell: View {
             settingsTab
         }
         .modifier(PlatformTabChrome())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.shell.root")
     }
 
@@ -61,6 +62,7 @@ struct LibraryTabShell: View {
                         .accessibilityIdentifier("design.libraryOverflow.\(library.id)")
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("design.libraries.root")
         } label: {
             tabLabel(.tabLibraries, symbol: "square.grid.2x2", identifier: "design.tab.libraries")

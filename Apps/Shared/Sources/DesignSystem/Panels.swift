@@ -50,6 +50,7 @@ struct HeroHeader: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 640)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.hero.root")
     }
 
@@ -141,6 +142,7 @@ struct NextUpCard: View {
             .padding(SpacingToken.m)
             .ownGlassSurface(in: ContentShape.concentric)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.nextUp.root")
     }
 }
@@ -157,6 +159,7 @@ struct LoginPanel: View {
             .frame(maxWidth: 480, alignment: .leading)
             .ownGlassSurface(in: ContentShape.concentric)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.login.root")
     }
 }
@@ -177,8 +180,8 @@ struct FocusGlassSample: View {
                 .padding(.vertical, SpacingToken.s)
                 .ownGlassSurface(in: Capsule(), kind: .focused(isFocused))
                 .focusable(forcedFocus == nil)
+                .accessibilityIdentifier(isFocused ? "design.focusGlass.focused" : "design.focusGlass.idle")
         }
-        .accessibilityIdentifier(isFocused ? "design.focusGlass.focused" : "design.focusGlass.idle")
     }
 }
 
@@ -189,8 +192,8 @@ struct InteractiveGlassProbe: View {
                 .padding(.horizontal, SpacingToken.l)
                 .padding(.vertical, SpacingToken.s)
                 .ownGlassSurface(in: Capsule(), kind: .interactiveProbe)
+                .accessibilityIdentifier("design.probe.interactive")
         }
-        .accessibilityIdentifier("design.probe.interactive")
     }
 }
 

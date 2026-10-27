@@ -5,16 +5,26 @@ final class DesignSystemFocusTests: XCTestCase {
     func testT05_22_demoIdentifiersExist() {
         let app = launch("-uitest-design-system")
         for identifier in [
+            "design.shell.root",
             "design.root",
+            "design.hero.root",
+            "design.hero.title",
+            "design.hero.meta",
             "design.hero.play",
+            "design.hero.watched",
+            "design.hero.favorite",
             "design.hero.more",
             "design.hero.overview.collapsed",
             "design.banner.offline",
+            "design.banner.offline.icon",
             "design.row.primary",
+            "design.row.primary.item.0",
             "design.row.posters",
+            "design.row.posters.item.0",
             "design.playback.target",
         ] {
             require(element(app, identifier))
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: identifier).count, 1, identifier)
         }
     }
 
@@ -26,7 +36,7 @@ final class DesignSystemFocusTests: XCTestCase {
             remote(.down)
             waitUntilFocused(card)
             remote(.select, forDuration: 1.5)
-            require(element(app, "design.context.play"), timeout: 8)
+            require(app.buttons["design.context.play"], timeout: 8)
         }
 
         func testT05_12_rowFocusReturnsToTheRememberedPoster() {
@@ -119,6 +129,8 @@ final class DesignSystemFocusTests: XCTestCase {
             waitUntilFocused(retry)
             let attempts = element(app, "design.error.attempts")
             require(attempts)
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "design.error.root").count, 1)
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "design.error.attempts").count, 1)
             XCTAssertEqual(attempts.value as? String, "0")
             remote(.select)
             let updated = XCTNSPredicateExpectation(
