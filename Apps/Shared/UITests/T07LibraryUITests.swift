@@ -3,7 +3,8 @@ import XCTest
 @MainActor
 final class T07LibraryUITests: XCTestCase {
     #if os(tvOS)
-        func testT07_15_detailBackRestoresTheSameGridCardAndScrollPosition() {
+        /// T07-19: canonical spec/TESTPLAN-M07.md.
+        func testT07_19_detailBackRestoresTheSameGridCardAndScrollPosition() {
             let app = launch("grid")
             let first = element(app, "library.item.00000000000000000000000000000064")
             require(first)
@@ -24,10 +25,12 @@ final class T07LibraryUITests: XCTestCase {
             let restored = element(app, identifier)
             focused(restored)
             XCTAssertEqual(restored.frame.minY, before.minY, accuracy: 2)
-            save(app, name: "T07-15-grid-restored")
+            save(app, name: "T07-19-grid-restored")
         }
 
-        func testT07_06_playIsDefaultAndInProgressEpisodeIsVisible() {
+        /// T07-46: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_46_playIsDefaultAndInProgressEpisodeIsVisible() {
             let app = launch("series")
             let play = element(app, "detail.play")
             focused(play)
@@ -36,10 +39,12 @@ final class T07LibraryUITests: XCTestCase {
             require(season)
             XCTAssertTrue(season.isSelected)
             XCTAssertTrue(element(app, "series.episode.000000000000000000000000000075fd").isHittable)
-            save(app, name: "T07-06-default-play")
+            save(app, name: "T07-46-default-play")
         }
 
-        func testT07_07_focusOnSeasonChangesRowWithoutSelectingOrLeavingPicker() {
+        /// T07-50: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_50_focusOnSeasonChangesRowWithoutSelectingOrLeavingPicker() {
             let app = launch("series")
             focused(element(app, "detail.play"))
             XCUIRemote.shared.press(.down)
@@ -49,26 +54,32 @@ final class T07LibraryUITests: XCTestCase {
             focused(seasonOne)
             require(element(app, "series.episode.00000000000000000000000000007595"))
             XCTAssertTrue(seasonOne.hasFocus)
-            save(app, name: "T07-07-season-focus")
+            save(app, name: "T07-50-season-focus")
         }
 
-        func testT07_08_downFromSeasonTargetsThatSeasonsFirstUnplayedEpisode() {
+        /// T07-48: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_48_downFromSeasonTargetsThatSeasonsFirstUnplayedEpisode() {
             let app = launch("series")
             enterEpisodes(app)
             focused(element(app, "series.episode.000000000000000000000000000075fd"))
-            save(app, name: "T07-08-first-unplayed")
+            save(app, name: "T07-48-first-unplayed")
         }
 
-        func testT07_30_upFromEpisodeReturnsToSelectedSeason() {
+        /// T07-49: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_49_upFromEpisodeReturnsToSelectedSeason() {
             let app = launch("series")
             enterEpisodes(app)
             XCUIRemote.shared.press(.right)
             XCUIRemote.shared.press(.up)
             focused(element(app, "series.season.000000000000000000000000000007d2"))
-            save(app, name: "T07-30-up-to-season")
+            save(app, name: "T07-49-up-to-season")
         }
 
-        func testT07_09_playbackReturnHookRestoresSameEpisode() {
+        /// T07-51: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_51_playbackReturnHookRestoresSameEpisode() {
             let app = launch("series-return")
             enterEpisodes(app)
             XCUIRemote.shared.press(.right)
@@ -77,19 +88,23 @@ final class T07LibraryUITests: XCTestCase {
             XCUIRemote.shared.press(.playPause)
             require(element(app, "library.playback.returned"))
             focused(episode)
-            save(app, name: "T07-09-return-same-episode")
+            save(app, name: "T07-51-return-same-episode")
         }
 
-        func testT07_09_finishedPlaybackReturnHookMovesToNextEpisode() {
+        /// T07-51: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_51_finishedPlaybackReturnHookMovesToNextEpisode() {
             let app = launch("series-finished")
             enterEpisodes(app)
             XCUIRemote.shared.press(.playPause)
             require(element(app, "library.playback.returned"))
             focused(element(app, "series.episode.000000000000000000000000000075fe"))
-            save(app, name: "T07-09-return-next-episode")
+            save(app, name: "T07-51-return-next-episode")
         }
 
-        func testT07_10_episodeOverviewNeverReceivesFocus() {
+        /// T07-52: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_52_episodeOverviewNeverReceivesFocus() {
             let app = launch("series")
             enterEpisodes(app)
             let overview = element(app, "series.overview")
@@ -99,27 +114,31 @@ final class T07LibraryUITests: XCTestCase {
             XCTAssertFalse(overview.hasFocus)
             XCUIRemote.shared.press(.up)
             XCTAssertFalse(overview.hasFocus)
-            save(app, name: "T07-10-overview")
+            save(app, name: "T07-52-overview")
         }
 
-        func testT07_14_episodeCardNavigatesToEpisodeDetail() {
+        /// T07-53: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_53_episodeCardNavigatesToEpisodeDetail() {
             let app = launch("series")
             enterEpisodes(app)
             XCUIRemote.shared.press(.select)
             require(element(app, "detail.root"))
             require(element(app, "detail.startOver"))
             XCTAssertFalse(element(app, "series.seasons").exists)
-            save(app, name: "T07-14-episode-detail")
+            save(app, name: "T07-53-episode-detail")
         }
 
-        func testT07_18_serverDownMidBrowseKeepsCardsAndShowsBanner() {
+        /// T07-63: canonical spec/TESTPLAN-M07.md.
+
+        func testT07_63_serverDownMidBrowseKeepsCardsAndShowsBanner() {
             let app = launch("down")
             require(element(app, "library.item.00000000000000000000000000000064"))
             for _ in 0..<8 { XCUIRemote.shared.press(.down) }
             require(element(app, "library.banner"))
             XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'library.item.'")).count > 0)
             XCTAssertFalse(element(app, "design.error.root").exists)
-            save(app, name: "T07-18-retained-content")
+            save(app, name: "T07-63-retained-content")
         }
 
         private func enterEpisodes(_ app: XCUIApplication) {

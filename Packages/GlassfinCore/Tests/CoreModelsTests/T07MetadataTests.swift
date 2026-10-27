@@ -3,7 +3,8 @@ import Foundation
 import XCTest
 
 final class T07MetadataTests: XCTestCase {
-    func testT07_20_metadataKeepsMarkupLiteralAndStripsControlsAndBidi() throws {
+    /// T07-77: canonical spec/TESTPLAN-M07.md.
+    func testT07_77_metadataKeepsMarkupLiteralAndStripsControlsAndBidi() throws {
         let dto = try JSONDecoder().decode(
             BaseItemDTO.self,
             from: Data(
@@ -17,7 +18,9 @@ final class T07MetadataTests: XCTestCase {
         XCTAssertEqual(item.detail?.studios.first, "S")
     }
 
-    func testT07_21_limitsCountExtendedGraphemesAfterCleaning() {
+    /// T07-77: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_77_limitsCountExtendedGraphemesAfterCleaning() {
         let glyph = "👩‍👩‍👧‍👦e\u{0301}"
         let long = String(repeating: glyph + "\u{202E}\u{0007}", count: MetadataPolicy.overviewMax)
         let item = MediaItem(
@@ -41,7 +44,9 @@ final class T07MetadataTests: XCTestCase {
         XCTAssertEqual(MetadataPolicy.clean(long, limit: 0), "")
     }
 
-    func testT07_17_technicalFixtureShowsHDRDVAndLosslessAudio() throws {
+    /// T07-35: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_35_technicalFixtureShowsHDRDVAndLosslessAudio() throws {
         let dto = try JSONDecoder().decode(
             BaseItemDTO.self,
             from: Data(

@@ -8,7 +8,8 @@ import XCTest
 
 @MainActor
 final class T07LibraryTests: XCTestCase {
-    func testT07_01_browseRequestIncludesPagingSortFiltersAndUserData() async throws {
+    /// T07-11: canonical spec/TESTPLAN-M07.md.
+    func testT07_11_browseRequestIncludesPagingSortFiltersAndUserData() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -47,7 +48,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(calls.last?.path, "/Items/Filters2")
     }
 
-    func testT07_02_choicesPersistPerServerUserAndLibraryAndAllSortsMap() {
+    /// T07-13: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_13_choicesPersistPerServerUserAndLibraryAndAllSortsMap() {
         let settings = InMemorySettingsStore()
         let store = LibraryChoicesStore(settings: settings, serverID: "s", userID: "u")
         for sort in LibrarySort.allCases {
@@ -67,7 +70,9 @@ final class T07LibraryTests: XCTestCase {
             LibraryChoices())
     }
 
-    func testT07_03_pagesTwoThousandItemsAtTenRemainingWithoutDuplicateRequests() async throws {
+    /// T07-05: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_05_pagesTwoThousandItemsAtTenRemainingWithoutDuplicateRequests() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -88,7 +93,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(model.totalCount, 2000)
     }
 
-    func testT07_04_cacheIncludesTheQueryAndUserAndStopsAtShortPage() async throws {
+    /// T07-07: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_07_cacheIncludesTheQueryAndUserAndStopsAtShortPage() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -118,7 +125,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(otherUserCalls.count, calls.count + 1)
     }
 
-    func testT07_05_malformedRecordsAdvanceServerOffsetAndDuplicatesAreRemoved() async throws {
+    /// T07-71: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_71_malformedRecordsAdvanceServerOffsetAndDuplicatesAreRemoved() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -150,7 +159,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(final.count, 2)
     }
 
-    func testT07_18_downMidBrowseKeepsContentBannerAndTenSecondRecovery() async throws {
+    /// T07-63: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_63_downMidBrowseKeepsContentBannerAndTenSecondRecovery() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -172,7 +183,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(model.state.value?.count, 100)
     }
 
-    func testT07_18_filterFailureKeepsPreviousQueryContent() async throws {
+    /// T07-63: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_63_filterFailureKeepsPreviousQueryContent() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -194,7 +207,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
     }
 
-    func testT07_18_automaticTenSecondPingRecoversAndKeepsContent() async throws {
+    /// T07-63: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_63_automaticTenSecondPingRecoversAndKeepsContent() async throws {
         let rig = Harness.make(automaticPing: true, suspendingClock: true)
         defer { rig.cleanup() }
         try rig.signIn()
@@ -212,7 +227,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(model.state.value?.count, ListPaging.pageSize)
     }
 
-    func testT07_19_downWithoutContentUsesTheExistingServerDownKey() async throws {
+    /// T07-64: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_64_downWithoutContentUsesTheExistingServerDownKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -225,7 +242,9 @@ final class T07LibraryTests: XCTestCase {
         guard case .signedIn = rig.app.phase else { return XCTFail("Server down signed out") }
     }
 
-    func testT07_26_viewModelsSanitizeProtocolValuesAndDetailCanResumeAndStartOver() async throws {
+    /// T07-25: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_25_viewModelsSanitizeProtocolValuesAndDetailCanResumeAndStartOver() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -248,7 +267,9 @@ final class T07LibraryTests: XCTestCase {
         XCTAssertEqual(detail.similar.value?.count, 1)
     }
 
-    func testT07_27_directTabsAndOverflowAndSanitizedLibraryNames() async throws {
+    /// T07-01: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_01_directTabsAndOverflowAndSanitizedLibraryNames() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()

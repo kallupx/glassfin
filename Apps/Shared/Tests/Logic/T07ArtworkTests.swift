@@ -7,7 +7,8 @@ import XCTest
 
 @MainActor
 final class T07ArtworkTests: XCTestCase {
-    func testT07_25_artworkIsDownsampledToDisplayedPixels() async throws {
+    /// T07-80: canonical spec/TESTPLAN-M07.md.
+    func testT07_80_artworkIsDownsampledToDisplayedPixels() async throws {
         let context = try XCTUnwrap(
             CGContext(
                 data: nil, width: 2048, height: 2048, bitsPerComponent: 8, bytesPerRow: 0,

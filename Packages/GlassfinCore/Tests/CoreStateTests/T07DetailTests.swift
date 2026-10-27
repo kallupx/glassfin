@@ -8,7 +8,8 @@ import XCTest
 
 @MainActor
 final class T07DetailTests: XCTestCase {
-    func testT07_06_seriesOpensAtInProgressSeasonTwoEpisodeFiveAndSpecialsLast() async throws {
+    /// T07-45: canonical spec/TESTPLAN-M07.md.
+    func testT07_45_seriesOpensAtInProgressSeasonTwoEpisodeFiveAndSpecialsLast() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -22,7 +23,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.episodes.value?.count, 8)
     }
 
-    func testT07_07_seasonFocusDebouncesAndLatestSelectionWinsWithoutMovingToEpisodes() async throws {
+    /// T07-50: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_50_seasonFocusDebouncesAndLatestSelectionWinsWithoutMovingToEpisodes() async throws {
         let rig = Harness.make(suspendingClock: true)
         defer { rig.cleanup() }
         try rig.signIn()
@@ -41,7 +44,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.focus, .season(LibraryFixtureClient.specials))
     }
 
-    func testT07_08_downTargetsFirstUnplayedAndUpReturnsToSelectedSeason() async throws {
+    /// T07-48: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_48_downTargetsFirstUnplayedAndUpReturnsToSelectedSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -56,7 +61,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.focus, .episode(LibraryFixtureClient.episodeID(season: 1, episode: 1)))
     }
 
-    func testT07_09_playbackReturnKeepsEpisodeOrAdvancesToNextUnplayed() async throws {
+    /// T07-51: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_51_playbackReturnKeepsEpisodeOrAdvancesToNextUnplayed() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -70,7 +77,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.focus, .episode(LibraryFixtureClient.episodeID(season: 2, episode: 6)))
     }
 
-    func testT07_09_finishedLastEpisodeCanAdvanceToTheNextSeason() async throws {
+    /// T07-51: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_51_finishedLastEpisodeCanAdvanceToTheNextSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -82,7 +91,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.focus, .episode(LibraryFixtureClient.episodeID(season: 2, episode: 5)))
     }
 
-    func testT07_10_selectedOverviewFollowsFocusedEpisodeAsLiteralText() async throws {
+    /// T07-52: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_52_selectedOverviewFollowsFocusedEpisodeAsLiteralText() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -92,7 +103,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.selectedOverview, "Overview 2-6")
     }
 
-    func testT07_11_episodeFailureKeepsPreviousSeasonAndContent() async throws {
+    /// T07-63: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_63_episodeFailureKeepsPreviousSeasonAndContent() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -113,7 +126,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(rig.app.bannerKey, .serverUnreachable)
     }
 
-    func testT07_12_playedIsOptimisticAndFailureRollsBackAndShowsAKey() async throws {
+    /// T07-27: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_27_playedIsOptimisticAndFailureRollsBackAndShowsAKey() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -136,7 +151,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(requests.first?.method, "POST")
     }
 
-    func testT07_13_favoriteAndPlayedTogglesUsePOSTAndDELETE() async throws {
+    /// T07-28: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_28_favoriteAndPlayedTogglesUsePOSTAndDELETE() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -158,7 +175,9 @@ final class T07DetailTests: XCTestCase {
             ])
     }
 
-    func testT07_14_movieSeriesSeasonAndEpisodeDetailRequests() async throws {
+    /// T07-21: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_21_movieSeriesSeasonAndEpisodeDetailRequests() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -174,7 +193,9 @@ final class T07DetailTests: XCTestCase {
         }
     }
 
-    func testT07_28_staleQueryResponseCannotReplaceNewQuery() async throws {
+    /// T07-09: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_09_staleQueryResponseCannotReplaceNewQuery() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -192,7 +213,9 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.state.value?.first?.name, Sample.other)
     }
 
-    func testT07_36_storeRefreshAndReloadPreserveEpisodeFocusAndSeason() async throws {
+    /// T07-29: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_29_storeRefreshAndReloadPreserveEpisodeFocusAndSeason() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()

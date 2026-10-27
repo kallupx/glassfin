@@ -1,6 +1,6 @@
 # M07 implementation questions and integration notes
 
-The binding inputs are `spec/07-library-detail.md` v1.3.3 and the supplied spec PR #18 copies of M01, M02, M03, and M09. Test IDs were reconstructed because the original M07 test plan was unavailable. See `spec/TESTPLAN-M07-impl.md`.
+The binding inputs are the merged spec PR #18 decisions and the verbatim canonical `spec/TESTPLAN-M07.md`. Coverage and automation limits are recorded in `docs/TEST-COVERAGE-M07.md`.
 
 | Question | Conservative implementation | Follow-up |
 | --- | --- | --- |
@@ -16,10 +16,10 @@ The binding inputs are `spec/07-library-detail.md` v1.3.3 and the supplied spec 
 - The old shared `MetadataSanitizer.plainText` removed tags and decoded entities. Binding S6.1 supersedes that behavior: it now strips only controls and bidi characters. Existing M04/S4.7 tests were updated to preserve literal tags/entities while retaining the 64-grapheme name cap and host fallback. Authentication routing and decisions are unchanged.
 - `AuthFlow.featureApp` and `makeFeatureClient()` are composition hooks. Credentials remain inside the core. `AuthRootView` adds signed-in library tabs and releases feature state on sign-out. Existing auth DEBUG launches use library fixtures rather than making live feature requests.
 - M05's `HeroHeader`, `GlassBanner`, and `ErrorStateView` accept optional feature content/message overrides. Their default behavior is unchanged. The title override reuses the core server-down key rather than adding a duplicate translation.
-- The known M05 compile failures in `Demo.swift`, `GlassChrome.swift`, and `Shell.swift` are untouched. Linux can parse SwiftUI source but cannot type-check it against the Apple SDK or execute tvOS focus tests.
+- The merged base includes the M05 compilation fixes. Linux cannot type-check SwiftUI against the Apple SDK or execute tvOS focus tests.
 - `project.yml` already includes all shared unit/UI-test directories in both schemes. Comments identify M07 coverage; no workflow, signing, entitlement, bundle identifier, or plist changes are needed.
 - Images use CoreNetworking authorization and an ephemeral bounded download. Both declared size and received chunks are checked; compressed bytes live only in DiskImageCache under the exact SHA-256 tuple digest. ImageIO thumbnail creation and immediate decoding run in a detached utility task. Network errors never log image URLs.
 
 ## Deliberately deferred
 
-P1: collections, person navigation, alphabet jump, version selection, trailers, continuous rows spanning all seasons, and the iOS product layout. Physical Apple TV frame rate/hitch measurements and accessibility screenshot review require Apple hardware/simulators. See the test-plan status rows for exact coverage.
+P1: collections, person navigation, alphabet jump, version selection, trailers, continuous rows spanning all seasons, and the iOS product layout. Physical Apple TV frame rate/hitch measurements and accessibility screenshot review require Apple hardware/simulators. See `docs/TEST-COVERAGE-M07.md` for exact coverage.

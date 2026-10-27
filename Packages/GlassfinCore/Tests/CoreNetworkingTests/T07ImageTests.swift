@@ -9,7 +9,8 @@ import XCTest
 #endif
 
 final class T07ImageTests: XCTestCase {
-    func testT07_22_imageURLHasNoCredentialQueryAndRequestUsesAuthorization() throws {
+    /// T07-78: canonical spec/TESTPLAN-M07.md.
+    func testT07_78_imageURLHasNoCredentialQueryAndRequestUsesAuthorization() throws {
         let descriptor = LibraryImageRequest(
             serverID: "server", itemID: try XCTUnwrap(ItemID("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")),
             type: .primary, tag: "image tag", width: 250, height: 375)
@@ -26,7 +27,9 @@ final class T07ImageTests: XCTestCase {
         XCTAssertEqual(url.path, "/jellyfin/Items/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Images/Primary")
     }
 
-    func testT07_22_imageRequestsRejectCredentialParametersIncludingBaseURLAndRedirects() throws {
+    /// T07-78: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_78_imageRequestsRejectCredentialParametersIncludingBaseURLAndRedirects() throws {
         for name in ["ApiKey", "api" + "_key", "token", "TOKEN"] {
             let url = try XCTUnwrap(URL(string: "https://media.example?\(name)=secret"))
             let client = HTTPJellyfinClient(
@@ -38,7 +41,9 @@ final class T07ImageTests: XCTestCase {
         }
     }
 
-    func testT07_23_cacheKeyIsStableSHA256OfTheWholeTuple() throws {
+    /// T07-78: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_78_cacheKeyIsStableSHA256OfTheWholeTuple() throws {
         let item = try XCTUnwrap(ItemID("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
         let request = LibraryImageRequest(
             serverID: "s", itemID: item, type: .primary, tag: "t", width: 250, height: 375)
@@ -54,7 +59,9 @@ final class T07ImageTests: XCTestCase {
         ] { XCTAssertNotEqual(other.cacheKey, request.cacheKey) }
     }
 
-    func testT07_24_HTTPClientRejectsOversizeImage() async throws {
+    /// T07-78: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_78_HTTPClientRejectsOversizeImage() async throws {
         let url = try XCTUnwrap(URL(string: "https://media.example"))
         let client = HTTPJellyfinClient(
             server: url, identity: ClientIdentity(deviceName: "TV", deviceID: "d", version: "1"),

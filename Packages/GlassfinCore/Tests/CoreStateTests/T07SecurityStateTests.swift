@@ -8,7 +8,8 @@ import XCTest
 
 @MainActor
 final class T07SecurityStateTests: XCTestCase {
-    func testT07_16_401CancelsAllRequestsEndsSessionOnceAndNeverRetries() async throws {
+    /// T07-67: canonical spec/TESTPLAN-M07.md.
+    func testT07_67_401CancelsAllRequestsEndsSessionOnceAndNeverRetries() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -37,7 +38,9 @@ final class T07SecurityStateTests: XCTestCase {
         XCTAssertEqual(rig.secure.removed().filter { $0 == Sample.account() }.count, 1)
     }
 
-    func testT07_35_disappearCancelsTheActivePageAndIgnoresItsResult() async throws {
+    /// T07-06: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_06_disappearCancelsTheActivePageAndIgnoresItsResult() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
@@ -53,7 +56,9 @@ final class T07SecurityStateTests: XCTestCase {
         XCTAssertNil(model.state.presentedError)
     }
 
-    func testT07_29_non401ErrorsKeepSessionAndCancellationIsNotPresented() async throws {
+    /// T07-68: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_68_non401ErrorsKeepSessionAndCancellationIsNotPresented() async throws {
         for error in [
             APIError.forbidden, .notFound, .server(status: 500), .timeout, .network, .tls, .cancelled, .decoding,
         ] {
@@ -72,7 +77,9 @@ final class T07SecurityStateTests: XCTestCase {
         }
     }
 
-    func testT07_24_imageLoaderAndDiskRejectOversizeAndUseTheExactHashFilename() async throws {
+    /// T07-78: canonical spec/TESTPLAN-M07.md.
+
+    func testT07_78_imageLoaderAndDiskRejectOversizeAndUseTheExactHashFilename() async throws {
         let rig = Harness.make()
         defer { rig.cleanup() }
         try rig.signIn()
