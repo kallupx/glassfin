@@ -8,6 +8,8 @@ This note records what M05 implemented and which warnings still need screenshot 
 
 Decided. `GlassContrastChrome.showsSeparator` is the only switch. When `colorSchemeContrast` is `.increased`, own glass surfaces draw a 1 pt `Color(.separator)` stroke. The no-border rule applies in the default contrast mode only. Snapshots render both states.
 
+SwiftUI's accessibility environment values are read-only. Snapshot modes inject a debug-only `designAccessibilityOverride` consumed by custom surfaces, tint, morphing, shimmer, and image fades. Release builds always read the system settings. Native glass controls still follow the actual simulator settings; verifying their accessibility adaptations requires simulator or device UI runs.
+
 ## Q5-02 Banner container
 
 Unresolved. `GlassBanner` calls `ownGlassSurface` and is not wrapped in `GlassEffectContainer`. `ScreenGlassPlan.detail()` counts the hero actions and the season picker only. Whether the spec should count the banner is still open.
