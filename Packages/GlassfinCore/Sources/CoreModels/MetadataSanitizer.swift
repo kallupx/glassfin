@@ -2,6 +2,22 @@ import Foundation
 
 /// Server names and overviews are plain text. Tags are not rendered.
 public enum MetadataSanitizer {
+    /// Strips control and bidi characters, then caps grapheme clusters. Tags remain literal text (S6.1).
+    public static func displayText(_ raw: String, limit: Int) -> String {
+        let cleaned = raw.unicodeScalars.filter { !isControl($0) }
+        return String(String(String.UnicodeScalarView(cleaned)).prefix(limit))
+    }
+
+    private static func isControl(_ scalar: Unicode.Scalar) -> Bool {
+        if scalar.properties.generalCategory == .control { return true }
+        switch scalar.value {
+        case 0x061C, 0x200E...0x200F, 0x202A...0x202E, 0x2066...0x2069:
+            return true
+        default:
+            return false
+        }
+    }
+
     public static func plainText(_ raw: String) -> String {
         var text = raw
         text = removeElement(text, named: "script")

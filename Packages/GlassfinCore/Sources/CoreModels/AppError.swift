@@ -240,6 +240,8 @@ public enum AppErrorMessage {
     }
 
     /// Catalog key for the error's message, or nil when the error must not be shown.
+    /// For `unsupportedServer` this is a raw format key containing `%@`, not display text.
+    /// Only ``userFacing(_:)`` substitutes the versions; never show the key directly.
     public static func messageKey(for error: AppError) -> String? {
         switch error {
         case .offline:
@@ -270,10 +272,12 @@ public enum AppErrorMessage {
     }
 
     /// Nil when the error must not be shown (cancellation, skipped JSON, local invariant).
+    /// Server text is sanitized before formatting and must be rendered as plain text (`Text(verbatim:)`).
     public static func userFacing(_ error: AppError) -> String? {
         guard let key = messageKey(for: error) else { return nil }
         if case .unsupportedServer(let version) = error {
-            return String(format: unsupportedServer, version, ServerVersionGate.dotted(.minimumJellyfin))
+            let safeVersion = MetadataSanitizer.displayText(version, limit: 200)
+            return String(format: unsupportedServer, safeVersion, ServerVersionGate.dotted(.minimumJellyfin))
         }
         return localizedString(key)
     }

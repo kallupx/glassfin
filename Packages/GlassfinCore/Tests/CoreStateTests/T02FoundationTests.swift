@@ -643,8 +643,8 @@ final class T02FoundationTests: XCTestCase {
 #if os(macOS) || os(iOS) || os(tvOS)
     import os
 
-    final class T02_18_AppleSignpostMetricTests: XCTestCase {
-        func testT02_18b_xctMetricRecordsPlaybackFirstFrame() {
+    final class T02_33_AppleSignpostMetricTests: XCTestCase {
+        func testT02_33_xctMetricRecordsPlaybackFirstFrame() {
             let poster = OSSignposter(subsystem: Signposters.subsystem, category: Signposters.category)
             let metric = XCTOSSignpostMetric(
                 subsystem: Signposters.subsystem, category: Signposters.category, name: "playback.firstFrame")

@@ -120,6 +120,12 @@ public struct StaticConnectivityPath: ConnectivityPath {
     }
 #endif
 
+/// Content retained by the visible screen, including previous values during loading or failure.
+@MainActor
+public protocol ViewContentProviding: AnyObject {
+    var hasContent: Bool { get }
+}
+
 @MainActor
 @Observable
 public final class AppState {
@@ -135,6 +141,10 @@ public final class AppState {
     public private(set) var activeServer: ServerInfo?
     public private(set) var bannerKey: String?
     public private(set) var sessionNoticeKey: String?
+
+    /// Set on screen entry (also when returning without reloading); nil for screens without media content.
+    /// View models select themselves when loading. A weak reference avoids retaining a departed screen.
+    public weak var currentView: (any ViewContentProviding)?
 
     public var banner: String? {
         bannerKey.map(AppErrorMessage.localized)
@@ -174,7 +184,9 @@ public final class AppState {
     @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored public var onReconnect: (@MainActor () -> Void)?
 
-    public var showsServerDown: Bool { connectivity == .serverUnreachable }
+    public var showsServerDown: Bool {
+        connectivity == .serverUnreachable && currentView?.hasContent != true
+    }
     public var serverDownTitleKey: String { AppErrorMessage.serverDownKey }
     public var serverDownTitle: String { AppErrorMessage.serverDown }
     public var retryTitleKey: String { AppErrorMessage.retryKey }
@@ -196,14 +208,7 @@ public final class AppState {
     }
 
     public var playbackBlockedMessage: String? {
-        switch connectivity {
-        case .offline:
-            AppErrorMessage.playbackOffline
-        case .serverUnreachable:
-            AppErrorMessage.playbackUnreachable
-        case .online, .degraded:
-            nil
-        }
+        playbackBlockedMessageKey.map(AppErrorMessage.localized)
     }
 
     public init(
@@ -243,6 +248,7 @@ public final class AppState {
     }
 
     public func bootstrap() {
+        currentView = nil
         let prefs = preferences.load()
         guard let stored = prefs.activeServer() else {
             phase = .needsServer
@@ -314,6 +320,7 @@ public final class AppState {
         logoutStarted = false
         sessionNoticeKey = nil
         blockingError = nil
+        currentView = nil
         phase = .signedIn(session)
         activeServer = session.server
     }
@@ -326,11 +333,13 @@ public final class AppState {
             try? secureStore.remove(account: account)
         }
         if case .signedIn(let session) = phase, session.server.id == id {
+            currentView = nil
             logoutStarted = true
             phase = .needsServer
             activeServer = nil
             sessionNoticeKey = nil
         } else if activeServer?.id == id {
+            currentView = nil
             phase = .needsServer
             activeServer = nil
         }
@@ -343,10 +352,12 @@ public final class AppState {
         try? preferences.save(prefs)
         pingTask?.cancel()
         pingArmed = false
+        currentView = nil
         phase = .needsServer
         activeServer = nil
         if pathOnline, connectivity == .serverUnreachable {
             connectivity = .online
+            bannerKey = nil
         }
     }
 
@@ -437,6 +448,7 @@ public final class AppState {
             account: SessionCredential.account(serverID: session.server.id, userID: session.userID))
         log.warning("Ended the session after HTTP 401.")
         sessionNoticeKey = AppErrorMessage.sessionExpiredKey
+        currentView = nil
         phase = .needsLogin(session.server)
         activeServer = session.server
         requestGeneration += 1
@@ -455,7 +467,7 @@ public final class AppState {
             return
         }
         connectivity = .serverUnreachable
-        bannerKey = nil
+        bannerKey = AppErrorMessage.serverDownKey
         pingArmed = true
         armPingLoop()
     }
