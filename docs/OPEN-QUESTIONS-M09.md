@@ -1,14 +1,23 @@
-# M09 implementation questions
+# M09 open questions
 
-These conservative defaults do not block P0. Related code carries matching TODO markers.
+The question numbers below match the canonical plan, [TESTPLAN-M09.md](../spec/TESTPLAN-M09.md). Automation gaps and environment limitations for every test ID are listed in [M09-TEST-MAPPING.md](M09-TEST-MAPPING.md).
 
-| Question | Current behavior | Follow-up |
-|---|---|---|
-| Q9-01: exact meaning of one-character CJK | Accept a single Han (including supplementary Han), kana, half-width kana, Hangul syllable or jamo grapheme; other scripts need two characters. Whitespace is ignored for eligibility. | Confirm the script range policy, including compatibility Han. |
-| Q9-02: M07 destination integration on this stacked branch | Search pushes a session-scoped detail destination that loads and shows literal, bounded name and overview. M07's full detail/playback destination is absent from this branch. Search owns its state and per-row focus memory independently. | Replace the small destination when M07 is merged; preserve its selected-item binding and tab ownership. |
-| Q9-03: when and how to record a recent query | Record a completed successful request, including zero results. Store trimmed query text only; exact text duplicates move to the front. No locale-dependent case folding. Failed/cancelled/too-short requests are not recorded. | Confirm if case-insensitive deduplication or recording only submitted/selected queries is preferred. |
-| Q9-04: “clearly faster” threshold | Retain `/Items` x3. ADR-M09-1 proposes ≥20% median improvement, no p95 regression and sufficient image tags/row coverage on every CI version, confirmed in another run. | Review real Docker artifacts before accepting a switch. |
+| Question | Current behavior / decision needed |
+|---|---|
+| Q9-02 | Query eligibility and transmission trim surrounding whitespace. Confirm this policy. |
+| Q9-03 | Maximum query length is unspecified in the module spec. Canonical plan assumes 100 graphemes; implementation alignment is pending. |
+| Q9-04 | Search state is retained for the app session when leaving the tab. Confirm retention lifetime. |
+| Q9-05 | A failed parallel request currently fails the entire initial query. Canonical plan expects successful sibling rows; choose hidden failed rows or inline errors. |
+| Q9-06 | Completed successful queries, including zero results, are recorded. Canonical plan assumes recording when opening a result. |
+| Q9-07 | Duplicate comparison is exact text. Canonical plan assumes trimmed, case-insensitive matching. |
+| Q9-08 | Clear all is immediate in the Search view. Confirm whether individual deletion or confirmation is needed. |
+| Q9-09 | Offline behavior needs explicit request preflight and recent-query usability verification. |
+| Q9-11 | One Han (including supplementary Han), kana, half-width kana, Hangul syllable or jamo grapheme is eligible. Confirm script ranges. |
+| Q9-12 | Full M07 navigation is absent from this branch. The current session-scoped detail shows bounded literal name and overview. Integrate movie/series detail and episode season/focus when M07 lands. |
+| Q9-16 | Rows page automatically. Confirm whether P0 should instead show exactly 24 with no additional pages. |
 
-Security storage decisions are resolved by spec #18: recent history is per server/user, limited to MetadataPolicy.recentSearchesMax, stored in Application Support, excluded from backup, never logged, and cleared on user sign-out, authenticated 401, server removal or explicit user action. It contains only query text. The original M04 sanitizer behavior and M05 components remain compatible (PosterFace gains an optional decoded image input that defaults to nil); M09 uses the new literal metadata path. Taglines, genres, people and studios are not rendered by the search destination; their shared limits are defined in the identical MetadataPolicy file for M06/M07.
+Q9-01 is resolved: three parallel `/Items` requests remain the default. ADR-M09-1 proposes a 20% median improvement with no p95 regression on every supported version before changing to hints; benchmark evidence is still pending. Q9-10 follows the final shared state rule: keep visible content with the `.serverUnreachable` banner; use the existing blocking key only when there is no content. Q9-13 keeps people, collections and music outside P0. Q9-14 and Q9-15 are resolved by S6.1/S6.6/S6.7; implementation verification is recorded in the mapping.
 
-Local limitations: no Docker executable, Xcode, Apple simulators or ImageIO. T09-21/T09-22, UI tests, Apple image decoding, and P10 on-device/LAN timing need their designated environments. The known M05 compile fixes in Demo.swift, GlassChrome.swift and Shell.swift remain on the separate branch; those files were not edited here.
+Q6-20 and Q7-25 are resolved owner decisions, not open questions: separate Continue Watching and Next Up home rows; per-season episodes with a season picker. This branch has no M06/M07 feature implementation to adjust.
+
+Docker, Xcode, Apple simulators and ImageIO are unavailable locally. Live endpoint evidence, Apple UI/snapshots, actual thumbnail decoding and physical-device timing/memory still require their designated environments.

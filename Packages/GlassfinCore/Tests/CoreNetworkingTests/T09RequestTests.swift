@@ -9,7 +9,8 @@ import XCTest
 #endif
 
 final class T09RequestTests: XCTestCase {
-    func testT09_07_queryEncodingRoundTripsSpecialCharactersAndSubpath() throws {
+    /// T09-26: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+    func testT09_26_queryEncodingRoundTripsSpecialCharactersAndSubpath() throws {
         let server = try XCTUnwrap(URL(string: "https://media.example/jellyfin/"))
         let client = HTTPJellyfinClient(
             server: server, identity: ClientIdentity(deviceName: "TV", deviceID: "test", version: "1"))
@@ -24,7 +25,9 @@ final class T09RequestTests: XCTestCase {
         }
     }
 
-    func testT09_25_transportFailureLogsNoSearchTextOrRawImageURL() async throws {
+    /// T09-66: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_66_transportFailureLogsNoSearchTextOrRawImageURL() async throws {
         let log = SearchLogSpy()
         let client = HTTPJellyfinClient(
             server: try XCTUnwrap(URL(string: "https://media.example")),
@@ -42,7 +45,9 @@ final class T09RequestTests: XCTestCase {
         XCTAssertFalse(log.lines.joined().contains("https://"))
     }
 
-    func testT09_18_imageURLHasNoCredentialAndRequestCarriesAuthorization() throws {
+    /// T09-65: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_65_imageURLHasNoCredentialAndRequestCarriesAuthorization() throws {
         let server = try XCTUnwrap(URL(string: "https://media.example/jellyfin"))
         let identity = ClientIdentity(deviceName: "TV", deviceID: "test", version: "1", token: "secret-token")
         let client = HTTPJellyfinClient(server: server, identity: identity)

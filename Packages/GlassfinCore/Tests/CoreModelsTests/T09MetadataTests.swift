@@ -3,7 +3,8 @@ import Foundation
 import XCTest
 
 final class T09MetadataTests: XCTestCase {
-    func testT09_17_allLimitsCountGraphemesAfterCleaning() {
+    /// T09-64: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+    func testT09_64_allLimitsCountGraphemesAfterCleaning() {
         for limit in [
             MetadataPolicy.overviewMax, MetadataPolicy.taglineMax,
             MetadataPolicy.genreMax, MetadataPolicy.nameMax, MetadataPolicy.displayNameMax,

@@ -12,7 +12,8 @@ import XCTest
 
 @MainActor
 final class T09PrivacyAndImageTests: XCTestCase {
-    func testT09_23_historyIsScopedByBothServerAndUserAndSurvivesRestart() throws {
+    /// T09-47: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+    func testT09_47_historyIsScopedByBothServerAndUserAndSurvivesRestart() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -25,7 +26,9 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertEqual(try restored.queries(serverID: Sample.otherServerID, userID: Sample.userID), ["third"])
     }
 
-    func testT09_24_historyCapRecencyAndDeduplication() throws {
+    /// T09-44: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_44_historyCapRecencyAndDeduplication() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -41,7 +44,9 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertFalse(values.contains("query 0"))
     }
 
-    func testT09_25_onlyQueryTextInApplicationSupportNoPreferencesOrKeychainWrites() throws {
+    /// T09-49: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_49_onlyQueryTextInApplicationSupportNoPreferencesOrKeychainWrites() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root)
@@ -60,16 +65,22 @@ final class T09PrivacyAndImageTests: XCTestCase {
         // The store accepts only a directory; it has no SecureStore, SettingsStore or logger dependency.
     }
 
-    func testT09_26_signOutDeletesOnlyThatUsersHistory() throws {
+    /// T09-51: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_51_signOutDeletesOnlyThatUsersHistory() throws {
         try checkCleanup(removeServer: false, unauthorized: false)
         try checkCleanup(removeServer: false, unauthorized: true)
     }
 
-    func testT09_27_serverRemovalDeletesAllItsUsersOnly() throws {
+    /// T09-52: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_52_serverRemovalDeletesAllItsUsersOnly() throws {
         try checkCleanup(removeServer: true, unauthorized: false)
     }
 
-    func testT09_19_imageCacheUsesStableSHA256TupleAsActualFilename() async throws {
+    /// T09-65: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_65_imageCacheUsesStableSHA256TupleAsActualFilename() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let id = try XCTUnwrap(ItemID(Sample.movie))
@@ -101,7 +112,9 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertEqual(recovered, Data([1, 2, 3]))
     }
 
-    func testT09_20_oversizedImagesRejectedBeforeCachingOrDecode() async throws {
+    /// T09-69: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_69_oversizedImagesRejectedBeforeCachingOrDecode() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let disk = DiskImageCache(directory: root, byteLimit: CacheBudget.imageDiskBytes)
@@ -123,7 +136,9 @@ final class T09PrivacyAndImageTests: XCTestCase {
         XCTAssertTrue(accepted)
     }
 
-    func testT09_29_sessionClientCancelsAllRequestsAndNeverRetries401() async throws {
+    /// T09-59: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_59_sessionClientCancelsAllRequestsAndNeverRetries401() async throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = RecentSearchStore(directory: root.appendingPathComponent("history"))
@@ -150,7 +165,8 @@ final class T09PrivacyAndImageTests: XCTestCase {
     }
 
     #if canImport(ImageIO)
-        func testT09_31_decodeDownsamplesOffMainThread() async throws {
+        /// T09-68: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+        func testT09_68_decodeDownsamplesOffMainThread() async throws {
             let bitmap = try XCTUnwrap(
                 CGContext(
                     data: nil, width: 128, height: 96, bitsPerComponent: 8, bytesPerRow: 128 * 4,

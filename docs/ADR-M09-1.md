@@ -10,7 +10,7 @@ Use `ItemsSearchBackend` by default. Start three parallel `/Items` requests, one
 
 Keep `SearchHintsBackend` available for measurement and injection. Its initial `/Search/Hints` request has a total budget of 72, groups without re-sorting, and displays at most 24 per type. A full shared hints page can leave a type unrepresented; that row can subsequently fetch a type-specific page. This difference in coverage must be considered alongside latency. Do not silently fall back or switch endpoints.
 
-Switch only if `/Search/Hints` is clearly faster on **all three** CI versions (10.10.7, 10.11.11, 12.2), retains usable image tags, and provides sufficient row coverage. The proposed interpretation of “clearly faster” is at least 20% lower median on each version with no p95 regression, confirmed in another run. This threshold is a conservative implementation proposal (Q9-04); changing the default requires reviewing and recording the evidence in this ADR.
+Switch only if `/Search/Hints` is clearly faster on **all three** CI versions (10.10.7, 10.11.11, 12.2), retains usable image tags, and provides sufficient row coverage. The proposed interpretation of “clearly faster” is at least 20% lower median on each version with no p95 regression, confirmed in another run. This threshold is a conservative implementation proposal (Q9-01); changing the default requires reviewing and recording the evidence in this ADR.
 
 ## Reproducible benchmark
 
@@ -30,7 +30,7 @@ bash scripts/docker-integration.sh 10.10.7
 
 Output goes to the CI console as `T09-21 search-benchmark` JSON and to `artifacts/integration/search/search-<version>.json`. `integration.yml` needs the narrowly scoped redaction/upload steps added here: it previously had no artifact upload, so measurements would otherwise disappear with the runner. The `search-backend-benchmarks` artifact retains only these JSON files for seven days. No query text, credential, URL or raw server metadata is emitted. No xcresult is uploaded.
 
-Docker measurements run on the host loopback connection. They compare endpoint cost and do not replace the P10 LAN/device acceptance measurement (T09-34: first results within 500 ms after debounce).
+Docker measurements run on the host loopback connection. They compare endpoint cost and do not replace the P10 LAN/device acceptance measurement (T09-62: first results within 500 ms after debounce).
 
 ## Local evidence
 

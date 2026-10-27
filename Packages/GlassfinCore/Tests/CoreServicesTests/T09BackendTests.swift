@@ -6,7 +6,8 @@ import GlassfinServices
 import XCTest
 
 final class T09BackendTests: XCTestCase, @unchecked Sendable {
-    func testT09_01_threeItemsRequestsStartInParallelWithIndependentLimits() async throws {
+    /// T09-23: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+    func testT09_23_threeItemsRequestsStartInParallelWithIndependentLimits() async throws {
         let client = SearchRequestGate()
         let work = Task {
             try await ItemsSearchBackend(client: client).results(
@@ -31,7 +32,9 @@ final class T09BackendTests: XCTestCase, @unchecked Sendable {
             Set(SearchKind.allCases.map(\.rawValue)))
     }
 
-    func testT09_07_bothBackendsPassSpecialTermsAsQueryItems() async throws {
+    /// T09-26: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_26_bothBackendsPassSpecialTermsAsQueryItems() async throws {
         let client = SearchRequestGate(open: true)
         for backend: any SearchBackend in [ItemsSearchBackend(client: client), SearchHintsBackend(client: client)] {
             for term in ["&", "#", "ä", "日本", "a&b#c?x=y+z/%"] {
@@ -44,7 +47,9 @@ final class T09BackendTests: XCTestCase, @unchecked Sendable {
         }
     }
 
-    func testT09_07_sdkQueryBuilderPreservesSpecialTerms() async throws {
+    /// T09-26: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_26_sdkQueryBuilderPreservesSpecialTerms() async throws {
         let wire = SearchRequestGate(open: true)
         let client = SearchQueryClient(inner: wire)
         for backend: any SearchBackend in [ItemsSearchBackend(client: client), SearchHintsBackend(client: client)] {
@@ -54,7 +59,9 @@ final class T09BackendTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(wire.requests.allSatisfy { $0.query.first { $0.name == "searchTerm" }?.value == "& # ä 日本" })
     }
 
-    func testT09_14_serverOrderAndLiteralMetadataArePreserved() async throws {
+    /// T09-28: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_28_serverOrderAndLiteralMetadataArePreserved() async throws {
         let client = SearchRequestGate(open: true)
         let result = try await ItemsSearchBackend(client: client).results(
             term: "star", kind: .movies, page: PageRequest(limit: 2))
@@ -63,7 +70,9 @@ final class T09BackendTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(result.groups.first?.nextIndex, 2)
     }
 
-    func testT09_15_bothBackendsPropagateEveryFailureWithoutRetry() async {
+    /// T09-59: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_59_bothBackendsPropagateEveryFailureWithoutRetry() async {
         for error in [APIError.unauthorized, .forbidden, .notFound, .server(status: 500), .timeout, .decoding] {
             for backend: any SearchBackend in [
                 ItemsSearchBackend(client: FailedSearchClient(error: error)),
@@ -78,7 +87,9 @@ final class T09BackendTests: XCTestCase, @unchecked Sendable {
         }
     }
 
-    func testT09_32_hintsGroupInServerOrderRetainImagesAndPageByType() async throws {
+    /// T09-24: canonical scenario; see docs/M09-TEST-MAPPING.md for scope.
+
+    func testT09_24_hintsGroupInServerOrderRetainImagesAndPageByType() async throws {
         let data = Data(
             """
             {"SearchHints":[
