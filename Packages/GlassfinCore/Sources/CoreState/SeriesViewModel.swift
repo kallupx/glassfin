@@ -50,6 +50,9 @@ public final class SeriesViewModel {
         return items.first(where: { !$0.userData.played })?.id ?? items.first?.id
     }
 
+    /// The per-season picker stays visible even when the series has only one season (Q7-25).
+    public var showsSeasonPicker: Bool { seasons.value?.isEmpty == false }
+
     public var selectedOverview: String {
         episodes.value?.first(where: { $0.id == focusedEpisodeID })?.overview ?? ""
     }

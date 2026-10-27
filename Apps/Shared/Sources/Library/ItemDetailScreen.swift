@@ -60,7 +60,12 @@ struct ItemDetailScreen: View {
         .accessibilityIdentifier("detail.root")
         .defaultFocus($focus, Optional(.play), priority: .userInitiated)
         .task {
-            if model.state.value == nil { await load() } else { await series.refreshFromStore() }
+            if model.state.value == nil {
+                await load()
+            } else {
+                await series.refreshFromStore()
+                if isSeries { focus = series.focus }
+            }
         }
         .onChange(of: session.app.userDataGeneration) { _, _ in
             Task {

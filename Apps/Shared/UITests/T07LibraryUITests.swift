@@ -2,7 +2,87 @@ import XCTest
 
 @MainActor
 final class T07LibraryUITests: XCTestCase {
+    /// T07-43/T07-48/T07-49: Q7-25 keeps the single-season picker visible and reachable.
+    func testT07_43_singleSeasonPickerStaysVisible() {
+        let app = launch("series-single-season")
+        let picker = element(app, "series.seasons")
+        let season = element(app, "series.season.000000000000000000000000000007d1")
+        require(picker)
+        require(season)
+        require(element(app, "series.episode.00000000000000000000000000007595"))
+        XCTAssertTrue(season.isSelected)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'series.season.'")).count, 1)
+        #if os(tvOS)
+            focused(element(app, "detail.play"))
+            XCUIRemote.shared.press(.down)
+            focused(season)
+            XCUIRemote.shared.press(.down)
+            focused(element(app, "series.episode.00000000000000000000000000007595"))
+            XCUIRemote.shared.press(.up)
+            focused(season)
+        #endif
+        save(app, name: "T07-43-single-season-picker")
+    }
+
     #if os(tvOS)
+        /// T07-44/T07-50: only the selected season's row is visible, including a one-episode season.
+        func testT07_44_twoSeasonPickerReplacesEpisodesAndKeepsFocus() {
+            let app = launch("series-two-seasons")
+            focused(element(app, "detail.play"))
+            let seasonOne = element(app, "series.season.000000000000000000000000000007d1")
+            let seasonTwo = element(app, "series.season.000000000000000000000000000007d2")
+            let firstEpisode = element(app, "series.episode.00000000000000000000000000007595")
+            let shortEpisode = element(app, "series.episode.000000000000000000000000000075f9")
+            require(firstEpisode)
+            XCTAssertFalse(shortEpisode.exists)
+            XCUIRemote.shared.press(.down)
+            focused(seasonOne)
+            XCUIRemote.shared.press(.right)
+            focused(seasonTwo)
+            require(shortEpisode)
+            XCTAssertTrue(seasonTwo.isSelected)
+            XCTAssertTrue(seasonTwo.hasFocus)
+            XCTAssertFalse(firstEpisode.exists)
+            XCTAssertEqual(
+                app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'series.episode.'")).count, 1)
+            XCUIRemote.shared.press(.left)
+            focused(seasonOne)
+            require(firstEpisode)
+            XCTAssertTrue(seasonOne.isSelected)
+            XCTAssertTrue(seasonOne.hasFocus)
+            XCTAssertFalse(shortEpisode.exists)
+            save(app, name: "T07-44-two-season-switch")
+        }
+
+        /// T07-48/T07-49/T07-51: returning from detail keeps the short episode and its season reachable.
+        func testT07_51_shortSecondSeasonEpisodeDetailReturnsToSameEpisode() {
+            let app = launch("series-two-seasons")
+            focused(element(app, "detail.play"))
+            XCUIRemote.shared.press(.down)
+            focused(element(app, "series.season.000000000000000000000000000007d1"))
+            XCUIRemote.shared.press(.right)
+            let season = element(app, "series.season.000000000000000000000000000007d2")
+            focused(season)
+            let episode = element(app, "series.episode.000000000000000000000000000075f9")
+            require(episode)
+            XCUIRemote.shared.press(.down)
+            focused(episode)
+            XCUIRemote.shared.press(.select)
+            require(element(app, "detail.play"))
+            let hidden = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "exists == false"), object: element(app, "series.seasons"))
+            XCTAssertEqual(XCTWaiter().wait(for: [hidden], timeout: 10), .completed)
+            XCUIRemote.shared.press(.menu)
+            focused(episode)
+            XCTAssertTrue(season.isSelected)
+            XCTAssertFalse(element(app, "series.episode.00000000000000000000000000007595").exists)
+            XCUIRemote.shared.press(.up)
+            focused(season)
+            XCUIRemote.shared.press(.down)
+            focused(episode)
+            save(app, name: "T07-51-short-season-detail-return")
+        }
+
         /// T07-19: canonical spec/TESTPLAN-M07.md.
         func testT07_19_detailBackRestoresTheSameGridCardAndScrollPosition() {
             let app = launch("grid")

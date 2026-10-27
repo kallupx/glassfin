@@ -14,6 +14,14 @@
         private let scenario: String
         private var outageInjected = false
 
+        private var usesShortSeries: Bool {
+            scenario == "series-single-season" || scenario.hasPrefix("series-two-seasons")
+        }
+        private var seasonNumbers: [Int] {
+            if scenario == "series-single-season" { return [1] }
+            return usesShortSeries ? [1, 2] : [0, 1, 2]
+        }
+
         public init(scenario: String = "grid") { self.scenario = scenario }
         public static func id(_ value: Int) -> String { String(format: "%032x", value) }
         public static func episodeID(season: Int, episode: Int) -> String { id(30000 + season * 100 + episode) }
@@ -52,15 +60,19 @@
                 return json(["Items": start < end ? (start..<end).map { movie($0) } : [], "TotalRecordCount": total])
             }
             if request.path.hasSuffix("/Seasons") {
-                return json(["Items": [season(0), season(1), season(2)], "TotalRecordCount": 3])
+                return json(["Items": seasonNumbers.map { season($0) }, "TotalRecordCount": seasonNumbers.count])
             }
             if request.path == "/Shows/NextUp" {
-                return json(["Items": [episode(season: 2, number: 5)], "TotalRecordCount": 1])
+                return json([
+                    "Items": [episode(season: usesShortSeries ? 1 : 2, number: usesShortSeries ? 1 : 5)],
+                    "TotalRecordCount": 1,
+                ])
             }
             if request.path.hasSuffix("/Episodes") {
                 let number = query["seasonId"].flatMap { Int($0, radix: 16) }.map { $0 - 2000 }
-                let episodes = (number.map { [$0] } ?? [1, 2, 0]).flatMap { season in
-                    (1...8).map { episode(season: season, number: $0) }
+                let episodes = (number.map { [$0] } ?? seasonNumbers).flatMap { season in
+                    let count = usesShortSeries ? (season == 2 ? 1 : 2) : 8
+                    return (1...count).map { episode(season: season, number: $0) }
                 }
                 return json(["Items": episodes, "TotalRecordCount": episodes.count])
             }
@@ -108,10 +120,11 @@
             [
                 "Id": Self.episodeID(season: season, episode: number), "Type": "Episode", "SeriesId": Self.series,
                 "SeasonId": Self.id(2000 + season), "ParentIndexNumber": season, "IndexNumber": number,
-                "Name": "Episode \(number)", "Overview": "Overview \(season)-\(number)", "RunTimeTicks": 27_000_000_000,
+                "Name": "Episode \(number)", "Overview": "Overview \(season)-\(number)",
+                "RunTimeTicks": usesShortSeries ? 20_000_000 : 27_000_000_000,
                 "UserData": [
-                    "Played": season == 1 || (season == 2 && number < 5),
-                    "PlaybackPositionTicks": season == 2 && number == 5 ? 10_000_000_000 : 0,
+                    "Played": !usesShortSeries && (season == 1 || (season == 2 && number < 5)),
+                    "PlaybackPositionTicks": !usesShortSeries && season == 2 && number == 5 ? 10_000_000_000 : 0,
                 ],
             ]
         }

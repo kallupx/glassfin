@@ -56,15 +56,15 @@ and finishing playback may advance focus. The canonical file is unchanged.
 | T07-40 | Partial K: design-system checks enforce glass placement. Visual budget requires snapshots. |
 | T07-41 | Not automated: parallel item/seasons start needs a gated service test. |
 | T07-42 | L: T07-43 asserts seasonId, enableUserData and Overview,PrimaryImageAspectRatio fields, following the merged module spec. |
-| T07-43 | L: `testT07_43_fiveSeasonsFetchAndShowOnlyTheSelectedSeason` verifies no all-season episode request, series-scoped Next Up discovery, and replacement of the displayed season. Picker visuals require Apple UI/snapshot execution. |
-| T07-44 | L: `testT07_44_switchingSeasonCancelsPreviousRequestAndReusesCachedRows` uses a suspended request, proves cancellation, and verifies a completed season is reused without another request. |
+| T07-43 | L: `testT07_43_fiveSeasonsFetchAndShowOnlyTheSelectedSeason` verifies no all-season episode request, series-scoped Next Up discovery, and replacement of the displayed season. `testT07_43_singleSeasonKeepsPickerVisibleAndItsEpisodesSelected` and `testT07_43_noSeasonsHidesPicker` enforce the Q7-25 follow-up. A: `testT07_43_singleSeasonPickerStaysVisible` checks visibility and Down/Up focus with one season. |
+| T07-44 | L: `testT07_44_switchingSeasonCancelsPreviousRequestAndReusesCachedRows` uses a suspended request, proves cancellation, and verifies a completed season is reused without another request. `testT07_44_twoSeasonsReplaceEpisodesAndKeepFocusInTheSelectedSeason` checks the two-second S2E1 fixture, season-scoped requests, row replacement, cache reuse and picker/episode focus. A: `testT07_44_twoSeasonPickerReplacesEpisodesAndKeepsFocus`. |
 | T07-45 | L: `testT07_45_seriesOpensAtInProgressSeasonTwoEpisodeFiveAndSpecialsLast`; no-progress default needs another fixture. |
 | T07-46 | A: `testT07_46_playIsDefaultAndInProgressEpisodeIsVisible`; follows final module spec Play/Resume default focus. |
 | T07-47 | Not automated: fully watched series needs a dedicated fixture (Q7-07). |
 | T07-48 | L and A: `testT07_48_downTargetsFirstUnplayedAndUpReturnsToSelectedSeason`, `testT07_48_downFromSeasonTargetsThatSeasonsFirstUnplayedEpisode`. |
 | T07-49 | L: T07-48; A: `testT07_49_upFromEpisodeReturnsToSelectedSeason`. |
 | T07-50 | L: `testT07_50_seasonFocusDebouncesAndLatestSelectionWinsWithoutMovingToEpisodes`; A: `testT07_50_focusOnSeasonChangesRowWithoutSelectingOrLeavingPicker`. |
-| T07-51 | L/A: same-episode and next-episode playback-return hook tests, including next-season transition. Real player return awaits M08 presentation (Q7-08). |
+| T07-51 | L/A: same-episode and next-episode playback-return hook tests, including next-season transition. L: `testT07_51_shortFinalSeasonReturnsToItsOnlyEpisode` covers finishing the only episode of the final season. A: `testT07_51_shortSecondSeasonEpisodeDetailReturnsToSameEpisode` checks detail return, the selected season and Up/Down focus. Real player return awaits M08 presentation (Q7-08). |
 | T07-52 | Partial L/A: `testT07_52_selectedOverviewFollowsFocusedEpisodeAsLiteralText`, `testT07_52_episodeOverviewNeverReceivesFocus`. Card snapshots require Apple SDK. |
 | T07-53 | A: `testT07_53_episodeCardNavigatesToEpisodeDetail`; direct Play/Pause uses the M08 hook (Q7-20). |
 | T07-54 | Partial L: T07-45 checks Specials last. Localized name snapshot requires Apple SDK (Q7-17). |
@@ -104,20 +104,32 @@ helpers are retained with duplicate helpers removed. Linux `swift build` and
 `swift test` passed before this follow-up; five live Docker tests were skipped
 because `GLASSFIN_INTEGRATION` was not enabled.
 
-Final Linux validation passed: `swift build`, `swift test` (360 passed,
-including 43 M07 tests; five live Docker tests skipped), and
+Final Linux validation passed: `swift build`, `swift test` (364 passed,
+including 47 M07 tests; five live Docker tests skipped), and
 `swift-format lint --recursive --strict Package.swift Sources Tests ../../Apps`.
 The design-system, String Catalog, DEBUG-string and CI grep checks passed.
 The image source check is part of CI grep and its forbidden-pattern detection
 was also verified. The canonical copy, all 82 mapping rows, and every authored
 M07 test's ID/comment were checked for consistency.
 
-There are 54 authored M07 tests: 43 Linux tests and 11 Apple ImageIO/UI tests.
+The Q7-25 single-season follow-up also passed `scripts/coverage-gate.sh`
+(91.72% line coverage), license and entitlement checks, DEBUG-string and artifact
+redaction self-tests. The Docker seed generation was exercised locally with
+`ffmpeg`/`ffprobe`: one movie, two S1 episodes and one two-second S2 episode.
+The bootstrap's TV-library fallback and incomplete-scan retry passed with mock
+responses. Docker and Xcode are unavailable here; live integration and Apple UI
+tests were not executed. No plist, workflow or `project.yml` changes were made.
+
+The DEBUG scenarios `series-single-season` and `series-two-seasons` exercise the
+same service/view-model path as the app. The picker uses the existing en/fi
+catalog entries and appears for every series with at least one season.
+
+There are 61 authored M07 tests: 47 Linux tests and 14 Apple ImageIO/UI tests.
 Linux executed IDs T07-01, T07-05–T07-07, T07-09, T07-11, T07-13, T07-21,
 T07-25, T07-27–T07-29, T07-35, T07-43–T07-45, T07-48, T07-50–T07-52,
 T07-63–T07-64, T07-67–T07-68, T07-71, T07-77–T07-78, and T07-80–T07-81.
 Supporting assertions cover T07-26, T07-42, T07-49 and T07-54 as described above.
-Apple-only test IDs are T07-19, T07-46, T07-48–T07-53, T07-63 and T07-80;
+Apple-only tests use IDs T07-19, T07-43–T07-44, T07-46, T07-48–T07-53, T07-63 and T07-80;
 they were not executed on Linux. Every remaining ID has a not-automated or
 partial-coverage explanation in the table. No PNGs, device performance results
 or live-server compatibility results are claimed.

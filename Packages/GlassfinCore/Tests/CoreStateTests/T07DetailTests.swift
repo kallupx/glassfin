@@ -57,6 +57,93 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.state.presentedError.flatMap(AppErrorMessage.key), .serverUnreachable)
     }
 
+    /// T07-43: Q7-25 also requires a picker for a single-season series.
+    func testT07_43_singleSeasonKeepsPickerVisibleAndItsEpisodesSelected() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let model = series(rig, scenario: "series-single-season")
+        XCTAssertFalse(model.showsSeasonPicker)
+        await model.load(seriesID: LibraryFixtureClient.series)
+        XCTAssertTrue(model.showsSeasonPicker)
+        XCTAssertEqual(model.seasons.value?.map(\.id), [LibraryFixtureClient.seasonOne])
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonOne)
+        XCTAssertEqual(model.episodes.value?.count, 2)
+        XCTAssertEqual(Set(model.episodes.value?.compactMap(\.seasonID) ?? []), [LibraryFixtureClient.seasonOne])
+        model.moveDownFromSeason()
+        XCTAssertEqual(model.focus, .episode(LibraryFixtureClient.episodeID(season: 1, episode: 1)))
+        model.moveUpFromEpisodes()
+        XCTAssertEqual(model.focus, .season(LibraryFixtureClient.seasonOne))
+    }
+
+    /// T07-43: an empty series has no season to select and no empty glass picker.
+    func testT07_43_noSeasonsHidesPicker() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let model = SeriesViewModel(library: rig.library, userData: rig.app.userData, app: rig.app)
+        await model.load(seriesID: Sample.other)
+        XCTAssertFalse(model.showsSeasonPicker)
+        XCTAssertTrue(model.episodes.value?.isEmpty == true)
+    }
+
+    /// T07-44/T07-48/T07-49/T07-50: replace the row, retain picker focus, then navigate the short season.
+    func testT07_44_twoSeasonsReplaceEpisodesAndKeepFocusInTheSelectedSeason() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let fixture = LibraryFixtureClient(scenario: "series-two-seasons")
+        let client = MockAPIClient { request async throws(APIError) -> Data in try await fixture.send(request) }
+        let model = SeriesViewModel(
+            library: JellyfinLibraryService(client: client), userData: rig.app.userData, app: rig.app)
+        await model.load(seriesID: LibraryFixtureClient.series)
+        let firstEpisodes = try XCTUnwrap(model.episodes.value)
+        XCTAssertEqual(firstEpisodes.count, 2)
+        XCTAssertEqual(
+            model.seasons.value?.map(\.id), [LibraryFixtureClient.seasonOne, LibraryFixtureClient.seasonTwo])
+        model.focusSeason(LibraryFixtureClient.seasonTwo)
+        await model.select(seasonID: LibraryFixtureClient.seasonTwo)
+        let shortEpisode = LibraryFixtureClient.episodeID(season: 2, episode: 1)
+        XCTAssertEqual(model.episodes.value?.map(\.id), [shortEpisode])
+        XCTAssertEqual(model.episodes.value?.first?.seasonID, LibraryFixtureClient.seasonTwo)
+        XCTAssertEqual(model.episodes.value?.first?.runtime, .seconds(2))
+        XCTAssertEqual(model.focus, .season(LibraryFixtureClient.seasonTwo))
+        model.moveDownFromSeason()
+        XCTAssertEqual(model.focus, .episode(shortEpisode))
+        model.moveUpFromEpisodes()
+        XCTAssertEqual(model.focus, .season(LibraryFixtureClient.seasonTwo))
+        model.focusSeason(LibraryFixtureClient.seasonOne)
+        await model.select(seasonID: LibraryFixtureClient.seasonOne)
+        XCTAssertEqual(model.episodes.value, firstEpisodes)
+        XCTAssertEqual(model.focus, .season(LibraryFixtureClient.seasonOne))
+        let calls = await client.calls.filter { $0.path.hasSuffix("/Episodes") }
+        XCTAssertEqual(
+            calls.compactMap { $0.query.first { $0.name == "seasonId" }?.value },
+            [LibraryFixtureClient.seasonOne, LibraryFixtureClient.seasonTwo])
+        model.onDisappear()
+    }
+
+    /// T07-51: the last short episode remains a valid return target when no later season exists.
+    func testT07_51_shortFinalSeasonReturnsToItsOnlyEpisode() async throws {
+        let rig = Harness.make()
+        defer { rig.cleanup() }
+        try rig.signIn()
+        let model = series(rig, scenario: "series-two-seasons")
+        await model.load(seriesID: LibraryFixtureClient.series)
+        await model.select(seasonID: LibraryFixtureClient.seasonTwo)
+        let episode = LibraryFixtureClient.episodeID(season: 2, episode: 1)
+        model.focusEpisode(episode)
+        await model.returnedFromPlayback(itemID: episode, finished: false)
+        XCTAssertEqual(model.focus, .episode(episode))
+        await rig.app.userData.recordPlayback(id: episode, position: .seconds(2), played: true, log: SilentLog())
+        await model.returnedFromPlayback(itemID: episode, finished: true)
+        XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
+        XCTAssertEqual(model.focus, .episode(episode))
+        XCTAssertEqual(model.episodes.value?.first?.userData.played, true)
+        model.moveUpFromEpisodes()
+        XCTAssertEqual(model.focus, .season(LibraryFixtureClient.seasonTwo))
+    }
+
     /// T07-42/T07-43: five seasons; only the selected season's episodes are requested and displayed.
     func testT07_43_fiveSeasonsFetchAndShowOnlyTheSelectedSeason() async throws {
         let rig = Harness.make()
@@ -325,9 +412,12 @@ final class T07DetailTests: XCTestCase {
         XCTAssertEqual(model.selectedSeasonID, LibraryFixtureClient.seasonTwo)
     }
 
-    private func series(_ rig: Harness, clock: any GlassfinClock = SystemGlassfinClock()) -> SeriesViewModel {
+    private func series(
+        _ rig: Harness, clock: any GlassfinClock = SystemGlassfinClock(), scenario: String = "grid"
+    ) -> SeriesViewModel {
         SeriesViewModel(
-            library: JellyfinLibraryService(client: LibraryFixtureClient()), userData: rig.app.userData, app: rig.app,
+            library: JellyfinLibraryService(client: LibraryFixtureClient(scenario: scenario)),
+            userData: rig.app.userData, app: rig.app,
             clock: clock)
     }
 }

@@ -10,7 +10,7 @@ struct SeriesEpisodeSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.l) {
-            seasonPicker
+            if model.showsSeasonPicker { seasonPicker }
             episodeRow
             Text(verbatim: model.selectedOverview)
                 .font(.body).focusable(false)

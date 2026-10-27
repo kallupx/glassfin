@@ -73,14 +73,23 @@ for version in "${versions[@]}"; do
   fi
   work="$(mktemp -d)"
   chmod 755 "$work"
-  mkdir -p "$work/media" "$work/config"
+  mkdir -p "$work/media/movies" "$work/config" \
+    "$work/media/tvshows/Fixture Series/Season 01" \
+    "$work/media/tvshows/Fixture Series/Season 02"
   chmod 777 "$work/media" "$work/config"
   ffmpeg -y -loglevel error \
     -f lavfi -i "testsrc=size=320x240:rate=24" \
     -f lavfi -i "sine=frequency=440:sample_rate=48000" \
     -t 2 -shortest \
     -c:v libx264 -pix_fmt yuv420p -c:a aac \
-    "$work/media/Test Movie (2024).mp4"
+    "$work/media/movies/Test Movie (2024).mp4"
+  # Q7-25 / T07-44: two seasons, with one short episode in the second season.
+  for episode in 01 02; do
+    cp "$work/media/movies/Test Movie (2024).mp4" \
+      "$work/media/tvshows/Fixture Series/Season 01/Fixture Series - S01E${episode}.mp4"
+  done
+  cp "$work/media/movies/Test Movie (2024).mp4" \
+    "$work/media/tvshows/Fixture Series/Season 02/Fixture Series - S02E01.mp4"
   port="$(python3 - <<'PY'
 import socket
 s = socket.socket()

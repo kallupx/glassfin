@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Finish the Jellyfin startup wizard and wait for one scanned movie.
+"""Finish the Jellyfin startup wizard and wait for a movie and a two-season series.
 
 Credentials come from the environment. This script never prints them or the access token.
 """
@@ -90,24 +90,24 @@ def authenticate(username: str) -> str:
     raise SystemExit(1)
 
 
-def add_library(token: str) -> None:
+def add_library(token: str, name: str, collection_type: str, path: str) -> None:
     status, _ = request(
         "POST",
         "/Library/VirtualFolders",
         token=token,
-        query={"name": "Movies", "collectionType": "movies", "paths": "/media", "refreshLibrary": "true"},
+        query={"name": name, "collectionType": collection_type, "paths": path, "refreshLibrary": "true"},
     )
     if status in (200, 204):
         return
     status, _ = request(
         "POST",
         "/Library/VirtualFolders",
-        body={"LibraryOptions": {"PathInfos": [{"Path": "/media"}]}},
+        body={"LibraryOptions": {"PathInfos": [{"Path": path}]}},
         token=token,
-        query={"name": "Movies", "collectionType": "movies", "refreshLibrary": "true"},
+        query={"name": name, "collectionType": collection_type, "refreshLibrary": "true"},
     )
     if status not in (200, 204):
-        print(f"bootstrap: add library HTTP {status}", file=sys.stderr)
+        print(f"bootstrap: add {collection_type} library HTTP {status}", file=sys.stderr)
         raise SystemExit(1)
 
 
@@ -128,6 +128,40 @@ def wait_for_movie(token: str) -> None:
                 return
         time.sleep(3)
     print("bootstrap: library scan found no movie", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def wait_for_series(token: str) -> None:
+    """Do not start the live tests until both seasons and the short episode are scanned."""
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        status, raw = request(
+            "GET", "/Items", token=token,
+            query={"Recursive": "true", "IncludeItemTypes": "Series", "Limit": "5"},
+        )
+        items = json.loads(raw).get("Items", []) if status == 200 else []
+        for series in items:
+            series_id = series["Id"]
+            status, raw = request("GET", f"/Shows/{series_id}/Seasons", token=token)
+            seasons = json.loads(raw).get("Items", []) if status == 200 else []
+            if sorted(season.get("IndexNumber", -1) for season in seasons) != [1, 2]:
+                continue
+            ready = True
+            for season in seasons:
+                status, raw = request(
+                    "GET", f"/Shows/{series_id}/Episodes", token=token,
+                    query={"seasonId": season["Id"]},
+                )
+                episodes = json.loads(raw).get("Items", []) if status == 200 else []
+                expected = 1 if season["IndexNumber"] == 2 else 2
+                ready = ready and len(episodes) == expected and all(
+                    0 < episode.get("RunTimeTicks", 0) <= 30_000_000 for episode in episodes
+                )
+            if ready:
+                print("bootstrap: two-season series with a short S2E1 is in the library")
+                return
+        time.sleep(3)
+    print("bootstrap: library scan found no complete two-season series", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -197,8 +231,10 @@ def main() -> None:
             raise SystemExit(1)
     publish_username(username)
     token = authenticate(username)
-    add_library(token)
+    add_library(token, "Movies", "movies", "/media/movies")
+    add_library(token, "Series", "tvshows", "/media/tvshows")
     wait_for_movie(token)
+    wait_for_series(token)
 
 
 if __name__ == "__main__":
