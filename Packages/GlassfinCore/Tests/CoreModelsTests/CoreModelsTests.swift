@@ -226,6 +226,32 @@ final class MapperTests: XCTestCase {
         }
     }
 
+    func testSharedAuthErrorKeysReuseAppErrorMessageConstants() {
+        let shared: [(AuthCopy.Key, String)] = [
+            (.tryAgain, AppErrorMessage.retryKey),
+            (.switchServer, AppErrorMessage.changeServerKey),
+            (.sessionExpired, AppErrorMessage.sessionExpiredKey),
+            (.serverUnreachable, AppErrorMessage.serverDownKey),
+            (.noNetworkConnection, AppErrorMessage.offlineKey),
+            (.forbidden, AppErrorMessage.forbiddenKey),
+            (.invalidCredentials, AppErrorMessage.invalidCredentialsKey),
+            (.playbackFailed, AppErrorMessage.playbackFailedKey),
+            (.buffering, AppErrorMessage.bufferingKey),
+            (.playbackOffline, AppErrorMessage.playbackOfflineKey),
+            (.playbackUnreachable, AppErrorMessage.playbackUnreachableKey),
+            (.certificateUntrusted, AppErrorMessage.tlsUntrustedKey),
+            (.insecureRedirect, AppErrorMessage.insecureRedirectKey),
+            (.itemNotFound, AppErrorMessage.notFoundKey),
+            (.serverError, AppErrorMessage.serverErrorKey),
+            (.unsupportedServerDetail, AppErrorMessage.unsupportedServerKey),
+        ]
+        for (authKey, errorKey) in shared {
+            XCTAssertEqual(authKey.rawValue, errorKey)
+        }
+        let authKeys = AuthCopy.Key.allCases.map(\.rawValue)
+        XCTAssertEqual(Set(authKeys).count, authKeys.count)
+    }
+
     func testAuthCatalogHasEnglishAndFinnishForEveryKey() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

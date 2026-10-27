@@ -73,7 +73,8 @@ final class T06HomeTests: XCTestCase {
         let home = h.home()
         await home.reload(libraryIDs: [])
         XCTAssertEqual(home.resume.presentedError, .serverError(status: 500))
-        XCTAssertEqual(AppErrorMessage.key(for: try XCTUnwrap(home.resume.presentedError)), .serverError)
+        XCTAssertEqual(
+            AppErrorMessage.messageKey(for: try XCTUnwrap(home.resume.presentedError)), AppErrorMessage.serverErrorKey)
         XCTAssertTrue(home.hasContent)
         XCTAssertNil(home.serverDownTitleKey)
         let calls = h.library.nextCallCount()
@@ -115,7 +116,7 @@ final class T06HomeTests: XCTestCase {
         await home.load()
         XCTAssertFalse(home.isLoading)
         XCTAssertFalse(home.isEmpty)
-        XCTAssertEqual(HomePolicy.sectionErrorKey(for: home.resume), .serverError)
+        XCTAssertEqual(HomePolicy.sectionErrorKey(for: home.resume), AppErrorMessage.serverErrorKey)
         XCTAssertEqual(home.nextUp.value?.first?.id, Sample.movie)
         h.library.resumeError = nil
         await home.retry(rowID: "resume")
@@ -308,7 +309,7 @@ final class T06HomeTests: XCTestCase {
         await home.retry(rowID: "resume")
         XCTAssertTrue(home.hasContent)
         XCTAssertEqual(h.app.connectivity, .serverUnreachable)
-        XCTAssertEqual(home.bannerKey, .serverUnreachable)
+        XCTAssertEqual(home.bannerKey, AppErrorMessage.serverDownKey)
         XCTAssertNil(home.serverDownTitleKey)
         XCTAssertEqual(home.resume.value?.first?.id, Sample.movie)
         guard case .signedIn = h.app.phase else { return XCTFail("network error ended session") }
@@ -324,7 +325,7 @@ final class T06HomeTests: XCTestCase {
         h.library.nextError = .network
         let home = h.home()
         await home.reload(libraryIDs: [])
-        XCTAssertEqual(home.serverDownTitleKey, AppErrorMessage.key(for: .serverUnreachable))
+        XCTAssertEqual(home.serverDownTitleKey, AppErrorMessage.messageKey(for: .serverUnreachable))
         XCTAssertNotNil(try h.secure.data(for: Sample.account()))
     }
 
@@ -368,7 +369,7 @@ final class T06HomeTests: XCTestCase {
         h.library.latestByID[Sample.library] = .failure(.unauthorized)
         h.library.latestByID[Sample.other] = .success([Sample.movie()])
         await h.home().reload(libraryIDs: [Sample.library, Sample.other])
-        XCTAssertEqual(h.app.sessionNoticeKey, .sessionExpired)
+        XCTAssertEqual(h.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
         XCTAssertEqual(h.secure.removed().count, 1)
     }
 
@@ -534,7 +535,7 @@ final class T06HomeTests: XCTestCase {
         h.library.error = .network
         await home.setFavorite(item)
         XCTAssertEqual(home.actionError, .serverUnreachable)
-        XCTAssertEqual(home.bannerKey, .serverUnreachable)
+        XCTAssertEqual(home.bannerKey, AppErrorMessage.serverDownKey)
         XCTAssertNil(home.serverDownTitleKey)
         XCTAssertEqual(home.resume.value?.first?.id, item.id)
         XCTAssertEqual(home.rememberedIDs["resume"], item.id)
@@ -572,7 +573,7 @@ final class T06HomeTests: XCTestCase {
         let home = h.home()
         await home.reload(libraryIDs: [], coldStart: true)
         XCTAssertEqual(home.resume.value?.first?.id, Sample.movie)
-        XCTAssertEqual(home.bannerKey, .serverUnreachable)
+        XCTAssertEqual(home.bannerKey, AppErrorMessage.serverDownKey)
         XCTAssertNil(home.serverDownTitleKey)
         XCTAssertNotNil(try h.secure.data(for: Sample.account()))
     }

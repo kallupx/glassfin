@@ -186,6 +186,7 @@ struct SkeletonRow: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
         .accessibilityHidden(true)
     }

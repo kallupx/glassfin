@@ -23,6 +23,7 @@ struct LibraryTabShell: View {
             settingsTab
         }
         .modifier(PlatformTabChrome())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.shell.root")
     }
 
@@ -62,6 +63,7 @@ struct LibraryTabShell: View {
                         .accessibilityIdentifier("design.libraryOverflow.\(library.id)")
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("design.libraries.root")
         } label: {
             tabLabel(.tabLibraries, symbol: "square.grid.2x2", identifier: "design.tab.libraries")
@@ -157,11 +159,47 @@ struct NavigationPrototype: View {
         }
     }
 
+    @ViewBuilder
     private func navScreen(_ key: CopyKey, identifier: String) -> some View {
-        Copy.text(key)
-            .font(.largeTitle)
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityIdentifier(identifier)
+        #if os(tvOS)
+            NavigationFocusScreen(title: key, identifier: identifier)
+        #else
+            Copy.text(key)
+                .font(.largeTitle)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier(identifier)
+        #endif
     }
 }
+
+#if os(tvOS)
+    private struct NavigationFocusScreen: View {
+        var title: CopyKey
+        var identifier: String
+
+        @FocusState private var focused: Bool
+        @Namespace private var focusScope
+
+        var body: some View {
+            VStack {
+                Button(action: {}) {
+                    Copy.text(title)
+                        .font(.largeTitle)
+                        .foregroundStyle(.primary)
+                }
+                .focused($focused)
+                .prefersDefaultFocus(in: focusScope)
+                .accessibilityIdentifier(identifier)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .focusScope(focusScope)
+            .onAppear {
+                // Wait until the pushed or revealed screen has joined the focus hierarchy.
+                DispatchQueue.main.async {
+                    focused = true
+                }
+            }
+        }
+    }
+#endif

@@ -120,6 +120,12 @@ public struct StaticConnectivityPath: ConnectivityPath {
     }
 #endif
 
+/// Content retained by the visible screen, including previous values during loading or failure.
+@MainActor
+public protocol ViewContentProviding: AnyObject {
+    var hasContent: Bool { get }
+}
+
 @MainActor
 @Observable
 public final class AppState {
@@ -133,8 +139,20 @@ public final class AppState {
     public private(set) var phase: Phase = .launching
     public private(set) var connectivity: Connectivity = .online
     public private(set) var activeServer: ServerInfo?
-    public private(set) var banner: String?
-    public private(set) var sessionNotice: String?
+    public private(set) var bannerKey: String?
+    public private(set) var sessionNoticeKey: String?
+
+    /// Set on screen entry (also when returning without reloading); nil for screens without media content.
+    /// View models select themselves when loading. A weak reference avoids retaining a departed screen.
+    public weak var currentView: (any ViewContentProviding)?
+
+    public var banner: String? {
+        bannerKey.map(AppErrorMessage.localized)
+    }
+
+    public var sessionNotice: String? {
+        sessionNoticeKey.map(AppErrorMessage.localized)
+    }
     /// Set when the saved server is below the minimum. The phase enum has no blocked case.
     public private(set) var blockingError: AppError?
     public private(set) var securityNotice: AppError?
@@ -166,37 +184,31 @@ public final class AppState {
     @ObservationIgnored private var probeTask: Task<Void, Never>?
     @ObservationIgnored public var onReconnect: (@MainActor () -> Void)?
 
-    public var bannerKey: AuthCopy.Key? {
-        switch connectivity {
-        case .offline: .noNetworkConnection
-        case .serverUnreachable: .serverUnreachable
-        case .online, .degraded: nil
-        }
+    public var showsServerDown: Bool {
+        connectivity == .serverUnreachable && currentView?.hasContent != true
     }
-    public var sessionNoticeKey: AuthCopy.Key? { sessionNotice == nil ? nil : .sessionExpired }
-    public var playbackBlockedKey: AuthCopy.Key? {
-        switch connectivity {
-        case .offline: .playbackOffline
-        case .serverUnreachable: .playbackUnreachable
-        case .online, .degraded: nil
-        }
-    }
-    public var showsServerDown: Bool { connectivity == .serverUnreachable }
+    public var serverDownTitleKey: String { AppErrorMessage.serverDownKey }
     public var serverDownTitle: String { AppErrorMessage.serverDown }
+    public var retryTitleKey: String { AppErrorMessage.retryKey }
     public var retryTitle: String { AppErrorMessage.retry }
-    public var switchServerTitle: String { AppErrorMessage.switchServer }
+    public var changeServerTitleKey: String { AppErrorMessage.changeServerKey }
+    public var changeServerTitle: String { AppErrorMessage.changeServer }
     public var scheduledPingDelay: Duration { NetworkThresholds.serverPingInterval }
     public var playbackBlocked: Bool { connectivity == .offline || connectivity == .serverUnreachable }
 
-    public var playbackBlockedMessage: String? {
+    public var playbackBlockedMessageKey: String? {
         switch connectivity {
         case .offline:
-            AppErrorMessage.playbackOffline
+            AppErrorMessage.playbackOfflineKey
         case .serverUnreachable:
-            AppErrorMessage.playbackUnreachable
+            AppErrorMessage.playbackUnreachableKey
         case .online, .degraded:
             nil
         }
+    }
+
+    public var playbackBlockedMessage: String? {
+        playbackBlockedMessageKey.map(AppErrorMessage.localized)
     }
 
     public init(
@@ -231,11 +243,12 @@ public final class AppState {
         self.scope = RequestScope()
         if !path.isOnline {
             self.connectivity = .offline
-            self.banner = AppErrorMessage.offline
+            self.bannerKey = AppErrorMessage.offlineKey
         }
     }
 
     public func bootstrap() {
+        currentView = nil
         let prefs = preferences.load()
         guard let stored = prefs.activeServer() else {
             phase = .needsServer
@@ -289,7 +302,7 @@ public final class AppState {
         activate(session)
     }
 
-    /// Local sign-out that is not the HTTP 401 path. `notice` is an existing session string, if any.
+    /// Local sign-out that is not the HTTP 401 path. `notice` is an existing catalog key, if any.
     public func signOutLocally(notice: String?) {
         guard case .signedIn(let session) = phase else { return }
         logoutStarted = true
@@ -298,7 +311,8 @@ public final class AppState {
         pingArmed = false
         deleteAccessToken(serverID: session.server.id, userID: session.userID)
         log.debug("Signed out.")
-        sessionNotice = notice
+        sessionNoticeKey = notice
+        currentView = nil
         phase = .needsLogin(session.server)
         activeServer = session.server
         requestGeneration += 1
@@ -319,11 +333,13 @@ public final class AppState {
             try? vault.deleteTokens(serverID: id)
         }
         if case .signedIn(let session) = phase, session.server.id == id {
+            currentView = nil
             logoutStarted = true
             phase = .needsServer
             activeServer = nil
-            sessionNotice = nil
+            sessionNoticeKey = nil
         } else if activeServer?.id == id {
+            currentView = nil
             phase = .needsServer
             activeServer = nil
         }
@@ -336,10 +352,12 @@ public final class AppState {
         try? preferences.save(prefs)
         pingTask?.cancel()
         pingArmed = false
+        currentView = nil
         phase = .needsServer
         activeServer = nil
         if pathOnline, connectivity == .serverUnreachable {
             connectivity = .online
+            bannerKey = nil
         }
     }
 
@@ -441,7 +459,8 @@ public final class AppState {
         pingArmed = false
         deleteAccessToken(serverID: session.server.id, userID: session.userID)
         log.warning("Ended the session after HTTP 401.")
-        sessionNotice = AppErrorMessage.sessionExpired
+        sessionNoticeKey = AppErrorMessage.sessionExpiredKey
+        currentView = nil
         phase = .needsLogin(session.server)
         activeServer = session.server
         requestGeneration += 1
@@ -449,7 +468,7 @@ public final class AppState {
 
     private func enterOffline() {
         connectivity = .offline
-        banner = AppErrorMessage.offline
+        bannerKey = AppErrorMessage.offlineKey
         pingArmed = false
         pingTask?.cancel()
     }
@@ -460,14 +479,14 @@ public final class AppState {
             return
         }
         connectivity = .serverUnreachable
-        banner = AppErrorMessage.serverDown
+        bannerKey = AppErrorMessage.serverDownKey
         pingArmed = true
         armPingLoop()
     }
 
     private func recoverFromServerDown() {
         pingArmed = false
-        banner = nil
+        bannerKey = nil
         if connectivity == .serverUnreachable || connectivity == .offline {
             connectivity = .online
             onReconnect?()
@@ -481,7 +500,7 @@ public final class AppState {
             return
         }
         guard connectivity == .offline else { return }
-        banner = nil
+        bannerKey = nil
         connectivity = .online
         onReconnect?()
         scheduleProbe()
@@ -547,8 +566,9 @@ public final class AppState {
     private func activate(_ session: UserSession) {
         log.debug("Signed in.")
         logoutStarted = false
-        sessionNotice = nil
+        sessionNoticeKey = nil
         blockingError = nil
+        currentView = nil
         phase = .signedIn(session)
         activeServer = session.server
     }

@@ -44,6 +44,10 @@ public struct SessionEndResult: Sendable, Equatable {
         self.serverSessionMayRemain = serverSessionMayRemain
     }
 
+    public var userMessageKey: String? {
+        messageKey?.rawValue
+    }
+
     public var messageKey: AuthCopy.Key? {
         serverSessionMayRemain ? .serverSessionMayRemain : nil
     }
@@ -54,6 +58,7 @@ public struct SessionEndResult: Sendable, Equatable {
 }
 
 public enum SessionEndCopy {
+    public static var serverSessionMayRemainKey: String { AuthCopy.Key.serverSessionMayRemain.rawValue }
     public static var serverSessionMayRemain: String { AuthCopy.localized(.serverSessionMayRemain) }
 }
 

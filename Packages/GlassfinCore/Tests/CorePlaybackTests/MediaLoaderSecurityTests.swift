@@ -138,6 +138,67 @@ final class MediaLoaderSecurityTests: XCTestCase {
         XCTAssertEqual(sniffed.data, Data("#EXTM3U\n".utf8))
     }
 
+    func testBoundedBodyChunkAppendHonorsExactRangeLimit() throws {
+        for limit in [1, 2, 65, 64 * 1_024] {
+            let range = HTTPByteRange(start: 7, end: Int64(6 + limit))
+            let expected = Data(repeating: 1, count: limit)
+            var exact = BoundedMediaBody(contentType: "video/mp4", url: url, range: range)
+            try exact.append(contentsOf: expected)
+            XCTAssertEqual(exact.data, expected)
+            try exact.append(contentsOf: Data())
+            XCTAssertEqual(exact.data, expected)
+            XCTAssertThrowsError(try exact.append(contentsOf: Data([2]))) {
+                XCTAssertEqual($0 as? APIError, .decoding)
+            }
+            XCTAssertEqual(exact.data, expected)
+
+            var oversized = BoundedMediaBody(contentType: "video/mp4", url: url, range: range)
+            XCTAssertThrowsError(try oversized.append(contentsOf: expected + Data([2]))) {
+                XCTAssertEqual($0 as? APIError, .decoding)
+            }
+            XCTAssertEqual(oversized.data, expected)
+        }
+    }
+
+    func testBoundedBodyAccumulatesChunksUpToProgressiveLimit() throws {
+        var body = BoundedMediaBody(contentType: "video/mp4", url: url, range: nil)
+        let chunkBytes = 64 * 1_024
+        var expected = Data()
+        for index in 0..<(MediaLoaderLimits.chunkBytes / chunkBytes) {
+            let chunk = Data(repeating: UInt8(index), count: chunkBytes)
+            try body.append(contentsOf: chunk)
+            expected.append(chunk)
+            XCTAssertEqual(body.data, expected)
+        }
+        XCTAssertEqual(body.data.count, MediaLoaderLimits.chunkBytes)
+        XCTAssertThrowsError(try body.append(contentsOf: Data([0]))) {
+            XCTAssertEqual($0 as? APIError, .decoding)
+        }
+        XCTAssertEqual(body.data, expected)
+    }
+
+    func testBoundedBodyChunkAppendPreservesPlaylistSniffingAndLimit() throws {
+        let prefix = Data("#EXTM3U".utf8)
+        for split in 0...prefix.count {
+            var body = BoundedMediaBody(contentType: nil, url: url, range: HTTPByteRange(start: 0, end: 6))
+            try body.append(contentsOf: prefix.prefix(split))
+            try body.append(contentsOf: prefix.dropFirst(split))
+            let padding = Data(repeating: 32, count: MediaLoaderLimits.playlistBytes - prefix.count)
+            try body.append(contentsOf: padding)
+            XCTAssertEqual(body.data, prefix + padding)
+            XCTAssertThrowsError(try body.append(contentsOf: Data([32]))) {
+                XCTAssertEqual($0 as? APIError, .decoding)
+            }
+            XCTAssertEqual(body.data.count, MediaLoaderLimits.playlistBytes)
+        }
+        // A probe shorter than the identifying prefix must still fail at its first excess byte.
+        var short = BoundedMediaBody(contentType: nil, url: url, range: HTTPByteRange(start: 0, end: 1))
+        XCTAssertThrowsError(try short.append(contentsOf: prefix)) {
+            XCTAssertEqual($0 as? APIError, .decoding)
+        }
+        XCTAssertEqual(short.data, Data("#E".utf8))
+    }
+
     func testOversizedPlaylistAndProgressiveResponsesFailSafely() {
         let oversized = OriginMediaResponse(
             status: 200, contentType: "application/vnd.apple.mpegurl",

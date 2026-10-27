@@ -770,6 +770,27 @@ func began(_ samples: [RecordingSignposter.Sample], _ mark: PerformanceMark) -> 
     samples.filter { $0.mark == mark && $0.phase == "begin" }.count
 }
 
+func englishCatalogText(for key: String) throws -> String {
+    let package = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let data = try Data(contentsOf: package.appendingPathComponent("Sources/CoreModels/Localizable.xcstrings"))
+    let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+    let entry = try XCTUnwrap(strings[key] as? [String: Any])
+    let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+    let english = try XCTUnwrap(localizations["en"] as? [String: Any])
+    let unit = try XCTUnwrap(english["stringUnit"] as? [String: Any])
+    return try XCTUnwrap(unit["value"] as? String)
+}
+
+func assertEnglishCopy(
+    _ text: String?, key: String, expected: String, file: StaticString = #filePath, line: UInt = #line
+) throws {
+    XCTAssertEqual(text, AppErrorMessage.localized(key), file: file, line: line)
+    XCTAssertEqual(text, try englishCatalogText(for: key), file: file, line: line)
+    XCTAssertEqual(text, expected, file: file, line: line)
+}
+
 func expectEqual<T: Equatable>(
     _ lhs: T, _ rhs: T, file: StaticString = #filePath, line: UInt = #line
 ) {

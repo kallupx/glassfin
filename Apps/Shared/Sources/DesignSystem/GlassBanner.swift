@@ -10,6 +10,7 @@ struct GlassBanner: View {
     var body: some View {
         HStack(spacing: SpacingToken.s) {
             GlassIcon(systemName: systemImage, label: message)
+                .accessibilityLabel(messageOverride ?? Copy.string(message))
             Group {
                 if let messageOverride { Text(verbatim: messageOverride) } else { Copy.text(message) }
             }
@@ -20,8 +21,7 @@ struct GlassBanner: View {
         .padding(.vertical, SpacingToken.s)
         .ownGlassSurface(in: Capsule())
         .focusable(false)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(messageOverride ?? Copy.string(message))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
 }

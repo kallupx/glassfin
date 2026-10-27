@@ -28,7 +28,7 @@ final class T06SessionTests: XCTestCase {
             _ = try await pending.value
             XCTFail("Expected cancelled sibling request")
         } catch { XCTAssertEqual(error as? APIError, .cancelled) }
-        XCTAssertEqual(h.app.sessionNoticeKey, .sessionExpired)
+        XCTAssertEqual(h.app.sessionNoticeKey, AppErrorMessage.sessionExpiredKey)
         XCTAssertEqual(h.secure.removed().count, 1)
         do { _ = try await client.send(resource.request()) } catch { XCTAssertEqual(error, .cancelled) }
         let count = await transport.calls

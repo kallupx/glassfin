@@ -77,16 +77,21 @@ final class T02FoundationTests: XCTestCase {
 
     func testT02_09_userFacingCopyAndDiagnosticsOmitTokens() {
         let log = CapturingLog()
-        XCTAssertEqual(AppErrorMessage.key(for: .offline), .noNetworkConnection)
-        XCTAssertEqual(AppErrorMessage.key(for: .serverUnreachable), .serverUnreachable)
-        XCTAssertEqual(AppErrorMessage.key(for: .forbidden), .forbidden)
-        XCTAssertEqual(AppErrorMessage.key(for: .unauthorized), .sessionExpired)
-        XCTAssertEqual(AppErrorMessage.key(for: .invalidCredentials), .invalidCredentials)
-        XCTAssertEqual(AppErrorMessage.key(for: .insecureRedirect), .insecureRedirect)
-        XCTAssertEqual(AppErrorMessage.key(for: .notFound), .itemNotFound)
-        XCTAssertEqual(AppErrorMessage.key(for: .serverError(status: 500)), .serverError)
-        XCTAssertEqual(AppErrorMessage.key(for: .playback(.itemFailed(code: "NoCompatibleStream"))), .playbackFailed)
-        XCTAssertEqual(AppErrorMessage.key(for: .unsupportedServer(version: "10.9.11")), .unsupportedServerDetail)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .offline), AppErrorMessage.offlineKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .serverUnreachable), AppErrorMessage.serverDownKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .forbidden), AppErrorMessage.forbiddenKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .unauthorized), AppErrorMessage.sessionExpiredKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .invalidCredentials), AppErrorMessage.invalidCredentialsKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .insecureRedirect), AppErrorMessage.insecureRedirectKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .notFound), AppErrorMessage.notFoundKey)
+        XCTAssertEqual(AppErrorMessage.messageKey(for: .serverError(status: 500)), AppErrorMessage.serverErrorKey)
+        XCTAssertEqual(
+            AppErrorMessage.messageKey(for: .playback(.itemFailed(code: "NoCompatibleStream"))),
+            AppErrorMessage.playbackFailedKey)
+        XCTAssertEqual(
+            AppErrorMessage.messageKey(for: .unsupportedServer(version: "10.9.11")),
+            AppErrorMessage.unsupportedServerKey
+        )
         XCTAssertNil(AppErrorMessage.userFacing(.cancelled))
         XCTAssertNil(AppErrorMessage.userFacing(.decoding))
         XCTAssertNil(AppErrorMessage.userFacing(.internalInvariant))
@@ -115,28 +120,28 @@ final class T02FoundationTests: XCTestCase {
     }
 
     func testAppErrorMessageKeysCoverEveryCase() {
-        let cases: [(AppError, AuthCopy.Key?)] = [
-            (.offline, .noNetworkConnection),
-            (.serverUnreachable, .serverUnreachable),
-            (.tlsUntrusted(.unavailable), .certificateUntrusted),
-            (.unauthorized, .sessionExpired),
-            (.invalidCredentials, .invalidCredentials),
-            (.insecureRedirect, .insecureRedirect),
-            (.forbidden, .forbidden),
-            (.notFound, .itemNotFound),
-            (.serverError(status: 500), .serverError),
-            (.unsupportedServer(version: "10.9.11"), .unsupportedServerDetail),
-            (.publicHTTPRejected, .publicAddressRequiresHTTPS),
-            (.playback(.itemFailed(code: "NoCompatibleStream")), .playbackFailed),
-            (.playback(.itemFailed(code: nil)), .playbackFailed),
-            (.playback(.stalled), .playbackFailed),
-            (.playback(.fallbackExhausted), .playbackFailed),
+        let cases: [(AppError, String?)] = [
+            (.offline, AppErrorMessage.offlineKey),
+            (.serverUnreachable, AppErrorMessage.serverDownKey),
+            (.tlsUntrusted(.unavailable), AppErrorMessage.tlsUntrustedKey),
+            (.unauthorized, AppErrorMessage.sessionExpiredKey),
+            (.invalidCredentials, AppErrorMessage.invalidCredentialsKey),
+            (.insecureRedirect, AppErrorMessage.insecureRedirectKey),
+            (.forbidden, AppErrorMessage.forbiddenKey),
+            (.notFound, AppErrorMessage.notFoundKey),
+            (.serverError(status: 500), AppErrorMessage.serverErrorKey),
+            (.unsupportedServer(version: "10.9.11"), AppErrorMessage.unsupportedServerKey),
+            (.publicHTTPRejected, AuthCopy.Key.publicAddressRequiresHTTPS.rawValue),
+            (.playback(.itemFailed(code: "NoCompatibleStream")), AppErrorMessage.playbackFailedKey),
+            (.playback(.itemFailed(code: nil)), AppErrorMessage.playbackFailedKey),
+            (.playback(.stalled), AppErrorMessage.playbackFailedKey),
+            (.playback(.fallbackExhausted), AppErrorMessage.playbackFailedKey),
             (.decoding, nil),
             (.cancelled, nil),
             (.internalInvariant, nil),
         ]
         for (error, expectedKey) in cases {
-            let key = AppErrorMessage.key(for: error)
+            let key = AppErrorMessage.messageKey(for: error)
             XCTAssertEqual(key, expectedKey, "\(error)")
             XCTAssertEqual(AppErrorMessage.userFacing(error) != nil, key != nil, "\(error)")
         }
@@ -653,8 +658,8 @@ final class T02FoundationTests: XCTestCase {
 #if os(macOS) || os(iOS) || os(tvOS)
     import os
 
-    final class T02_18_AppleSignpostMetricTests: XCTestCase {
-        func testT02_18_xctMetricRecordsPlaybackFirstFrame() {
+    final class T02_33_AppleSignpostMetricTests: XCTestCase {
+        func testT02_33_xctMetricRecordsPlaybackFirstFrame() {
             let poster = OSSignposter(subsystem: Signposters.subsystem, category: Signposters.category)
             let metric = XCTOSSignpostMetric(
                 subsystem: Signposters.subsystem, category: Signposters.category, name: "playback.firstFrame")

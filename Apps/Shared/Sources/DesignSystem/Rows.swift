@@ -47,6 +47,7 @@ struct MediaRow: View {
                 rememberedID = newValue
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(rowID)
     }
 }
@@ -168,6 +169,7 @@ struct ErrorStateView: View {
                 .frame(width: 1, height: 1)
         }
         .padding(SpacingToken.xl)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.error.root")
     }
 

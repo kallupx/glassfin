@@ -13,7 +13,7 @@ final class T06MetadataTests: XCTestCase {
         XCTAssertEqual(cleaned, expected)
         XCTAssertGreaterThan(cleaned.unicodeScalars.count, cleaned.count)
         XCTAssertEqual(MetadataSanitizer.displayText(raw, limit: 0), "")
-        XCTAssertEqual(MetadataSanitizer.displayText(raw, limit: -1), "")
+        XCTAssertEqual(MetadataSanitizer.displayText(raw, limit: .max), raw)
     }
 
     // T06-73: canonical spec/TESTPLAN-M06.md.

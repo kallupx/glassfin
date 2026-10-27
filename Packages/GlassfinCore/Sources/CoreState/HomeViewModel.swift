@@ -10,9 +10,9 @@ public enum HomePolicy {
     public static let libraryDebounce: Duration = .seconds(2)
     public static let backdropDebounce: Duration = .milliseconds(250)
     /// A whole-body decode failure is a failed section; skipped individual items remain invisible.
-    public static func sectionErrorKey<T>(for state: LoadState<T>) -> AuthCopy.Key? {
+    public static func sectionErrorKey<T>(for state: LoadState<T>) -> String? {
         guard case .failed(let error, _) = state else { return nil }
-        return error == .decoding ? .serverError : AppErrorMessage.key(for: error)
+        return error == .decoding ? AppErrorMessage.serverErrorKey : AppErrorMessage.messageKey(for: error)
     }
 
     public static let backdropFade = 0.3
@@ -70,7 +70,7 @@ public enum HomeFocus {
 
 @MainActor
 @Observable
-public final class HomeViewModel {
+public final class HomeViewModel: ViewContentProviding {
     public private(set) var resume: LoadState<[MediaItem]> = .idle
     public private(set) var nextUp: LoadState<[MediaItem]> = .idle
     /// Compatibility projection for M02 clients. The Home UI uses `latestRows`.
@@ -95,12 +95,12 @@ public final class HomeViewModel {
             && HomePolicy.sectionErrorKey(for: libraries) == nil
             && latestRows.allSatisfy { HomePolicy.sectionErrorKey(for: $0.state) == nil }
     }
-    public var serverDownTitleKey: AuthCopy.Key? {
+    public var serverDownTitleKey: String? {
         !hasContent && (app.connectivity == .serverUnreachable || app.connectivity == .offline)
-            ? AppErrorMessage.key(for: .serverUnreachable) : nil
+            ? AppErrorMessage.messageKey(for: .serverUnreachable) : nil
     }
-    public var bannerKey: AuthCopy.Key? { app.bannerKey }
-    public var playbackBlockedKey: AuthCopy.Key? { app.playbackBlockedKey }
+    public var bannerKey: String? { app.bannerKey }
+    public var playbackBlockedKey: String? { app.playbackBlockedMessageKey }
 
     @ObservationIgnored private let library: any LibraryService
     @ObservationIgnored private let userData: UserDataStore
@@ -228,6 +228,7 @@ public final class HomeViewModel {
     public func reload(
         libraryIDs: [String], coldStart: Bool = false, refreshLatest: Bool = true, measureSections: Bool = true
     ) async {
+        app.currentView = self
         revision += 1
         let current = revision
         let generation = app.requestGeneration
@@ -476,7 +477,8 @@ public final class HomeViewModel {
         let items = latestRows.flatMap { $0.state.value ?? [] }
         if latestRows.allSatisfy({ $0.state.presentedError != nil }), let error = latestRows.first?.state.presentedError
         {
-            latest = .failed(error, previous: items)
+            let previous = latestRows.contains { $0.state.value != nil } ? items : nil
+            latest = .failed(error, previous: previous)
         } else {
             latest = .loaded(items)
         }

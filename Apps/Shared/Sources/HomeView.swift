@@ -34,10 +34,10 @@ struct HomeView: View {
             content
             if let key = model.bannerKey {
                 GlassBanner(
-                    messageOverride: AuthCopy.localized(key), message: .bannerOffline,
+                    messageOverride: AppErrorMessage.localized(key), message: .bannerOffline,
                     systemImage: "wifi.exclamationmark", identifier: "home.banner"
                 )
-                .accessibilityValue(key.rawValue)
+                .accessibilityValue(key)
                 .padding(.top, SpacingToken.s)
             }
         }
@@ -80,7 +80,7 @@ struct HomeView: View {
     private var content: some View {
         if let key = model.serverDownTitleKey {
             ErrorStateView(
-                messageOverride: AuthCopy.localized(key), failure: .serverUnreachable, attempts: 0,
+                messageOverride: AppErrorMessage.localized(key), failure: .serverUnreachable, attempts: 0,
                 onRetry: {
                     model.perform { home in
                         await app.retryNow()
@@ -90,7 +90,7 @@ struct HomeView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityIdentifier("home.error")
-            .accessibilityValue(key.rawValue)
+            .accessibilityValue(key)
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: SpacingToken.row) {
@@ -128,10 +128,10 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("home.empty")
                     }
-                    if let error = model.actionError, let key = AppErrorMessage.key(for: error) {
-                        Text(verbatim: AuthCopy.localized(key))
+                    if let error = model.actionError, let key = AppErrorMessage.messageKey(for: error) {
+                        Text(verbatim: AppErrorMessage.localized(key))
                             .accessibilityIdentifier("home.action.error")
-                            .accessibilityValue(key.rawValue)
+                            .accessibilityValue(key)
                     }
                 }
                 .padding(SpacingToken.xl)
@@ -149,7 +149,7 @@ struct HomeView: View {
                 Text(verbatim: title).font(.title3).accessibilityAddTraits(.isHeader)
                 if let key = HomePolicy.sectionErrorKey(for: state) {
                     HStack(spacing: SpacingToken.m) {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityValue(key.rawValue)
+                        Text(verbatim: AppErrorMessage.localized(key)).accessibilityValue(key)
                         Button {
                             model.perform { await $0.retry(rowID: id) }
                         } label: {

@@ -1,3 +1,4 @@
+import CoreModels
 import XCTest
 
 final class T04AuthUITests: XCTestCase {
@@ -6,7 +7,7 @@ final class T04AuthUITests: XCTestCase {
         let app = launch()
         let root = app.descendants(matching: .any)["welcome.root"]
         XCTAssertTrue(root.waitForExistence(timeout: 20))
-        let connect = app.descendants(matching: .any)["welcome.connect"]
+        let connect = app.descendants(matching: .any)[WelcomeCopy.Key.connect.rawValue]
         XCTAssertTrue(connect.waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["navigation.back"].exists)
         save(app.screenshot(), name: "welcome")
@@ -48,7 +49,7 @@ final class T04AuthUITests: XCTestCase {
         activate(app.descendants(matching: .any)["address.continue"], in: app)
         let error = app.descendants(matching: .any)["address.error"]
         XCTAssertTrue(error.waitForExistence(timeout: 10))
-        XCTAssertEqual(error.value as? String, publicHTTPSKey)
+        XCTAssertEqual(error.value as? String, AuthCopy.Key.publicAddressRequiresHTTPS.rawValue)
         XCTAssertFalse(app.descendants(matching: .any)["address.httpSkipped"].exists)
     }
 
@@ -76,7 +77,7 @@ final class T04AuthUITests: XCTestCase {
 
     @MainActor
     func testT04_49_backFromQuickConnectReturnsToTheMethodScreen() async {
-        let app = launch()
+        let app = launch(arguments: ["-uitest-qc-pending"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
         typeText("media.example", into: field, in: app)
@@ -118,7 +119,9 @@ final class T04AuthUITests: XCTestCase {
         #if os(tvOS)
             XCTAssertTrue(renew.hasFocus)
         #endif
-        XCTAssertEqual(app.descendants(matching: .any)["address.error"].value as? String, "The code expired")
+        XCTAssertEqual(
+            app.descendants(matching: .any)["address.error"].value as? String, AuthCopy.Key.quickConnectExpired.rawValue
+        )
         save(app.screenshot(), name: "quick-connect-expired")
         activate(renew, in: app)
         XCTAssertTrue(app.descendants(matching: .any)["quickconnect.root"].waitForExistence(timeout: 10))
@@ -135,7 +138,8 @@ final class T04AuthUITests: XCTestCase {
         activate(app.descendants(matching: .any)["credentials.signIn"], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
         // Settings is a catalog key used for the tab label on both platforms.
-        activate(app.descendants(matching: .any).matching(identifier: "design.tab.settings").firstMatch, in: app)
+        activate(
+            app.descendants(matching: .any).matching(identifier: "design.tab.settings").firstMatch, in: app)
         let signOut = app.descendants(matching: .any)["settings.signOut"]
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["settings.version"].exists)
@@ -149,7 +153,8 @@ final class T04AuthUITests: XCTestCase {
         save(app.screenshot(), name: "sign-out-confirmation")
         activate(cancel, in: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
-        activate(app.descendants(matching: .any).matching(identifier: "design.tab.settings").firstMatch, in: app)
+        activate(
+            app.descendants(matching: .any).matching(identifier: "design.tab.settings").firstMatch, in: app)
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
         activate(signOut, in: app)
         activate(app.descendants(matching: .any)["logout.confirm"], in: app)
@@ -167,8 +172,8 @@ final class T04AuthUITests: XCTestCase {
 
     @MainActor
     private func openAddress(_ app: XCUIApplication) {
-        XCTAssertTrue(app.descendants(matching: .any)["welcome.connect"].waitForExistence(timeout: 20))
-        activate(app.descendants(matching: .any)["welcome.connect"], in: app)
+        XCTAssertTrue(app.descendants(matching: .any)[WelcomeCopy.Key.connect.rawValue].waitForExistence(timeout: 20))
+        activate(app.descendants(matching: .any)[WelcomeCopy.Key.connect.rawValue], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["address.field"].waitForExistence(timeout: 10))
     }
 
@@ -196,9 +201,4 @@ final class T04AuthUITests: XCTestCase {
         }
     }
 
-    /// Catalog key, not a translated sentence.
-    @MainActor
-    private var publicHTTPSKey: String {
-        "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy."
-    }
 }
