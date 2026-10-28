@@ -2,7 +2,7 @@ import GlassfinCore
 import SwiftUI
 
 struct GlassfinRootView: View {
-    let flow: AuthFlow
+    var flow: AuthFlow
 
     var body: some View {
         #if DEBUG
