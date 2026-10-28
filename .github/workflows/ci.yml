@@ -82,6 +82,11 @@ jobs:
           python3 scripts/check-debug-only-strings.py
       - name: Artifact redaction self-test
         run: python3 scripts/redact_artifacts.py --self-test
+      - name: Bootstrap script unit tests
+        # The tests use unittest enterContext, which needs Python 3.11+.
+        run: |
+          python3 -c 'import sys; print(sys.version); assert sys.version_info >= (3, 11)'
+          python3 -m unittest scripts/test_jellyfin_bootstrap.py
       - name: Benchmark artifact scan self-test
         run: python3 scripts/scan_benchmark_artifacts.py --self-test
       - name: Linux package tests and coverage gate
