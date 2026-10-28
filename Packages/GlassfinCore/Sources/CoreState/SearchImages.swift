@@ -65,13 +65,17 @@ public enum SearchImageDecoder {
                     throw SearchImageError.invalidImage
                 }
                 try Task.checkCancellation()
-                return DecodedSearchImage(image: image, decodedOffMainThread: !Thread.isMainThread)
+                return DecodedSearchImage(image: image, decodedOffMainThread: isOffMainThread())
             }
             return try await withTaskCancellationHandler {
                 try await work.value
             } onCancel: {
                 work.cancel()
             }
+        }
+
+        private nonisolated static func isOffMainThread() -> Bool {
+            !Thread.isMainThread
         }
     }
 #endif
