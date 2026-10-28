@@ -35,6 +35,9 @@ if [[ -n "$ui_hits" ]]; then
   fail=1
 fi
 
+python3 "$root/scripts/check-design-system.py" || fail=1
+python3 "$root/scripts/check-string-catalogs.py" || fail=1
+
 if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi

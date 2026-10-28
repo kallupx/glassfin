@@ -22,6 +22,13 @@ MACOS_PREFIXES = (
     "project.yml",
     ".github/workflows/",
 )
+IOS_PREFIXES = (
+    "Apps/iOS/",
+    "Packages/",
+    "Apps/Shared/",
+    "project.yml",
+    ".github/workflows/",
+)
 
 
 def github_json(url: str):
@@ -126,7 +133,7 @@ def main() -> None:
     files = changed_files()
     macos = any(matches(path, prefix) for path in files for prefix in MACOS_PREFIXES)
     macos = macos or any(path.endswith("Package.resolved") for path in files)
-    ios = any(matches(path, "Apps/iOS/") or matches(path, "Packages/") for path in files)
+    ios = any(matches(path, prefix) for path in files for prefix in IOS_PREFIXES)
     if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
         macos = True
         ios = True
