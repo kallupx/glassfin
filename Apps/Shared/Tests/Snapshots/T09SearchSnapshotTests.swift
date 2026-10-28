@@ -176,7 +176,7 @@ final class T09SearchSnapshotTests: XCTestCase {
     @MainActor
     private func verticalScroll(in view: UIView) -> UIScrollView? {
         if let scroll = view as? UIScrollView, scroll.contentSize.height > scroll.bounds.height + 1 { return scroll }
-        return view.subviews.lazy.compactMap { verticalScroll(in: $0) }.first
+        return view.subviews.lazy.compactMap { self.verticalScroll(in: $0) }.first
     }
 
     @MainActor
