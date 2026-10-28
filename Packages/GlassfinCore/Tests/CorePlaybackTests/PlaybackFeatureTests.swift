@@ -235,13 +235,17 @@ final class PlaybackCompanionTests: XCTestCase {
 
     private func rig(
         segments: String = "{\"Items\":[{\"Type\":\"Intro\",\"StartTicks\":600000000,\"EndTicks\":1500000000}]}",
-        error: APIError? = nil, runtime: Int64 = 600_000_0000
+        error: APIError? = nil, runtime: Int64 = 600_000_0000,
+        onTileRequest: @escaping @Sendable () -> Void = {}
     ) async -> (PlaybackCompanion, PoCAPIClient) {
         let client = PoCAPIClient { request throws(APIError) in
             if let error { throw error }
             if request.path.hasPrefix("/MediaSegments/") { return Data(segments.utf8) }
             if request.path.hasPrefix("/Shows/") { return Data(episodesJSON.utf8) }
-            if request.path.contains("/Trickplay/") { return Data([1, 2, 3]) }
+            if request.path.contains("/Trickplay/") {
+                onTileRequest()
+                return Data([1, 2, 3])
+            }
             if request.path.contains("/PlayedItems/") { return Data() }
             return Data(
                 "{\"Id\":\"\(featureItem)\",\"Type\":\"Episode\",\"SeriesId\":\"\(featureSeries)\",\"RunTimeTicks\":\(runtime),\"Trickplay\":{\"\(featureSource)\":{\"320\":\(trickplayJSON)}}}"
@@ -355,12 +359,14 @@ final class PlaybackCompanionTests: XCTestCase {
     }
 
     func testScrubbingPrefetchesFiveBoundedTilesAndCancelDoesNotSeek() async {
-        let (model, client) = await rig()
+        let tilesRequested = XCTestExpectation(description: "Five trickplay tiles requested")
+        tilesRequested.expectedFulfillmentCount = 5
+        let (model, client) = await rig(onTileRequest: { tilesRequested.fulfill() })
         model.scrub(to: .seconds(80))
-        for _ in 0..<100 {
-            if await model.cache.count == 5 { break }
-            await Task.yield()
-        }
+        // Request completion drives progress; a fixed number of yields can finish
+        // before the preview task is scheduled on an Apple simulator.
+        let result = await XCTWaiter.fulfillment(of: [tilesRequested], timeout: 5)
+        XCTAssertEqual(result, .completed)
         let calls = await client.calls.filter { $0.path.contains("/Trickplay/") }
         XCTAssertEqual(calls.count, 5)
         XCTAssertTrue(calls.allSatisfy { $0.maximumResponseBytes == MetadataPolicy.imageMaxBytes })

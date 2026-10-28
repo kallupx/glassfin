@@ -3,11 +3,21 @@ import XCTest
 
 final class T10SettingsUITests: XCTestCase {
     @MainActor
-    func testTPOC_42_settingsContainsOnlySignOutAndVersion() async {
+    func testTPOC_42_settingsContainsPlaybackPreferencesSignOutAndVersion() async {
         let app = openSettings()
         let root = app.descendants(matching: .any)["settings.root"]
         XCTAssertTrue(root.waitForExistence(timeout: 10))
-        XCTAssertEqual(root.buttons.count, 1)
+        let expectedButtons = Set([
+            "settings.signOut", "settings.playback.segment.intro", "settings.playback.segment.recap",
+            "settings.playback.segment.outro", "settings.playback.segment.preview",
+            "settings.playback.segment.commercial",
+        ])
+        // The autoplay toggle can be exposed as a switch or button by the platform.
+        // All remaining buttons must match this exact set, including the five pickers.
+        let buttons = root.buttons.matching(NSPredicate(format: "identifier != %@", "settings.playback.autoplay"))
+        XCTAssertEqual(buttons.count, expectedButtons.count)
+        XCTAssertEqual(Set(buttons.allElementsBoundByIndex.map(\.identifier)), expectedButtons)
+        XCTAssertTrue(root.descendants(matching: .any)["settings.playback.autoplay"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["settings.signOut"].exists)
         let version = app.staticTexts["settings.version"]
         XCTAssertTrue(version.exists)
