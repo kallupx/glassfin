@@ -89,15 +89,15 @@ Each row identifies the missing part of the canonical scenario and why it remain
 | T06-27 | Glass placement is source-checked; final home rendering still requires snapshots. |
 | T06-28 | Bright/dark/busy backdrop readability is a visual review requiring rendered snapshots. |
 | T06-29 | Displayed-pixel request parameters are unit-tested; actual view geometry and scale require Apple rendering. |
-| T06-30 | The UI test is supplied unchanged, but main's Next Up fixture has four cards while the test requires five. Focus-memory validation also requires Apple execution. |
+| T06-30 | The unchanged UI test now has a full Next Up fixture and per-row remembered-focus preferences. Focus Engine validation requires Apple execution. |
 | T06-31 | The back-restoration UI test is supplied but requires Xcode; the actual M07 detail destination is a separate module handoff. |
 | T06-35 | Mark-played-to-next-episode UI timing requires M08 integration. A dedicated successful action fixture remains pending; playback-stop refresh is automated by T06-57. |
 | T06-36 | A dedicated HTTP 500 mark-played rollback fixture is pending; the existing action test asserts rollback for 403 (T06-41). |
 | T06-37 | Reset payload and a disposable-server test are supplied; actual absence from Resume after a real refetch requires the Docker version matrix and Q6-10 verification. |
 | T06-38 | Season-preserving series handoff and movie exclusion are automated. M07 owns the per-season detail picker; UI navigation awaits that module and Xcode. |
 | T06-39 | The action test asserts favorite POST success. DELETE/failure rollback still needs a dedicated fixture; no complete favorite-action claim is made. |
-| T06-42 | The unchanged UI test requires network controls, a completed-request counter and offline playback feedback absent from main. It remains enabled and fails its missing-counter prerequisite. |
-| T06-43 | The unchanged UI test requires network controls and a completed-request counter absent from main. It remains enabled and fails its missing-counter prerequisite. |
+| T06-42 | The unchanged UI test now has DEBUG path controls, a service request counter and production offline playback feedback. Remote navigation and banner timing require Apple execution. |
+| T06-43 | The unchanged UI test now has DEBUG path controls and a service request counter. Automatic recovery and uninterrupted rendered focus require Apple execution. |
 | T06-44 | Snapshot grouping, ownership, and account isolation are automated; immediate same-user stale display and focus need a dedicated cache-launch fixture. |
 | T06-45 | Purged-cache launch needs a dedicated cold-start fixture. Cache loss is supported by the M02 stores, but that is not full Home scenario coverage. |
 | T06-46 | The shared server-down key and Settings escape have tests; default retry focus and Change server still need Apple UI execution. |
@@ -126,7 +126,7 @@ Each row identifies the missing part of the canonical scenario and why it remain
 
 ## PoC tvOS follow-ups (2026-10-28)
 
-After merging `origin/main` through `eaf26b5` (M06 squash `b70aea1`, followed by M10 #28), this branch retains the tests below unchanged and takes all app sources from main. The removed branch-only fixtures and app fixes are recorded in [TEST-CHANGES-M06-POC-MAIN.md](TEST-CHANGES-M06-POC-MAIN.md). T06-30, T06-42 and T06-43 have known unmet prerequisites in main; their assertions remain enabled and will fail until those prerequisites are supplied. Linux package results do not validate these tvOS scenarios.
+After merging `origin/main` through `eaf26b5` (M06 squash `b70aea1`, followed by M10 #28), this branch retains the tests below unchanged. The app follow-up after `9071de5` supplies the fixtures, DEBUG launch controls and real behavior missing in CI run 40695296939. The exact app scope, unchanged test inventory and validation are recorded in [TEST-CHANGES-M06-POC-MAIN.md](TEST-CHANGES-M06-POC-MAIN.md). Linux package results do not validate these tvOS scenarios.
 
 The five U scenarios above are supplied in the existing [T06HomeUITests.swift](../Apps/Shared/UITests/T06HomeUITests.swift), which is already included by the `Glassfin-tvOSUITests` source directory in `project.yml`. All five methods and remote helpers are inside `#if os(tvOS)`; methods use `@MainActor async`, with no class-level actor isolation. The iOS target continues to include the same shared file. These are automated sources awaiting macOS execution, not a claim of a successful Apple build or UI run.
 
@@ -136,12 +136,12 @@ The five U scenarios above are supplied in the existing [T06HomeUITests.swift](.
 - T06-42 asserts `home.banner` appears within a 2 s wait, carries `AppErrorMessage.offlineKey`, and is skipped when moving Up to the tab bar. It checks the banner and its descendants have no focus, retained cards remain navigable in both rows, and no full-screen error appears. Context-menu Play exercises the production block and checks `home.playback.blocked` against `AppErrorMessage.playbackOfflineKey`, with no playback destination.
 - T06-43 asserts banner removal within a 2 s wait, then requires an increased fake-service Resume request count published only after Home finishes loading all sections. An inverted focus expectation runs alongside the refresh expectation for a bounded 5 s interval. No navigation or focus assignment follows the recovery command.
 
-T06-42 and T06-43 require a deterministic network control: `-uitest-home-network-controls` must inject a `ConnectivityPath` stream consumed by `AppState.startPathUpdates()`, Play/Pause must toggle that stream without moving focus, and `home.test.resumeRequests` must publish actual Resume request counts only after Home finishes loading. Those hooks were present in this branch before the merge but are absent from main's app sources, which this branch now preserves verbatim. The tests therefore fail their initial counter prerequisite on the current app; they are not skipped or relaxed.
+T06-42 and T06-43 use `-uitest-home-network-controls` inside the existing DEBUG mock/reset launch configuration. `HomeMockPath` supplies the `ConnectivityPath` stream consumed by `AppState.startPathUpdates()`. Play/Pause toggles that stream without moving focus; recovery invokes the existing Home connectivity observer and refetch. `home.test.resumeRequests` exposes actual service call counts only after sections finish loading. All controls and diagnostics are compiled out of Release.
 
-The retained tests also expose these outstanding fixture and app requirements:
+The app also supplies these acceptance requirements:
 
-- T06-30 needs five Next Up cards. Main's [HomeMockLibrary](../Apps/Shared/Sources/HomeMocks.swift) returns four, so the unchanged test cannot reach its fifth-card assertion. Main also retains its existing conditional default-focus preference for inactive rows; remembered cross-row focus still needs Apple Focus Engine validation.
-- T06-42 requires visible, nonfocusable `home.playback.blocked` feedback using `AppErrorMessage.playbackOfflineKey`. Main's [HomeView.swift](../Apps/Shared/Sources/HomeView.swift) returns silently when playback is blocked. The test keeps the feedback assertion; this merge does not add that app behavior.
+- T06-30: [HomeMockLibrary](../Apps/Shared/Sources/HomeMocks.swift) returns up to the 20-card policy limit for Next Up, including the fifth card. Each tvOS row retains its own remembered focus preference while inactive, with the existing first eligible row task handling initial focus.
+- T06-42: [HomeView.swift](../Apps/Shared/Sources/HomeView.swift) displays nonfocusable `home.playback.blocked` feedback using the existing `AppErrorMessage.playbackOfflineKey` when playback is blocked, and clears it on recovery. Context-menu Play uses this production behavior with the DEBUG network controls enabled.
 
 CI risks: Linux cannot type-check SwiftUI/XCUIRemote against the tvOS SDK or run the Focus Engine. Native tab focus identifiers, native context-menu cell focus, the geometry precondition, and the 2 s accessibility timing need macOS CI confirmation. The tests use the same identifiers/native-cell convention as the existing M05/M06 tests and bounded XCTest waits, without retrying navigation after a failed assertion.
 

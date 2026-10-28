@@ -17,6 +17,7 @@ struct HomeView: View {
     @State private var backdropSelection = HomeBackdropModel()
     @State private var backdropID: String?
     @State private var backdrop: Image?
+    @State private var playbackNoticeKey: String?
     #if DEBUG
         @State private var testRefreshFinished = false
     #endif
@@ -35,17 +36,32 @@ struct HomeView: View {
             }
             content
             if let key = model.bannerKey {
-                GlassBanner(
-                    messageOverride: AppErrorMessage.localized(key), message: .bannerOffline,
-                    systemImage: "wifi.exclamationmark", identifier: "home.banner"
-                )
-                .accessibilityValue(key)
+                VStack(spacing: SpacingToken.s) {
+                    GlassBanner(
+                        messageOverride: AppErrorMessage.localized(key), message: .bannerOffline,
+                        systemImage: "wifi.exclamationmark", identifier: "home.banner"
+                    )
+                    .accessibilityValue(key)
+                    if let notice = playbackNoticeKey {
+                        Text(verbatim: AppErrorMessage.localized(notice))
+                            .accessibilityIdentifier("home.playback.blocked")
+                            .accessibilityValue(notice)
+                            .focusable(false)
+                    }
+                }
                 .padding(.top, SpacingToken.s)
             }
         }
         .clipped()
         #if DEBUG
             .overlay(alignment: .bottomTrailing) {
+                if let controls = HomeMockControls.current, !model.isLoading, model.lastFetch != nil {
+                    // Publish actual service counts only after Home has applied all loaded sections.
+                    Text(verbatim: String(controls.resumeRequests)).frame(width: 1, height: 1)
+                    .accessibilityIdentifier("home.test.resumeRequests")
+                    .accessibilityValue(String(controls.resumeRequests))
+                    .focusable(false)
+                }
                 if testRefreshFinished {
                     Text(verbatim: "1").frame(width: 1, height: 1)
                     .accessibilityIdentifier("home.test.refreshed")
@@ -75,7 +91,10 @@ struct HomeView: View {
             if phase == .background { model.onDisappear() }
         }
         .onChange(of: app.connectivity) { old, new in
-            if new == .online && (old == .serverUnreachable || old == .offline) { model.reconnect() }
+            if new == .online && (old == .serverUnreachable || old == .offline) {
+                playbackNoticeKey = nil
+                model.reconnect()
+            }
         }
         .onChange(of: app.userDataGeneration) { _, _ in model.perform { await $0.userDataDidChange() } }
         .onChange(of: app.libraryGeneration) { _, _ in model.libraryDidChange() }
@@ -213,7 +232,10 @@ struct HomeView: View {
     }
 
     private func play(_ item: MediaItem) {
-        guard model.playbackBlockedKey == nil else { return }
+        if let key = model.playbackBlockedKey {
+            playbackNoticeKey = key
+            return
+        }
         onPlay(HomePlaybackRequest(item: item))
     }
 
@@ -265,9 +287,17 @@ private struct HomeMediaRow: View {
                     .focused($focus, equals: item.id)
                     .accessibilityIdentifier("home.\(rowID).item.\(item.id)")
                     #if os(tvOS)
-                        .onPlayPauseCommand { onPlay(item) }
+                        .onPlayPauseCommand {
+                            #if DEBUG
+                                if let controls = HomeMockControls.current {
+                                    controls.togglePath()
+                                    return
+                                }
+                            #endif
+                            onPlay(item)
+                        }
                         .prefersDefaultFocus(
-                            receivesDefaultFocus && item.id == (rememberedID ?? items.first?.id), in: rowNamespace)
+                            item.id == (rememberedID ?? items.first?.id), in: rowNamespace)
                     #endif
                     .contextMenu {
                         Button {
@@ -312,11 +342,8 @@ private struct HomeMediaRow: View {
         .designFocusSection()
         #if os(tvOS)
             .focusScope(rowNamespace)
-        #endif
-        .defaultFocus(
-            $focus, receivesDefaultFocus ? rememberedID ?? items.first?.id : nil, priority: .userInitiated
-        )
-        #if os(tvOS)
+            // Inactive rows also need a preference for the next time focus enters their scope.
+            .defaultFocus($focus, rememberedID ?? items.first?.id, priority: .userInitiated)
             .task(id: receivesDefaultFocus && needsDefaultFocus) {
                 guard receivesDefaultFocus, needsDefaultFocus, let target = rememberedID ?? items.first?.id else {
                     return
@@ -331,6 +358,9 @@ private struct HomeMediaRow: View {
                     focus = target
                 }
             }
+        #else
+            .defaultFocus(
+                $focus, receivesDefaultFocus ? rememberedID ?? items.first?.id : nil, priority: .userInitiated)
         #endif
         .onChange(of: focus) { _, value in
             guard let item = items.first(where: { $0.id == value }) else { return }
