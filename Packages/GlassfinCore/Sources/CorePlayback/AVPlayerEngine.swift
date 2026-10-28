@@ -20,6 +20,9 @@
         private var wantsToPlay = false
         private var seeking = false
         private var start: Duration = .zero
+        var trackSelectionPeers: [PlaybackTrack] = []
+        var expectedNativeAudio: AVMediaSelectionOption?
+        var expectedNativeSubtitle: AVMediaSelectionOption?
 
         public init(origin: any MediaOriginClient, log: any GlassfinLog = SilentLog()) {
             self.origin = origin
@@ -84,6 +87,9 @@
             observe(item, name: AVPlayerItem.timeJumpedNotification, run: currentRun) { engine in
                 if engine.ready && !engine.seeking { engine.continuation?.yield(.seeked) }
             }
+            observe(item, name: AVPlayerItem.mediaSelectionDidChangeNotification, run: currentRun) { engine in
+                Task { await engine.nativeSelectionChanged() }
+            }
             observe(item, name: AVPlayerItem.newErrorLogEntryNotification, run: currentRun) { engine in
                 engine.forwardLogs()
                 if engine.player?.currentItem?.errorLog()?.events.last?.errorStatusCode == 401 {
@@ -130,7 +136,7 @@
                 seeking = true
                 await player?.seek(to: Self.time(start), toleranceBefore: .zero, toleranceAfter: .zero)
                 guard run == currentRun else { return }
-                // Track selection and subtitle rendering belong to M08a full scope.
+                // The coordinator applies the full profile's selected tracks after ready.
                 if let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) {
                     item.select(nil, in: group)
                 }
@@ -159,6 +165,10 @@
                 })
         }
 
+        func emitNativeSelection(kind: PlaybackTrack.Kind, id: Int?) {
+            continuation?.yield(.trackChanged(kind: kind, id: id))
+        }
+
         private func recordFailure() {
             forwardLogs()
             let status401 = player?.currentItem?.errorLog()?.events.contains { $0.errorStatusCode == 401 } == true
@@ -171,6 +181,9 @@
         }
 
         private func clearPlayer() {
+            trackSelectionPeers = []
+            expectedNativeAudio = nil
+            expectedNativeSubtitle = nil
             observations.removeAll()
             for observer in notifications { NotificationCenter.default.removeObserver(observer) }
             notifications.removeAll()

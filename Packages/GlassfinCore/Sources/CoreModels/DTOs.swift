@@ -16,6 +16,7 @@ public struct UserDTO: Decodable, Sendable {
     public var Id: String?
     public var Name: String?
     public var Policy: UserPolicyDTO?
+    public var Configuration: PlaybackUserConfigurationDTO?
 }
 
 public struct AuthenticationResultDTO: Decodable, Sendable {
@@ -102,17 +103,24 @@ public struct MediaStreamDTO: Decodable, Sendable {
     public var Language: String?
     public var Codec: String?
     public var Profile: String?
-    public var Channels: Int?
     public var Width: Int?
     public var Height: Int?
     public var VideoRangeType: String?
     public var DvProfile: Int?
     public var IsDefault: Bool?
+    public var IsForced: Bool?
+    public var IsExternal: Bool?
+    public var IsHearingImpaired: Bool?
+    public var Channels: Int?
+    public var DeliveryMethod: String?
+    public var DeliveryUrl: String?
+    public var SupportsExternalStream: Bool?
 }
 
 public struct MediaSourceDTO: Decodable, Sendable {
     public var Id: String?
     public var Container: String?
+    public var Bitrate: Int?
     public var SupportsDirectPlay: Bool?
     public var SupportsDirectStream: Bool?
     public var SupportsTranscoding: Bool?
@@ -121,6 +129,8 @@ public struct MediaSourceDTO: Decodable, Sendable {
     public var TranscodingSubProtocol: String?
     public var MediaStreams: [MediaStreamDTO]?
     public var DefaultVideoStreamIndex: Int?
+    public var DefaultAudioStreamIndex: Int?
+    public var DefaultSubtitleStreamIndex: Int?
 }
 
 public struct PlaybackInfoResponseDTO: Decodable, Sendable {
@@ -179,4 +189,11 @@ public struct ItemPersonDTO: Decodable, Sendable {
 
 public struct ItemStudioDTO: Decodable, Sendable {
     public var Name: String?
+}
+
+public struct PlaybackUserConfigurationDTO: Decodable, Sendable {
+    public var AudioLanguagePreference: String?
+    public var SubtitleLanguagePreference: String?
+    public var SubtitleMode: String?
+    public var PlayDefaultAudioTrack: Bool?
 }
