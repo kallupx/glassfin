@@ -105,3 +105,38 @@ Refreshed Linux validation on Swift 6.4.1:
 The dispatched CI run for `85bc651` passed its Linux job, then was canceled
 while its Apple jobs were queued. A new branch dispatch verifies the
 refreshed head. Apple validation remains delegated to GitHub Actions.
+
+## Retarget to main after PR #23 merged
+
+PR #23 merged as `f5f63e3` on main. Its tree is byte-identical to the
+previously merged M07 base `942f4f0`, but its squash history makes Git report
+conflicts for this PR's follow-ups. Retarget PR #32 to main and incorporate
+`origin/main` with a merge commit, retaining the tested follow-up contents.
+
+Resolve these eight paths with their pre-merge PR versions:
+
+- `Apps/Shared/Sources/Library/ItemDetailScreen.swift`
+- `Apps/Shared/Sources/Library/LibraryDebugHost.swift`
+- `Apps/Shared/Sources/Library/LibraryGridView.swift`
+- `Packages/GlassfinCore/Sources/CoreModels/ItemMetadata.swift`
+- `Packages/GlassfinCore/Sources/CoreModels/Mappers.swift`
+- `Packages/GlassfinCore/Sources/CoreState/ItemDetailViewModel.swift`
+- `Packages/GlassfinCore/Tests/CoreStateTests/PinFailureTests.swift`
+- `docs/TEST-COVERAGE-M07.md`
+
+`PinFailureTests.swift` is the only conflicted test file. It stays
+byte-identical to `dc7c296`, including the additive missing-pin test and every
+existing assertion. The main version differs only by lacking that new test.
+All other test files also retain their pre-merge contents; no test assertion
+is changed, removed, or weakened to resolve this merge.
+
+The branch dispatch for `dc7c296` passed all five jobs: `lint`, `test-ios`,
+`test-tvos`, `full-ui`, and `dependabot-macos` (run `40756858383`). After
+resolving the main merge, both `swift test --package-path
+Packages/GlassfinCore` and `bash scripts/coverage-gate.sh` pass again:
+689 total, 679 passed, 10 existing live-integration skips, zero failures.
+The latest coverage run reports 91.89% (10,843 / 11,800 lines), above the
+80% threshold. A byte comparison confirms all test files match `dc7c296`,
+and removing only the new missing-pin method makes `PinFailureTests.swift`
+identical to main's version. `git diff --check` passes. The final head is
+verified by the normal pull-request CI workflow targeting main.
