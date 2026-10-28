@@ -852,6 +852,49 @@ final class PlaybackCoordinatorTests: XCTestCase {
         }
     }
 
+    func testT08P_92_failureWaitsForStoppedAndCannotOverwriteNewPlayback() async throws {
+        for replacePlayback in [false, true] {
+            let first = try playbackFixture()
+            let remux = try playbackFixture(
+                direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query", playSessionID: "remux-session")
+            let gate = PoCRequestGate()
+            let rig = try rig(handler: { request throws(APIError) in
+                if request.path.hasSuffix("PlaybackInfo") {
+                    let direct = (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) ?? true
+                    return direct ? first : remux
+                }
+                if request.path.hasSuffix("Stopped"),
+                    (try? jsonBody(request.body)["PlaySessionId"] as? String) == "remux-session"
+                {
+                    await gate.wait()
+                }
+                return Data()
+            })
+            await started(rig)
+            rig.engine.emit(.failed(.network))
+            await settle { rig.engine.loads.count == 2 && rig.timer.isRunning }
+            rig.engine.emit(.failed(.server(status: 500)))
+            await settle { await gate.isWaiting }
+            XCTAssertNil(rig.coordinator.failure)
+            XCTAssertFalse(rig.timer.isRunning)
+            if replacePlayback {
+                await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+                XCTAssertEqual(rig.engine.loads.count, 3)
+            }
+            await gate.release()
+            if replacePlayback {
+                await settle { rig.coordinator.state == .playing && rig.timer.isRunning }
+                XCTAssertEqual(rig.coordinator.state, .playing)
+                XCTAssertNil(rig.coordinator.failure)
+                await rig.coordinator.stop()
+            } else {
+                await settle { rig.coordinator.failure == .couldNotPlay }
+                XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: PlaybackCopy.couldNotPlayKey))
+                await assertAttempts(rig, info: 2, streams: 2)
+            }
+        }
+    }
+
     func testT08P_92_remuxPlaylistFailureEndsChain() async throws {
         for status in [404, 500] {
             let rig = try retryRig()

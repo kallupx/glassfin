@@ -4,6 +4,7 @@ struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
     var settings: AnyView? = nil
+    var search: AnyView? = nil
     var selection: Binding<String>? = nil
     @State private var localSelection: String = "home"
     #if os(iOS)
@@ -107,8 +108,14 @@ struct LibraryTabShell: View {
     @TabContentBuilder<String>
     private var searchTab: some TabContent<String> {
         Tab(value: "search", role: .search) {
-            Copy.text(.tabSearch)
-                .accessibilityIdentifier("design.search.root")
+            Group {
+                if let search {
+                    search
+                } else {
+                    Copy.text(.tabSearch)
+                        .accessibilityIdentifier("design.search.root")
+                }
+            }
         } label: {
             tabLabel(.tabSearch, symbol: "magnifyingglass", identifier: "design.tab.search")
         }

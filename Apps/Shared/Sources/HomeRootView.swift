@@ -16,7 +16,8 @@ struct HomeRootView: View {
             if let context {
                 LibraryTabShell(
                     libraries: (context.model.libraries.value ?? []).map { LibraryTabItem(id: $0.id, title: $0.name) },
-                    home: AnyView(home(context)), settings: AnyView(settings), selection: $selectedTab)
+                    home: AnyView(home(context)), settings: AnyView(settings),
+                    search: AnyView(SearchFeatureHost(flow: flow)), selection: $selectedTab)
             } else {
                 ProgressView().accessibilityIdentifier("home.loading")
             }
@@ -104,7 +105,7 @@ private final class HomeContext {
         let service: any LibraryService
         #if DEBUG
             if HomeMockLaunch.enabled {
-                service = HomeMockLibrary(mode: HomeMockLaunch.mode)
+                service = HomeMockLibrary(mode: HomeMockLaunch.mode, controls: HomeMockControls.current)
                 images = HomeMockImages()
             } else {
                 let client = (try? flow.makeHomeClient()) ?? HomeUnavailableClient()

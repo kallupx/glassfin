@@ -69,6 +69,17 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case homePlaybackPending = "home.playbackPending"
     case homeLibrariesRetry = "home.librariesRetry"
 
+    case searchPrompt = "search.prompt"
+    case searchMovies = "search.movies"
+    case searchSeries = "search.series"
+    case searchEpisodes = "search.episodes"
+    case searchRecent = "search.recent"
+    case searchClearRecent = "search.clearRecent"
+    case searchEmpty = "search.empty"
+    case searchMinimum = "search.minimum"
+    case searchHistoryFailure = "search.historyFailure"
+    case searchBack = "search.back"
+
     var resource: LocalizedStringResource {
         switch self {
         case .playbackBuffer: LocalizedStringResource("playback.tracks.buffer", bundle: .main)
@@ -78,6 +89,16 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .playbackConvertASS: LocalizedStringResource("playback.tracks.convertASS", bundle: .main)
         case .playbackOptions: LocalizedStringResource("playback.tracks.options", bundle: .main)
         case .playbackRemoteBitrate: LocalizedStringResource("playback.tracks.remoteBitrate", bundle: .main)
+        case .searchPrompt: LocalizedStringResource("search.prompt", bundle: .main)
+        case .searchMovies: LocalizedStringResource("search.movies", bundle: .main)
+        case .searchSeries: LocalizedStringResource("search.series", bundle: .main)
+        case .searchEpisodes: LocalizedStringResource("search.episodes", bundle: .main)
+        case .searchRecent: LocalizedStringResource("search.recent", bundle: .main)
+        case .searchClearRecent: LocalizedStringResource("search.clearRecent", bundle: .main)
+        case .searchEmpty: LocalizedStringResource("search.empty", bundle: .main)
+        case .searchMinimum: LocalizedStringResource("search.minimum", bundle: .main)
+        case .searchHistoryFailure: LocalizedStringResource("search.historyFailure", bundle: .main)
+        case .searchBack: LocalizedStringResource("search.back", bundle: .main)
         case .homeContinue: LocalizedStringResource("home.continueWatching", bundle: .main)
         case .homeNextUp: LocalizedStringResource("home.nextUp", bundle: .main)
         case .homeLatest: LocalizedStringResource("home.latest", bundle: .main)

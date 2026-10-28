@@ -133,7 +133,7 @@ run_tests() {
   if command -v swift >/dev/null 2>&1; then
     (
       cd "$root/Packages/GlassfinCore"
-      swift test --filter LiveServerTests
+      swift test "$@"
     )
     return
   fi
@@ -147,8 +147,9 @@ run_tests() {
     -e GLASSFIN_TEST_USERNAME \
     -e GLASSFIN_TEST_PASSWORD \
     -e GLASSFIN_SERVER_VERSION \
+    -e GLASSFIN_SEARCH_BENCHMARK_DIR=/src/artifacts/integration/search \
     "$swift_image" \
-    swift test --filter LiveServerTests
+    swift test "$@"
 }
 
 container=""
@@ -198,6 +199,7 @@ PY
   export GLASSFIN_TEST_PASSWORD="$(openssl rand -hex 24)"
   export GLASSFIN_SERVER_URL="http://127.0.0.1:${port}"
   export GLASSFIN_SERVER_VERSION="$version"
+  export GLASSFIN_SEARCH_BENCHMARK_DIR="$root/artifacts/integration/search"
   export GLASSFIN_USERNAME="glassfin"
   export GLASSFIN_USERNAME_FILE="$username_file"
   export GLASSFIN_PASSWORD="$(openssl rand -hex 16)"
@@ -230,11 +232,27 @@ PY
   echo "docker-integration: testing $version"
   test_output="$(mktemp "$work/live-tests.XXXXXX")"
   set +e
-  run_tests >"$test_output" 2>&1
+  run_tests --filter LiveServerTests --skip 'LiveServerTests.testT09_' >"$test_output" 2>&1
   status=$?
   set -e
   if ! show_checked_output "$test_output"; then status=1; fi
   results+=("$version tests $status")
+  if [[ "$status" -eq 0 ]]; then
+    # Keep M08's exact fixture counts intact until its checks have finished.
+    python3 "$root/scripts/jellyfin_search_seed.py" \
+      --media "$work/media" --sample "$work/media/Movies/Test Movie (2024).mp4"
+    set +e
+    python3 -u "$root/scripts/jellyfin_bootstrap.py" --search-seed
+    status=$?
+    if [[ "$status" -eq 0 ]]; then
+      search_output="$(mktemp "$work/search-tests.XXXXXX")"
+      run_tests --filter 'LiveServerTests.testT09_' >"$search_output" 2>&1
+      status=$?
+      if ! show_checked_output "$search_output"; then status=1; fi
+    fi
+    set -e
+    results+=("$version search $status")
+  fi
   "${docker_cmd[@]}" rm -f "$container" >/dev/null
   container=""
   sudo rm -rf "$work"

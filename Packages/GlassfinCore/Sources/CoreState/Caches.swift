@@ -110,9 +110,18 @@ public actor DiskImageCache {
 
     @discardableResult
     public func store(key: String, data: Data) -> Bool {
+        store(filename: CacheKey.filename(for: key), data: data)
+    }
+
+    @discardableResult
+    public func store(imageKey: ImageCacheKey, data: Data) -> Bool {
+        guard data.count <= MetadataPolicy.imageMaxBytes else { return false }
+        return store(filename: imageKey.sha256, data: data)
+    }
+
+    private func store(filename name: String, data: Data) -> Bool {
         loadIfNeeded()
         guard data.count <= byteLimit, data.count <= MetadataPolicy.imageMaxBytes, byteLimit > 0 else { return false }
-        let name = CacheKey.filename(for: key)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try data.write(to: directory.appendingPathComponent(name), options: .atomic)
@@ -128,8 +137,16 @@ public actor DiskImageCache {
     }
 
     public func data(for key: String) -> Data? {
+        data(filename: CacheKey.filename(for: key))
+    }
+
+    public func data(for imageKey: ImageCacheKey) -> Data? {
+        guard let data = data(filename: imageKey.sha256), data.count <= MetadataPolicy.imageMaxBytes else { return nil }
+        return data
+    }
+
+    private func data(filename name: String) -> Data? {
         loadIfNeeded()
-        let name = CacheKey.filename(for: key)
         guard let index = entries.firstIndex(where: { $0.name == name }) else { return nil }
         let url = directory.appendingPathComponent(name)
         guard let data = try? Data(contentsOf: url) else {
