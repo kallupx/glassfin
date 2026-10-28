@@ -127,9 +127,9 @@
         }
 
         /// AVKit calls this at scrub confirmation, before it performs its own seek.
-        public func beginSeekMeasurement() {
+        public func beginSeekMeasurement(_ interval: DevicePerformance.Interval? = nil) {
             seekInterval?.end(completed: false)
-            seekInterval = DevicePerformance.begin(.playbackSeek)
+            seekInterval = interval ?? DevicePerformance.begin(.playbackSeek)
         }
 
         private func endSeekMeasurement() {

@@ -102,11 +102,14 @@
             }
 
             #if os(tvOS)
-                func playerViewController(
+                nonisolated func playerViewController(
                     _ playerViewController: AVPlayerViewController,
                     timeToSeekAfterUserNavigatedFrom oldTime: CMTime, to targetTime: CMTime
                 ) -> CMTime {
-                    (playback.engine as? AVPlayerEngine)?.beginSeekMeasurement()
+                    let interval = DevicePerformance.begin(.playbackSeek)
+                    Task { @MainActor [weak self] in
+                        (self?.playback.engine as? AVPlayerEngine)?.beginSeekMeasurement(interval)
+                    }
                     return targetTime
                 }
 
