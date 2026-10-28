@@ -122,6 +122,37 @@ credentials; #50's native-server job is excluded under the mocks/Docker-only
 constraint. No real or native test server is started. Device playback, physical
 remote input, performance and reviewed snapshot baselines remain unverified.
 
+## Main synchronization after the #23 squash merge
+
+While the refreshed CI ran, main advanced to
+`f5f63e3f9ed93ce463d77a46e66e5b71a3abe52d` (#23). Merge it with a merge commit,
+retaining the existing canary history and combined feature implementation.
+All 15 conflicts overlap code already present plus later PR additions; resolving
+them leaves the production/test tree unchanged from the preceding canary head.
+
+| File | Conflict | Resolution |
+| --- | --- | --- |
+| `Apps/Shared/Resources/Localizable.xcstrings` | Squashed M07 catalog overlaps the full MVP catalog. | Keep the combined catalog; every main key/value is already retained verbatim. |
+| `Apps/Shared/Sources/DesignSystem/Copy.swift` | Squashed M07 mappings overlap M08 feature/track cases. | Retain all combined cases and resource mappings. |
+| `Apps/Shared/Sources/HomeRootView.swift` | Main restores the pre-wiring Home presentation. | Keep #51 shared presentation and existing library/Search tabs. |
+| `Apps/Shared/Sources/Library/ItemDetailScreen.swift` | Add/add of the M07 screen versus follow-up concurrency, technical metadata and #51 Play wiring. | Keep validated kind routing, parallel load, technical labels and request-based playback/focus return. |
+| `Apps/Shared/Sources/Library/LibraryDebugHost.swift` | Add/add restores the older fixture host. | Keep the kind-aware series host and #51 mock playback presenter. |
+| `Apps/Shared/Sources/Library/LibraryGridView.swift` | Add/add restores value-only navigation. | Keep kind-aware direct detail destinations from the follow-up stack. |
+| `Apps/Shared/Sources/Library/SeriesEpisodeSection.swift` | Add/add removes Start-over focus and optional playback callback. | Keep #51 episode playback and shared episode rendering. |
+| `Packages/GlassfinCore/Sources/CoreModels/ItemMetadata.swift` | Add/add removes default-stream flags and compact technical labels. | Keep #32 default selection, resolution/HDR/audio labels and stable subtitle languages. |
+| `Packages/GlassfinCore/Sources/CoreModels/Mappers.swift` | Main prefers top-level streams and lacks IsDefault projection. | Keep #32 first-media-source precedence and default-stream projection. |
+| `Packages/GlassfinCore/Sources/CoreState/AuthFlow.swift` | Main lacks the authenticated player factory. | Keep #51 credential/trust assembly and stop-state callback. |
+| `Packages/GlassfinCore/Sources/CoreState/ItemDetailViewModel.swift` | Add/add lacks the combined detail/series load. | Keep #32 concurrent item/seasons loading. |
+| `Packages/GlassfinCore/Sources/CoreState/LibrarySession.swift` | Main restores an obsolete M08 presentation TODO. | Keep the current request callback without the superseded TODO. |
+| `Packages/GlassfinCore/Sources/CoreState/SeriesViewModel.swift` | Add/add omits Start-over focus. | Keep #51 Start-over focus alongside all existing season/episode state. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/PinFailureTests.swift` | Main lacks #32 missing-pin factory regression. | Keep the current file byte-for-byte from #32, including every main assertion and the added regression. No removed lines from the main version. |
+| `docs/TEST-COVERAGE-M07.md` | Add/add restores the pre-follow-up coverage mapping. | Keep the expanded #32 mapping and validation history. |
+
+The pin test resolution is recorded in the test audit. All test assertions remain
+unchanged; every main catalog entry remains present verbatim. This adds 15
+file-conflict resolutions to the refresh's earlier 18, for 33 occurrences across
+23 distinct files in the current revision's merge history.
+
 ## Refreshed Apple CI findings
 
 Run [40765717404](https://github.com/kallupx/glassfin/actions/runs/40765717404)

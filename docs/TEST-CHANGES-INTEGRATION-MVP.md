@@ -45,3 +45,12 @@ The complete changed test/fixture inventory relative to main `085582b` follows.
 | Added | `Packages/GlassfinCore/Tests/CoreStateTests/T09MVPTests.swift` | `a34000a` |
 | Added | `Tests/Fixtures/m07-subtitles.json` | `dc7c296` |
 | Added | `Tests/Fixtures/m07-technical-items.json` | `dc7c296` |
+
+## Main synchronization after #23 merged
+
+The merge of main `f5f63e3` conflicts in
+`Packages/GlassfinCore/Tests/CoreStateTests/PinFailureTests.swift`. Retain the
+current #32 file verbatim, including `testFeatureClientWithMissingPinAllowsClientCreation`.
+A line diff confirms that no line from main's test file is removed; the current
+file only adds that regression. No assertion, body, timeout or skip changes.
+All other test files are unchanged by this main synchronization.
