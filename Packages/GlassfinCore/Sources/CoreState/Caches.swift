@@ -39,8 +39,14 @@ public struct HomeSnapshotStore: Sendable {
     }
 
     public func load() -> HomeSnapshot? {
-        guard let data = try? Data(contentsOf: file) else { return nil }
-        return try? JSONDecoder().decode(HomeSnapshot.self, from: data)
+        guard let data = try? Data(contentsOf: file),
+            var snapshot = try? JSONDecoder().decode(HomeSnapshot.self, from: data)
+        else { return nil }
+        snapshot.resume = snapshot.resume.map { $0.cleanedForDisplay() }
+        snapshot.nextUp = snapshot.nextUp.map { $0.cleanedForDisplay() }
+        snapshot.latest = snapshot.latest.map { $0.cleanedForDisplay() }
+        snapshot.latestByLibrary = snapshot.latestByLibrary?.mapValues { $0.map { $0.cleanedForDisplay() } }
+        return snapshot
     }
 
     @discardableResult
@@ -197,7 +203,10 @@ public actor DiskImageCache {
         let url = directory.appendingPathComponent("index.json")
         guard let data = try? Data(contentsOf: url), let decoded = try? JSONDecoder().decode([Entry].self, from: data)
         else { return }
-        entries = decoded
+        entries = decoded.filter {
+            $0.name.count == 64 && $0.name.allSatisfy { $0.isHexDigit && !$0.isUppercase }
+                && $0.bytes >= 0 && $0.bytes <= MetadataPolicy.imageMaxBytes
+        }
         clock = entries.map(\.access).max() ?? 0
     }
 

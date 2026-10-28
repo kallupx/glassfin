@@ -37,6 +37,7 @@ final class BoundedImageDownload: NSObject, URLSessionDataDelegate, @unchecked S
                     return
                 }
                 self.continuation = continuation
+                configuration.urlCache = nil
                 let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
                 let task = session.dataTask(with: request)
                 self.session = session

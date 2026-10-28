@@ -4,6 +4,7 @@ import SwiftUI
 /// The authenticated branch uses the M05 shell; each feature keeps its own navigation stack.
 struct HomeRootView: View {
     let flow: AuthFlow
+    var librarySession: LibrarySession? = nil
     @Binding var selectedTab: String
     @Binding var restoreSettingsFocus: Bool
     @State private var context: HomeContext?
@@ -15,8 +16,11 @@ struct HomeRootView: View {
         Group {
             if let context {
                 LibraryTabShell(
-                    libraries: (context.model.libraries.value ?? []).map { LibraryTabItem(id: $0.id, title: $0.name) },
+                    libraries: (context.model.libraries.value ?? librarySession?.libraries.value ?? []).map {
+                        LibraryTabItem(id: $0.id, title: $0.name)
+                    },
                     home: AnyView(home(context)), settings: AnyView(settings),
+                    libraryContent: libraryContent, overflowContent: overflowContent,
                     search: AnyView(SearchFeatureHost(flow: flow)), selection: $selectedTab)
             } else {
                 ProgressView().accessibilityIdentifier("home.loading")
@@ -54,6 +58,34 @@ struct HomeRootView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.playback")
             .accessibilityValue(String(Ticks.outboundPositionTicks(from: request.position)))
+        }
+    }
+
+    private var libraryContent: ((LibraryTabItem) -> AnyView)? {
+        guard let librarySession else { return nil }
+        return { library in
+            AnyView(
+                LibraryNavigationRoot(
+                    library: context?.model.libraries.value?.first { $0.id == library.id }
+                        ?? librarySession.libraries.value?.first { $0.id == library.id }
+                        ?? Library(id: library.id, name: library.title), session: librarySession))
+        }
+    }
+
+    private var overflowContent: (([LibraryTabItem]) -> AnyView)? {
+        guard let librarySession else { return nil }
+        return { libraries in
+            if libraries.isEmpty {
+                return AnyView(LibraryIndexStateView(session: librarySession))
+            }
+            return AnyView(
+                LibraryOverflowView(
+                    session: librarySession,
+                    libraries: libraries.map { library in
+                        context?.model.libraries.value?.first { $0.id == library.id }
+                            ?? librarySession.libraries.value?.first { $0.id == library.id }
+                            ?? Library(id: library.id, name: library.title)
+                    }))
         }
     }
 

@@ -89,6 +89,42 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case playbackSegmentBehaviorAutomatic = "playback.segmentBehavior.automatic"
     case playbackSegmentBehaviorIgnore = "playback.segmentBehavior.ignore"
 
+    case librarySort = "library.sort"
+    case libraryName = "library.sort.name"
+    case libraryDateAdded = "library.sort.dateAdded"
+    case libraryReleaseYear = "library.sort.releaseYear"
+    case libraryRating = "library.sort.rating"
+    case libraryRandom = "library.sort.random"
+    case libraryDescending = "library.sort.descending"
+    case libraryUnplayed = "library.filter.unplayed"
+    case libraryFavorites = "library.filter.favorites"
+    case libraryFilterOn = "library.filter.on"
+    case libraryFilterOff = "library.filter.off"
+    case libraryGenre = "library.filter.genre"
+    case libraryYear = "library.filter.year"
+    case libraryAll = "library.filter.all"
+    case libraryMoviesCount = "library.count.movies"
+    case librarySeriesCount = "library.count.series"
+    case libraryItemsCount = "library.count.items"
+    case libraryEmpty = "library.empty"
+    case libraryNoLibraries = "library.noLibraries"
+    case detailCast = "detail.cast"
+    case detailSimilar = "detail.similar"
+    case detailTechnical = "detail.technical"
+    case detailStartOver = "detail.startOver"
+    case detailTracks = "detail.tracks"
+    case detailAudio = "detail.audio"
+    case detailSubtitles = "detail.subtitles"
+    case detailDefault = "detail.default"
+    case detailNone = "detail.none"
+    case detailPlayEpisode = "detail.playEpisode"
+    case detailResumeEpisode = "detail.resumeEpisode"
+    case detailResumeTime = "detail.resumeTime"
+    case detailSeasonNumber = "detail.seasonNumber"
+    case detailSpecials = "detail.specials"
+    case detailEpisodeNumber = "detail.episodeNumber"
+    case detailRuntime = "detail.runtime"
+    case detailPlaybackPending = "detail.playbackPending"
     case searchPrompt = "search.prompt"
     case searchMovies = "search.movies"
     case searchSeries = "search.series"
@@ -150,6 +186,43 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .homeDetailPending: LocalizedStringResource("home.detailPending", bundle: .main)
         case .homePlaybackPending: LocalizedStringResource("home.playbackPending", bundle: .main)
         case .homeLibrariesRetry: LocalizedStringResource("home.librariesRetry", bundle: .main)
+
+        case .librarySort: LocalizedStringResource("library.sort", bundle: .main)
+        case .libraryName: LocalizedStringResource("library.sort.name", bundle: .main)
+        case .libraryDateAdded: LocalizedStringResource("library.sort.dateAdded", bundle: .main)
+        case .libraryReleaseYear: LocalizedStringResource("library.sort.releaseYear", bundle: .main)
+        case .libraryRating: LocalizedStringResource("library.sort.rating", bundle: .main)
+        case .libraryRandom: LocalizedStringResource("library.sort.random", bundle: .main)
+        case .libraryDescending: LocalizedStringResource("library.sort.descending", bundle: .main)
+        case .libraryUnplayed: LocalizedStringResource("library.filter.unplayed", bundle: .main)
+        case .libraryFavorites: LocalizedStringResource("library.filter.favorites", bundle: .main)
+        case .libraryFilterOn: LocalizedStringResource("library.filter.on", bundle: .main)
+        case .libraryFilterOff: LocalizedStringResource("library.filter.off", bundle: .main)
+        case .libraryGenre: LocalizedStringResource("library.filter.genre", bundle: .main)
+        case .libraryYear: LocalizedStringResource("library.filter.year", bundle: .main)
+        case .libraryAll: LocalizedStringResource("library.filter.all", bundle: .main)
+        case .libraryMoviesCount: LocalizedStringResource("library.count.movies", bundle: .main)
+        case .librarySeriesCount: LocalizedStringResource("library.count.series", bundle: .main)
+        case .libraryItemsCount: LocalizedStringResource("library.count.items", bundle: .main)
+        case .libraryEmpty: LocalizedStringResource("library.empty", bundle: .main)
+        case .libraryNoLibraries: LocalizedStringResource("library.noLibraries", bundle: .main)
+        case .detailCast: LocalizedStringResource("detail.cast", bundle: .main)
+        case .detailSimilar: LocalizedStringResource("detail.similar", bundle: .main)
+        case .detailTechnical: LocalizedStringResource("detail.technical", bundle: .main)
+        case .detailStartOver: LocalizedStringResource("detail.startOver", bundle: .main)
+        case .detailTracks: LocalizedStringResource("detail.tracks", bundle: .main)
+        case .detailAudio: LocalizedStringResource("detail.audio", bundle: .main)
+        case .detailSubtitles: LocalizedStringResource("detail.subtitles", bundle: .main)
+        case .detailDefault: LocalizedStringResource("detail.default", bundle: .main)
+        case .detailNone: LocalizedStringResource("detail.none", bundle: .main)
+        case .detailPlayEpisode: LocalizedStringResource("detail.playEpisode", bundle: .main)
+        case .detailResumeEpisode: LocalizedStringResource("detail.resumeEpisode", bundle: .main)
+        case .detailResumeTime: LocalizedStringResource("detail.resumeTime", bundle: .main)
+        case .detailSeasonNumber: LocalizedStringResource("detail.seasonNumber", bundle: .main)
+        case .detailSpecials: LocalizedStringResource("detail.specials", bundle: .main)
+        case .detailEpisodeNumber: LocalizedStringResource("detail.episodeNumber", bundle: .main)
+        case .detailRuntime: LocalizedStringResource("detail.runtime", bundle: .main)
+        case .detailPlaybackPending: LocalizedStringResource("detail.playbackPending", bundle: .main)
 
         case .welcomeTitle: LocalizedStringResource("welcome.title", bundle: .main)
         case .welcomeConnect: LocalizedStringResource("welcome.connect", bundle: .main)

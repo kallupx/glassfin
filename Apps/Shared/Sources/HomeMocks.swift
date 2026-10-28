@@ -118,6 +118,9 @@ import SwiftUI
             if mode == "down" { throw .network }
             return mode == "empty" ? [] : (20..<20 + min(limit, HomePolicy.rowLimit)).map { Self.item($0) }
         }
+        func nextUp(series: MediaItem.ID) async throws(APIError) -> MediaItem? {
+            try await nextUp(limit: 1).first { $0.seriesID == series }
+        }
         func latest(in library: String, limit: Int) async throws(APIError) -> [MediaItem] {
             if mode == "down" { throw .network }
             return mode == "empty" ? [] : (40..<44).map { Self.item($0) }

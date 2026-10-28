@@ -37,7 +37,7 @@ public struct DiscoveryPresentation: Sendable, Equatable {
 }
 
 public enum DiscoveryPolicy {
-    public static let maximumNameLength = 64
+    public static let maximumNameLength = MetadataPolicy.displayNameMax
     public static let maximumIDLength = 64
 
     public static func parse(_ data: Data, storedURL: URL?, publicInfoID: String?) -> DiscoveryPresentation? {
