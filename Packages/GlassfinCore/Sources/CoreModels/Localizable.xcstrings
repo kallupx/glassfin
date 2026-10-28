@@ -120,24 +120,6 @@
         }
       }
     },
-    "Change server": {
-      "comment": "Button to choose a different server.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Change server"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vaihda palvelinta"
-          }
-        }
-      }
-    },
     "Connect to a server": {
       "localizations": {
         "en": {
@@ -375,92 +357,6 @@
         }
       }
     },
-    "Playback is unavailable because the server cannot be reached": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback is unavailable because the server cannot be reached"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toisto ei ole käytettävissä, koska palvelimeen ei saada yhteyttä"
-          }
-        }
-      }
-    },
-    "Playback is unavailable without a network connection": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback is unavailable without a network connection"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toisto ei ole käytettävissä ilman verkkoyhteyttä"
-          }
-        }
-      }
-    },
-    "Playback isn't available because the server can't be reached": {
-      "comment": "Explains why playback is blocked while the server cannot be reached.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback isn't available because the server can't be reached"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toisto ei ole käytettävissä, koska palvelimeen ei saada yhteyttä"
-          }
-        }
-      }
-    },
-    "Playback isn't available without a network connection": {
-      "comment": "Explains why playback is blocked while the device is offline.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback isn't available without a network connection"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toisto ei ole käytettävissä ilman verkkoyhteyttä"
-          }
-        }
-      }
-    },
-    "Public addresses require HTTPS": {
-      "comment": "Shown when an unencrypted HTTP connection to a public server address is rejected.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Public addresses require HTTPS"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Julkiset osoitteet vaativat HTTPS:n"
-          }
-        }
-      }
-    },
     "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy.": {
       "extractionState": "manual",
       "localizations": {
@@ -579,40 +475,6 @@
         }
       }
     },
-    "Server version %@ is not supported. Version %@ or later is required.": {
-      "comment": "Shown when a server version is unsupported. The first %@ is the server version; the second %@ is the minimum required version.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Server version %@ is not supported. Version %@ or later is required."
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Palvelinversio %@ ei ole tuettu. Vaaditaan vähintään %@."
-          }
-        }
-      }
-    },
-    "Server version %@ is too old (required ≥ %@)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Server version %@ is too old (required ≥ %@)"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Palvelimen versio %@ on liian vanha (vaaditaan ≥ %@)"
-          }
-        }
-      }
-    },
     "Session expired, please sign in again": {
       "comment": "Notice shown when an authenticated request ends the session.",
       "extractionState": "manual",
@@ -694,22 +556,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kirjaudutaanko ulos tältä palvelimelta?"
-          }
-        }
-      }
-    },
-    "Switch server": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switch server"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vaihda palvelinta"
           }
         }
       }
@@ -799,22 +645,6 @@
         }
       }
     },
-    "The server certificate is not trusted": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The server certificate is not trusted"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Palvelimen sertifikaatti ei ole luotettu"
-          }
-        }
-      }
-    },
     "The server ran into a problem. Try again later.": {
       "localizations": {
         "en": {
@@ -862,76 +692,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Palvelimen istunto voi jäädä voimaan, kunnes ylläpitäjä poistaa laitteen."
-          }
-        }
-      }
-    },
-    "The server's certificate isn't trusted": {
-      "comment": "Shown when the server certificate is untrusted or has changed.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The server's certificate isn't trusted"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Palvelimen sertifikaatti ei ole luotettu"
-          }
-        }
-      }
-    },
-    "This connection is not encrypted": {
-      "comment": "Warning shown for an allowed HTTP connection to a local server address.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This connection is not encrypted"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yhteys ei ole salattu"
-          }
-        }
-      }
-    },
-    "This file could not be played": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This file could not be played"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tätä tiedostoa ei voitu toistaa"
-          }
-        }
-      }
-    },
-    "This file couldn't be played": {
-      "comment": "Shown when playback fails for a media file.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This file couldn't be played"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tätä tiedostoa ei voitu toistaa"
           }
         }
       }
@@ -1004,18 +764,110 @@
         }
       }
     },
-    "You do not have permission for this action": {
+    "Change server": {
+      "comment": "Button to choose a different server.",
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You do not have permission for this action"
+            "value": "Change server"
           }
         },
         "fi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ei oikeuksia tähän toimintoon"
+            "value": "Vaihda palvelinta"
+          }
+        }
+      }
+    },
+    "Playback isn't available because the server can't be reached": {
+      "comment": "Explains why playback is blocked while the server cannot be reached.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback isn't available because the server can't be reached"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toisto ei ole käytettävissä, koska palvelimeen ei saada yhteyttä"
+          }
+        }
+      }
+    },
+    "Playback isn't available without a network connection": {
+      "comment": "Explains why playback is blocked while the device is offline.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback isn't available without a network connection"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toisto ei ole käytettävissä ilman verkkoyhteyttä"
+          }
+        }
+      }
+    },
+    "Server version %@ is not supported. Version %@ or later is required.": {
+      "comment": "Shown when a server version is unsupported. The first %@ is the server version; the second %@ is the minimum required version.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server version %@ is not supported. Version %@ or later is required."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelinversio %@ ei ole tuettu. Vaaditaan vähintään %@."
+          }
+        }
+      }
+    },
+    "The server's certificate isn't trusted": {
+      "comment": "Shown when the server certificate is untrusted or has changed.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server's certificate isn't trusted"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelimen sertifikaatti ei ole luotettu"
+          }
+        }
+      }
+    },
+    "This file couldn't be played": {
+      "comment": "Shown when playback fails for a media file.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file couldn't be played"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä tiedostoa ei voitu toistaa"
           }
         }
       }
@@ -1034,6 +886,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ei oikeuksia tähän toimintoon"
+          }
+        }
+      }
+    },
+    "playback.selfSignedRemuxBlocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video can't be played yet from a server with a self-signed certificate."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne."
+          }
+        }
+      }
+    },
+    "playback.ok": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "playback.unsupportedVideoFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video format isn't supported yet"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä videomuotoa ei vielä tueta"
           }
         }
       }
@@ -1068,57 +971,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Palvelin ohjasi toiston turvattomaan osoitteeseen"
-          }
-        }
-      }
-    },
-    "playback.ok": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
-          }
-        }
-      }
-    },
-    "playback.selfSignedRemuxBlocked": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This video can't be played yet from a server with a self-signed certificate."
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne."
-          }
-        }
-      }
-    },
-    "playback.unsupportedVideoFormat": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This video format isn't supported yet"
-          }
-        },
-        "fi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tätä videomuotoa ei vielä tueta"
           }
         }
       }
