@@ -66,13 +66,13 @@ final class T02FoundationTests: XCTestCase {
         for (error, context, offline, expected) in cases {
             let mapped = AppErrorMapping.map(error, context: context, deviceOffline: offline)
             XCTAssertEqual(mapped, expected)
-            XCTAssertEqual(SessionTermination.shouldEndSession(mapped), mapped == .unauthorized)
+            XCTAssertEqual(CoreModels.SessionTermination.shouldEndSession(mapped), mapped == .unauthorized)
         }
         XCTAssertTrue(AppErrorMapping.isConnectivity(.offline))
         XCTAssertTrue(AppErrorMapping.isConnectivity(.serverUnreachable))
         XCTAssertFalse(AppErrorMapping.isConnectivity(.forbidden))
-        XCTAssertFalse(SessionTermination.shouldEndSession(.serverError(status: 500)))
-        XCTAssertFalse(SessionTermination.shouldEndSession(.serverUnreachable))
+        XCTAssertFalse(CoreModels.SessionTermination.shouldEndSession(.serverError(status: 500)))
+        XCTAssertFalse(CoreModels.SessionTermination.shouldEndSession(.serverUnreachable))
     }
 
     func testT02_09_userFacingCopyAndDiagnosticsOmitTokens() {
@@ -112,9 +112,10 @@ final class T02FoundationTests: XCTestCase {
         XCTAssertEqual(log.messages(level: "error"), ["forbidden"])
         XCTAssertFalse(log.contains(Sample.token))
         XCTAssertNil(ServerVersionGate.failure(for: .minimumJellyfin))
+        XCTAssertNil(ServerVersionGate.failure(for: SemVer(major: 10, minor: 10, patch: 6)))
         XCTAssertEqual(
-            ServerVersionGate.failure(for: SemVer(major: 10, minor: 10, patch: 6)),
-            .unsupportedServer(version: "10.10.6")
+            ServerVersionGate.failure(for: SemVer(major: 10, minor: 9, patch: 11)),
+            .unsupportedServer(version: "10.9.11")
         )
     }
 
@@ -130,6 +131,7 @@ final class T02FoundationTests: XCTestCase {
             (.notFound, AppErrorMessage.notFoundKey),
             (.serverError(status: 500), AppErrorMessage.serverErrorKey),
             (.unsupportedServer(version: "10.9.11"), AppErrorMessage.unsupportedServerKey),
+            (.publicHTTPRejected, AuthCopy.Key.publicAddressRequiresHTTPS.rawValue),
             (.playback(.itemFailed(code: "NoCompatibleStream")), AppErrorMessage.playbackFailedKey),
             (.playback(.itemFailed(code: nil)), AppErrorMessage.playbackFailedKey),
             (.playback(.stalled), AppErrorMessage.playbackFailedKey),
@@ -195,11 +197,11 @@ final class T02FoundationTests: XCTestCase {
         XCTAssertThrowsError(try ResilientItemDecoder.searchHints(from: Data("[]".utf8), log: log))
     }
 
-    func testT02_12_preferencesStayUnderBudgetAndDropUserinfo() throws {
+    func testT02_12_preferencesStayUnderBudgetAndRejectUserinfo() throws {
         var preferences = AppPreferences.empty
         for index in 0..<10 {
             let server = StoredServer(
-                id: "s\(index)",
+                id: String(format: "%032x", index + 1),
                 name: "Server \(index)",
                 url: Sample.url("https://s\(index).example:8096/jellyfin"),
                 version: "10.11.11",
@@ -208,11 +210,12 @@ final class T02FoundationTests: XCTestCase {
             preferences = try preferences.upserting(server: server)
             preferences = preferences.upserting(
                 user: StoredUser(
-                    serverID: "s\(index)", userID: "u\(index)", userName: "User \(index)", isAdministrator: index == 0,
+                    serverID: String(format: "%032x", index + 1), userID: String(format: "%032x", index + 101),
+                    userName: "User \(index)", isAdministrator: index == 0,
                     audioLanguage: "fi", subtitleLanguage: "sv"))
         }
-        preferences.activeServerID = "s0"
-        preferences.activeUserID = "u0"
+        preferences.activeServerID = String(format: "%032x", 1)
+        preferences.activeUserID = String(format: "%032x", 101)
         let bytes = try XCTUnwrap(PreferencesRepository.encodedByteCount(preferences))
         XCTAssertLessThan(bytes, CacheBudget.userDefaultsBytes)
         XCTAssertLessThan(bytes, 50 * 1_024)
@@ -222,7 +225,7 @@ final class T02FoundationTests: XCTestCase {
         let saved = repository.load()
         XCTAssertEqual(saved.servers.count, 10)
         XCTAssertEqual(saved.users.count, 10)
-        XCTAssertEqual(saved.activeServer()?.id, "s0")
+        XCTAssertEqual(saved.activeServer()?.id, String(format: "%032x", 1))
         XCTAssertEqual(saved.activeUser()?.userName, "User 0")
         let json = store.string(forKey: PreferencesRepository.storageKey) ?? ""
         XCTAssertFalse(json.contains(Sample.token))
@@ -250,10 +253,14 @@ final class T02FoundationTests: XCTestCase {
             url: Sample.url("https://alice:secret@media.example/jellyfin"),
             version: "10.11.0"
         )
-        let normalized = try AppPreferences.empty.upserting(server: dirty).servers[0].url
-        XCTAssertEqual(normalized.absoluteString, "https://media.example/jellyfin")
-        XCTAssertFalse(normalized.absoluteString.contains("alice"))
-        XCTAssertFalse(normalized.absoluteString.contains("secret"))
+        XCTAssertThrowsError(try AppPreferences.empty.upserting(server: dirty)) { error in
+            XCTAssertEqual(error as? PreferencesError, .invalidServerURL)
+        }
+        let clean = StoredServer(
+            id: "s", name: "Home", url: Sample.url("https://example.com/jellyfin?x=1#fragment"),
+            version: "10.11.0")
+        let normalized = try AppPreferences.empty.upserting(server: clean).servers[0].url
+        XCTAssertEqual(normalized.absoluteString, "https://example.com/jellyfin")
         XCTAssertThrowsError(
             try AppPreferences.empty.upserting(
                 server: StoredServer(id: "s", name: "n", url: Sample.url("ftp://example.com"), version: "1.0.0"))
@@ -263,13 +270,21 @@ final class T02FoundationTests: XCTestCase {
 
         let replaced = try preferences.upserting(
             server: StoredServer(
-                id: "s0", name: "Renamed", url: Sample.url("https://s0.example:8096/jellyfin"), version: "12.0.0"))
-        XCTAssertEqual(replaced.servers.first { $0.id == "s0" }?.name, "Renamed")
-        let (removed, accounts) = replaced.removing(serverID: "s0")
-        XCTAssertEqual(accounts, [SessionCredential.account(serverID: "s0", userID: "u0")])
+                id: String(format: "%032x", 1), name: "Renamed", url: Sample.url("https://s0.example:8096/jellyfin"),
+                version: "12.0.0"))
+        XCTAssertEqual(replaced.servers.first { $0.id == String(format: "%032x", 1) }?.name, "Renamed")
+        let (removed, accounts) = replaced.removing(serverID: String(format: "%032x", 1))
+        XCTAssertEqual(
+            accounts,
+            [
+                try CredentialVault.tokenAccount(
+                    serverID: String(format: "%032x", 1), userID: String(format: "%032x", 101))
+            ])
         XCTAssertNil(removed.activeServerID)
-        XCTAssertFalse(removed.servers.contains { $0.id == "s0" })
-        XCTAssertFalse(SessionCredential.account(serverID: "s0", userID: "u0").contains(Sample.token))
+        XCTAssertFalse(removed.servers.contains { $0.id == String(format: "%032x", 1) })
+        XCTAssertFalse(
+            try CredentialVault.tokenAccount(serverID: String(format: "%032x", 1), userID: String(format: "%032x", 101))
+                .contains(Sample.token))
 
         let defaults = UserDefaults(suiteName: "org.glassfin.tests.\(UUID().uuidString)")
         let userDefaults = UserDefaultsSettingsStore(defaults: defaults ?? .standard)
