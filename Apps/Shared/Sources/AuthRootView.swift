@@ -292,6 +292,10 @@ struct AuthRootView: View {
                 .defaultFocus($focused, flow.focus)
                 .onAppear { flow.onAppear() }
             }
+            #if os(iOS)
+                // Keep Settings reachable when library tabs overflow into the native More menu.
+                Tab(AuthCopy.localized(.settings), systemImage: "gear") { settings }
+            #endif
             if let librarySession {
                 ForEach(librarySession.directLibraries) { library in
                     Tab {
@@ -310,21 +314,9 @@ struct AuthRootView: View {
                     }
                 }
             }
-            Tab(AuthCopy.localized(.settings), systemImage: "gear") {
-                VStack(spacing: 16) {
-                    Text(verbatim: flow.displayedName)
-                        .accessibilityIdentifier("settings.serverName")
-                    Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
-                        .accessibilityIdentifier("settings.signOut")
-                    Text(
-                        verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                            ?? ""
-                    )
-                    .accessibilityIdentifier("settings.version")
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("settings.root")
-            }
+            #if os(tvOS)
+                Tab(AuthCopy.localized(.settings), systemImage: "gear") { settings }
+            #endif
         }
         .task {
             do {
@@ -336,6 +328,22 @@ struct AuthRootView: View {
                 flow.featureApp.handle(.internalInvariant)
             }
         }
+    }
+
+    private var settings: some View {
+        VStack(spacing: 16) {
+            Text(verbatim: flow.displayedName)
+                .accessibilityIdentifier("settings.serverName")
+            Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
+                .accessibilityIdentifier("settings.signOut")
+            Text(
+                verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                    ?? ""
+            )
+            .accessibilityIdentifier("settings.version")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settings.root")
     }
 
     private var logoutConfirm: some View {

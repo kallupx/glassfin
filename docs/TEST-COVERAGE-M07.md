@@ -346,3 +346,89 @@ target now compiles and execute the existing UI assertions, including
 `bash scripts/macos-ci.sh tvOS` for the tvOS suite. Xcode/simulator execution
 and live Jellyfin integration were not performed in this Linux workspace;
 no claim is made that the separate M04 race is fixed or that Apple CI is green.
+
+## CI run 40636746467: iOS Settings hidden by library tabs
+
+The new failure at `7e0fac1` is in `test-ios`, job `122646096582`.
+The complete job log and the uploaded `ios-results` artifact identify exactly
+one failing app test:
+`T04AuthUITests.testT04_68_settingsSignOutDefaultsToCancelAndKeepsServer`.
+It signs in and finds `home.root`, then fails on its first attempt to open
+Settings, before entering the sign-out confirmation. The query waits ten
+seconds, then reports no matching Settings element at `UIInteraction.swift:10`.
+The job finishes with xcodebuild exit code 65 after about seventeen minutes,
+within its twenty-five-minute limit. This is a tab-layout failure, not a
+compile error, remote-focus race, or job timeout.
+
+The exported failure hierarchy
+(`readable/bundle-1/screenshots/7282EEC3-B1D7-4726-B9EF-C4725FE084FC.txt`)
+shows Home, Library 1, Series, Library 3, and More in the iPhone tab bar, with
+no Settings element. The retained Home screenshot shows the same layout.
+M07 adds five direct library tabs and a library-overflow tab before Settings
+in `AuthRootView.home`. The DEBUG fixture returns seven libraries. iPhone's
+native five-item tab bar consequently moves Settings into More. Waiting longer
+cannot make the Settings query find a destination behind that menu.
+
+The fix puts Settings immediately after Home on iOS, before M07's dynamic
+library tabs. It follows the primary-destinations-first approach already used
+by M05's `LibraryTabShell`. The extracted Settings content is unchanged, and
+tvOS retains its existing tab order. Libraries remain accessible through the
+native More menu and the existing Libraries destination. No sleep, test-only
+layout, or new UI copy is needed.
+
+Although the host file belongs to the M04 authentication surface, this defect
+comes from M07's library-tab integration: main's host has only Home and
+Settings, and M05's own shell already places Settings before libraries on
+iOS. No inherited M05 or upstream-main defect requires a separate repair.
+
+### Comparison with M06 and M10
+
+- M06 `63a497f` fixes scheduler-dependent producer-byte assertions in its
+  image-stream tests. M07's seven `T07ImageTests`, including both cancellation
+  tests, passed in this iOS run. The package xcresult export records 491 passed
+  tests and seven live-server skips, with no failures. No image assertion is
+  changed on evidence from another module's run.
+- M10 `88acbdc` adds DEBUG synchronization between the Quick Connect fixture
+  and its code-display test. `testT04_03_quickConnectReachesHome` passed here,
+  with the login-method, quick-connect, and home screenshots retained. Its
+  code-display assertions did not fail, so this run does not justify importing
+  M10's backend hook or test changes.
+- The earlier M05 `selectTab` actor-isolation repair compiled successfully:
+  all three iOS design-system UI tests passed. The app suite records fourteen
+  passed tests and the single Settings failure described above.
+
+### Merge and test-change audit
+
+After `git fetch origin`, main remained at `d720120`, already an ancestor.
+M05 advanced to `b8c6349`; merge commit `7fffedc` includes that tip using a
+merge commit. Its updated `scripts/ci-path-filter.py` is imported unchanged.
+Main's `project.yml` is explicitly retained as requested, rather than importing
+M05's new hosted unit-test targets. All Info.plist files and workflows also
+match main. No rebase or force-push is used.
+
+No test or assertion changes are authored or imported by this repair. The
+existing sign-out test remains the regression check, with every interaction,
+assertion, screenshot, and timeout preserved. There are no catalog changes.
+
+### Verification and remaining limits
+
+All requested Linux checks pass with the specified Swift environment:
+`coverage-gate.sh` runs 493 tests with zero failures and seven existing
+live-server skips; line coverage is 91.72% (8,402/9,160). Strict recursive
+`swift-format` lint, `check-design-system.py`, `check-string-catalogs.py`,
+`check-debug-only-strings.py`, and `ci-grep.sh` pass. `git diff --check` passes.
+
+On an Apple runner, run `bash scripts/macos-ci.sh iOS` for the complete failing
+job's checks, or run this focused regression after `xcodegen generate`:
+
+```sh
+xcodebuild test -scheme Glassfin-iOS \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:Glassfin-iOSUITests/T04AuthUITests/testT04_68_settingsSignOutDefaultsToCancelAndKeepsServer \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+Run `bash scripts/macos-ci.sh tvOS` for tvOS. Linux cannot execute SwiftUI or
+Apple simulator tests, so the iOS layout fix still needs simulator confirmation.
+Live Jellyfin integration remains unexecuted. Keeping main's project file also
+means M05's hosted logic and snapshot targets remain outside the app schemes.
