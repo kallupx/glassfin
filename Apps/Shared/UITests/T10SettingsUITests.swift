@@ -3,11 +3,31 @@ import XCTest
 
 final class T10SettingsUITests: XCTestCase {
     @MainActor
-    func testTPOC_42_settingsContainsOnlySignOutAndVersion() async {
+    func testTPOC_42_settingsContainsPlaybackPreferencesSignOutAndVersion() async {
         let app = openSettings()
         let root = app.descendants(matching: .any)["settings.root"]
         XCTAssertTrue(root.waitForExistence(timeout: 10))
-        XCTAssertEqual(root.buttons.count, 1)
+        let expectedPickers = [
+            "settings.playback.segment.intro", "settings.playback.segment.recap",
+            "settings.playback.segment.outro", "settings.playback.segment.preview",
+            "settings.playback.segment.commercial",
+        ]
+        // tvOS exposes each segmented choice as a button; iOS exposes one menu button per picker.
+        #if os(tvOS)
+            let buttonsPerPicker = 3
+        #else
+            let buttonsPerPicker = 1
+        #endif
+        XCTAssertEqual(root.buttons.count, 1 + expectedPickers.count * buttonsPerPicker)
+        XCTAssertEqual(root.buttons.matching(identifier: "settings.signOut").count, 1)
+        let preferences = root.descendants(matching: .any)["settings.playback.preferences"]
+        XCTAssertTrue(preferences.exists)
+        for identifier in expectedPickers {
+            let picker = preferences.descendants(matching: .any)[identifier]
+            XCTAssertTrue(picker.exists, identifier)
+            XCTAssertEqual(picker.buttons.count, buttonsPerPicker, identifier)
+        }
+        XCTAssertTrue(preferences.descendants(matching: .any)["settings.playback.autoplay"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["settings.signOut"].exists)
         let version = app.staticTexts["settings.version"]
         XCTAssertTrue(version.exists)

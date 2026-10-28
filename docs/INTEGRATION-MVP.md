@@ -53,6 +53,14 @@ compile fix found in the initial canary. Its tests import without edits. Unlike
 the first pass, no obsolete transport file or duplicate cancellation method is
 restored.
 
+### 4. Trickplay and segments (#42)
+
+| File | Conflict | Resolution |
+| --- | --- | --- |
+| `Apps/Shared/Resources/Localizable.xcstrings` | Track entries and new feature entries overlap their insertion point. | Union complete JSON entries by key, retain both translated languages verbatim, and sort keys. Shared entries agree. |
+| `Apps/Shared/Sources/DesignSystem/Copy.swift` | M07 cases and #42 cases overlap; track and feature resources overlap. | Keep all distinct cases and resource mappings. |
+| `Apps/Shared/Sources/PlaybackView.swift` | Track menus/subtitle overlay and the companion/feature overlay modify the same view and native adapter. | Supply both companion and menus, render both overlays, update menus and companion state, and retain #42 lifecycle callbacks pending #51 integration. |
+
 ## Current validation and findings
 
 Pending the refreshed combined Linux suite and GitHub Actions. Apple builds and

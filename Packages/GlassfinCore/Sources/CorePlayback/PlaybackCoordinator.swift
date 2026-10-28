@@ -48,6 +48,26 @@ public final class PlaybackCoordinator {
     private var firstFrameTask: Task<Void, Never>?
     private let clock: any GlassfinClock
 
+    public var currentItemID: String? { context?.itemID }
+    public var currentMediaSourceID: String? { context?.mediaSourceID }
+
+    public func makeCompanion(
+        settings: PlaybackFeatureSettings = .init(),
+        playNext: (@MainActor (String) async -> Void)? = nil,
+        completed: @escaping @MainActor (String, Duration) async -> Void = { _, _ in }
+    ) -> PlaybackCompanion {
+        PlaybackCompanion(
+            client: session.apiClient, userID: session.userID, settings: settings,
+            seek: { [weak self] in await self?.seek(to: $0) },
+            stop: { [weak self] in await self?.stop() },
+            play: playNext ?? { [weak self] in await self?.play(itemID: $0, choice: .startOver) },
+            unauthorized: { [weak self] in
+                guard let self else { return }
+                await stop()
+                await expireSession(run: generation)
+            }, completed: completed)
+    }
+
     private let session: any PlaybackSessionProviding
     private let origin: any MediaOriginClient
     private let api: PlaybackAPI
