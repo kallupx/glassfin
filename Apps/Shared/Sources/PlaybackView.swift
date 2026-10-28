@@ -12,7 +12,10 @@
 
         var body: some View {
             ZStack {
-                NativePlaybackView(player: engine.player, coordinator: coordinator)
+                NativePlaybackView(
+                    player: engine.player, coordinator: coordinator,
+                    trackMenuItems: PlaybackTrackMenus.items(playback: coordinator))
+                PlaybackSubtitleOverlay(playback: coordinator)
                 if coordinator.state == .loading || coordinator.state == .buffering {
                     ProgressView()
                 }
@@ -54,6 +57,7 @@
     private struct NativePlaybackView: UIViewControllerRepresentable {
         let player: AVPlayer?
         let coordinator: PlaybackCoordinator
+        let trackMenuItems: [UIMenuElement]
 
         func makeCoordinator() -> DismissalHandler { DismissalHandler(playback: coordinator) }
 
@@ -62,6 +66,9 @@
             controller.player = player
             controller.delegate = context.coordinator
             #if os(tvOS)
+                controller.transportBarCustomMenuItems = trackMenuItems
+            #endif
+            #if os(tvOS)
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
             #endif
             return controller
@@ -69,6 +76,9 @@
 
         func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
             controller.player = player
+            #if os(tvOS)
+                controller.transportBarCustomMenuItems = trackMenuItems
+            #endif
         }
 
         static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: DismissalHandler) {
