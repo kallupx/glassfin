@@ -55,7 +55,7 @@ final class T07FilterEncodingTests: XCTestCase {
 private actor T07FilterTransport: RequestTransport {
     var requests: [URLRequest] = []
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         requests.append(request)
         let url = try XCTUnwrap(request.url)
         let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
