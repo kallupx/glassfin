@@ -166,6 +166,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      commandLineArguments:
+        "-uitest-mock-server": true
       gatherCoverageData: true
       coverageTargets:
         - Glassfin-tvOS
@@ -184,6 +186,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      commandLineArguments:
+        "-uitest-mock-server": true
       gatherCoverageData: true
       coverageTargets:
         - Glassfin-iOS

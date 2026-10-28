@@ -19,7 +19,10 @@ They are decoder/lifecycle regression measurements, not LAN startup, full-length
 acceptance procedures. No absolute device budgets are asserted on simulators.
 
 `project.yml` adds the generated fixture as an optional test bundle resource to
-both existing hosted unit-test targets. `scripts/macos-ci.sh` prepares it before
+both existing hosted unit-test targets. Both Debug test actions pass the existing
+`-uitest-mock-server` argument so hosted app startup cannot restore a saved
+server session while benchmarks run. Run/Profile/Archive actions are unchanged.
+`scripts/macos-ci.sh` prepares it before
 project generation. Test suites remain in their existing schemes and therefore
 run in the regular tvOS/iOS CI jobs. Existing synthetic performance tests remain
 intact. Source-check assertions and artifact redaction rules remain intact.

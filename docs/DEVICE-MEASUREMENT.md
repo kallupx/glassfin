@@ -31,7 +31,9 @@ device/provision profiles; a signing failure must be resolved in the owner's
 account. The device must be unlocked, reachable, and available to Xcode.
 Results are in `artifacts/device-perf/<UTC timestamp>.xcresult`. Open the bundle
 in Xcode, select a test, and inspect its Performance metrics and each iteration.
-No credentials or server are needed. Tests do not use the owner's saved session.
+No credentials or server are needed. Both Debug test actions pass the existing
+`-uitest-mock-server` flag to isolate hosted app startup from saved sessions.
+Tests do not use the owner's saved session.
 
 The equivalent `xcodebuild test` command, signing overrides, and exact
 `-only-testing` selectors are in [the runner](../scripts/device-measurement.sh).
