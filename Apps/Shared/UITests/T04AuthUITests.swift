@@ -143,9 +143,6 @@ final class T04AuthUITests: XCTestCase {
         #endif
         save(app.screenshot(), name: "sign-out-confirmation")
         activate(cancel, in: app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
-        activate(
-            app.descendants(matching: .any).matching(identifier: AuthCopy.Key.settings.rawValue).firstMatch, in: app)
         XCTAssertTrue(signOut.waitForExistence(timeout: 10))
         activate(signOut, in: app)
         activate(app.descendants(matching: .any)["logout.confirm"], in: app)

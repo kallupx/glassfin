@@ -37,6 +37,8 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case tabLibraries = "design.tab.libraries"
     case tabSearch = "design.tab.search"
     case tabSettings = "design.tab.settings"
+    case settingsVersion = "settings.version"
+    case settingsVersionUnavailable = "settings.versionUnavailable"
     case seasonPicker = "design.season.picker"
     case rowPrimary = "design.row.primary"
     case rowPosters = "design.row.posters"
@@ -81,6 +83,8 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .tabLibraries: LocalizedStringResource("design.tab.libraries", bundle: .main)
         case .tabSearch: LocalizedStringResource("design.tab.search", bundle: .main)
         case .tabSettings: LocalizedStringResource("design.tab.settings", bundle: .main)
+        case .settingsVersion: LocalizedStringResource("settings.version", bundle: .main)
+        case .settingsVersionUnavailable: LocalizedStringResource("settings.versionUnavailable", bundle: .main)
         case .seasonPicker: LocalizedStringResource("design.season.picker", bundle: .main)
         case .rowPrimary: LocalizedStringResource("design.row.primary", bundle: .main)
         case .rowPosters: LocalizedStringResource("design.row.posters", bundle: .main)

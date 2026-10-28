@@ -6,6 +6,7 @@ struct AuthRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
+    @State private var selectedTab = "home"
 
     var body: some View {
         ZStack {
@@ -29,6 +30,10 @@ struct AuthRootView: View {
             if phase == .active { Task { await flow.sceneBecameActive() } }
         }
         .onChange(of: flow.appPhase) { _, _ in
+            switch flow.appPhase {
+            case .signedIn: break
+            default: selectedTab = "home"
+            }
             Task { await flow.synchronizeSession() }
         }
     }
@@ -269,8 +274,8 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        TabView {
-            Tab(AuthCopy.localized(.home), systemImage: "house") {
+        TabView(selection: $selectedTab) {
+            Tab(AuthCopy.localized(.home), systemImage: "house", value: "home") {
                 VStack(spacing: 16) {
                     Text(verbatim: AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
                     if let key = flow.bannerKey {
@@ -288,21 +293,10 @@ struct AuthRootView: View {
                     }
                 }
                 .defaultFocus($focused, flow.focus)
+                .onAppear { flow.settingsApp.currentView = nil }
             }
-            Tab(AuthCopy.localized(.settings), systemImage: "gear") {
-                VStack(spacing: 16) {
-                    Text(verbatim: flow.displayedName)
-                        .accessibilityIdentifier("settings.serverName")
-                    Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
-                        .accessibilityIdentifier("settings.signOut")
-                    Text(
-                        verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                            ?? ""
-                    )
-                    .accessibilityIdentifier("settings.version")
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("settings.root")
+            Tab(AuthCopy.localized(.settings), systemImage: "gear", value: "settings") {
+                SettingsView(flow: flow)
             }
         }
     }
@@ -311,12 +305,17 @@ struct AuthRootView: View {
         VStack(spacing: 16) {
             Text(verbatim: AuthCopy.localized(.signOutConfirm))
                 .accessibilityIdentifier("logout.root")
-            Button(AuthCopy.localized(.signOut)) { Task { await flow.confirmLogout() } }
+            Button(AuthCopy.localized(.signOut), role: .destructive) { Task { await flow.confirmLogout() } }
+                .buttonStyle(.glass)
+                .disabled(flow.isSigningOut)
                 .accessibilityIdentifier("logout.confirm")
             Button(AuthCopy.localized(.cancel)) { flow.cancelLogout() }
+                .buttonStyle(.glassProminent)
+                .disabled(flow.isSigningOut)
                 .accessibilityIdentifier("logout.cancel")
                 .focused($focused, equals: .cancel)
         }
+        .onAppear { focused = .cancel }
     }
 
     private var backButton: some View {
