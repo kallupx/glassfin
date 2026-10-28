@@ -20,13 +20,15 @@ public struct PlaybackAPI: Sendable, CurrentUserProbing {
     }
 
     public func playbackInfo(
-        itemID: String, userID: String, start: Duration, maxBitrate: Int, enableDirectPlay: Bool = true
+        itemID: String, userID: String, start: Duration, maxBitrate: Int, enableDirectPlay: Bool = true,
+        audioStreamIndex: Int? = nil, subtitleStreamIndex: Int = -1
     ) async throws(APIError) -> PlaybackInfoResponseDTO {
         let item = try ItemID.require(itemID).value
         let body = PlaybackInfoBody(
             UserId: try ItemID.require(userID).value,
             StartTimeTicks: Ticks.outboundPositionTicks(from: start),
-            MaxStreamingBitrate: max(1, maxBitrate), EnableDirectPlay: enableDirectPlay
+            MaxStreamingBitrate: max(1, maxBitrate), EnableDirectPlay: enableDirectPlay,
+            AudioStreamIndex: audioStreamIndex, SubtitleStreamIndex: subtitleStreamIndex
         )
         return try await client.send(
             APIRequest(method: "POST", path: "/Items/\(item)/PlaybackInfo", body: try Self.encode(body)),
@@ -54,5 +56,6 @@ private struct PlaybackInfoBody: Encodable {
     let AllowVideoStreamCopy = true
     let AllowAudioStreamCopy = true
     // Avoid the user's default forced/burn-in subtitle selection in this PoC.
-    let SubtitleStreamIndex = -1
+    let AudioStreamIndex: Int?
+    let SubtitleStreamIndex: Int
 }

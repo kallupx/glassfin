@@ -5,6 +5,7 @@ struct SeriesEpisodeSection: View {
     let model: SeriesViewModel
     let session: LibrarySession
     var focus: FocusState<SeriesFocus?>.Binding
+    var onPlay: ((MediaItem) -> Void)? = nil
     @Namespace private var glassNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,7 +25,7 @@ struct SeriesEpisodeSection: View {
             switch value {
             case .season(let id): model.focusSeason(id)
             case .episode(let id): model.focusEpisode(id)
-            case .play, nil: break
+            case .play, .startOver, nil: break
             }
         }
         .onChange(of: model.focus) { _, value in
@@ -88,11 +89,16 @@ struct SeriesEpisodeSection: View {
                     LazyHStack(spacing: CardMetrics.spacing) {
                         ForEach(model.episodes.value ?? []) { episode in
                             if let id = ItemID(episode.id) {
-                                NavigationLink(value: id) {
-                                    LibraryMediaCardFace(
-                                        item: titled(session.actions.visible(episode)),
-                                        focused: focus.wrappedValue == .episode(episode.id), session: session,
-                                        style: .landscape)
+                                Group {
+                                    if let onPlay {
+                                        Button {
+                                            onPlay(session.actions.visible(episode))
+                                        } label: {
+                                            episodeFace(episode)
+                                        }
+                                    } else {
+                                        NavigationLink(value: id) { episodeFace(episode) }
+                                    }
                                 }
                                 .posterButtonStyle()
                                 .focused(focus, equals: .episode(episode.id))
@@ -119,6 +125,12 @@ struct SeriesEpisodeSection: View {
             .defaultFocus(focus, model.preferredEpisodeID.map { SeriesFocus.episode($0) }, priority: .userInitiated)
             .accessibilityIdentifier("series.episodes")
         }
+    }
+
+    private func episodeFace(_ episode: MediaItem) -> some View {
+        LibraryMediaCardFace(
+            item: titled(session.actions.visible(episode)), focused: focus.wrappedValue == .episode(episode.id),
+            session: session, style: .landscape)
     }
 
     private func scroll(_ proxy: ScrollViewProxy) {

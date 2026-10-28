@@ -4,45 +4,45 @@
     import SwiftUI
     import UIKit
 
-    /// M07 can present this view after calling `coordinator.play(itemID:choice:)`.
     struct PlaybackView: View {
         let coordinator: PlaybackCoordinator
-        let engine: AVPlayerEngine
-        @Environment(\.dismiss) private var dismiss
+        let onClose: @MainActor () -> Void
 
         var body: some View {
             ZStack {
-                NativePlaybackView(player: engine.player, coordinator: coordinator)
-                if coordinator.state == .loading || coordinator.state == .buffering {
-                    ProgressView()
+                ContentPaint.scrim
+                if let key = failureKey {
+                    PlaybackErrorView(messageKey: key, onClose: onClose)
+                } else {
+                    NativePlaybackView(player: (coordinator.engine as? AVPlayerEngine)?.player, onClose: onClose)
+                    if coordinator.state == .loading || coordinator.state == .buffering { ProgressView() }
+                    #if DEBUG
+                        if coordinator.engine is MockPlaybackEngine {
+                            Button(PlaybackCopy.message(for: PlaybackCopy.okKey), action: onClose)
+                                .accessibilityIdentifier("home.playback.close")
+                        }
+                    #endif
+                    #if os(iOS)
+                        VStack {
+                            HStack {
+                                Button(PlaybackCopy.message(for: PlaybackCopy.okKey), action: onClose)
+                                    .accessibilityIdentifier("playback.close")
+                                Spacer()
+                            }
+                            Spacer()
+                        }.padding()
+                    #endif
                 }
             }
             .ignoresSafeArea()
-            .alert(
-                PlaybackCopy.message(for: failureKey ?? PlaybackCopy.couldNotPlayKey),
-                isPresented: Binding(
-                    get: { failureKey != nil },
-                    set: { if !$0 { dismiss() } }
-                )
-            ) {
-                // keyboardShortcut is unavailable on tvOS; the Siri Remote select
-                // button already activates the focused alert action there.
-                #if os(tvOS)
-                    Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
-                #else
-                    Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
-                        .keyboardShortcut(.defaultAction)
-                #endif
-            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("playback.root")
             .onChange(of: coordinator.state) { _, state in
-                if state == .ended || state == .sessionExpired { dismiss() }
+                if state == .ended || state == .sessionExpired { onClose() }
             }
             #if os(tvOS)
-                .onExitCommand { dismiss() }
+                .onExitCommand(perform: onClose)
             #endif
-            .onDisappear {
-                Task { await coordinator.stop() }
-            }
         }
 
         private var failureKey: String? {
@@ -51,11 +51,26 @@
         }
     }
 
+    struct PlaybackErrorView: View {
+        let messageKey: String
+        let onClose: @MainActor () -> Void
+
+        var body: some View {
+            VStack(spacing: SpacingToken.l) {
+                Text(verbatim: PlaybackCopy.message(for: messageKey))
+                    .accessibilityIdentifier("playback.error")
+                Button(PlaybackCopy.message(for: PlaybackCopy.okKey), action: onClose)
+                    .buttonStyle(.glassProminent)
+                    .accessibilityIdentifier("playback.close")
+            }
+        }
+    }
+
     private struct NativePlaybackView: UIViewControllerRepresentable {
         let player: AVPlayer?
-        let coordinator: PlaybackCoordinator
+        let onClose: @MainActor () -> Void
 
-        func makeCoordinator() -> DismissalHandler { DismissalHandler(playback: coordinator) }
+        func makeCoordinator() -> DismissalHandler { DismissalHandler(onClose: onClose) }
 
         func makeUIViewController(context: Context) -> AVPlayerViewController {
             let controller = AVPlayerViewController()
@@ -73,17 +88,17 @@
 
         static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: DismissalHandler) {
             controller.player = nil
-            Task { await coordinator.playback.stop() }
         }
 
         @MainActor
         final class DismissalHandler: NSObject, AVPlayerViewControllerDelegate {
-            let playback: PlaybackCoordinator
-            init(playback: PlaybackCoordinator) { self.playback = playback }
+            let onClose: @MainActor () -> Void
+            init(onClose: @escaping @MainActor () -> Void) { self.onClose = onClose }
 
             #if os(tvOS)
-                func playerViewControllerWillDismiss(_ playerViewController: AVPlayerViewController) {
-                    Task { await playback.stop() }
+                func playerViewControllerShouldDismiss(_ playerViewController: AVPlayerViewController) -> Bool {
+                    onClose()
+                    return false
                 }
             #endif
         }
