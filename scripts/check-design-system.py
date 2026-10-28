@@ -48,6 +48,10 @@ ONLY_IN = {
     "Color.white": "Tokens.swift",
     "Color.black": "Tokens.swift",
 }
+# M04 owns its authentication surface; preserve main's glass and background.
+MODULE_EXCEPTIONS = {
+    ROOT / "Apps/Shared/Sources/AuthRootView.swift": {"glassEffect(", "Color.black"},
+}
 IDENTIFIER = re.compile(r'accessibilityIdentifier\(\s*"([^"\\]+)"\s*\)')
 IDENTIFIER_SHAPE = re.compile(r"^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)+$")
 FINNISH = re.compile(r"[äöåÄÖÅ]")
@@ -110,7 +114,7 @@ def main() -> int:
             if pattern.search(text):
                 errors.append(f"{relative}: {message} (T05-03/T05-04/T05-05)")
         for needle, allowed in ONLY_IN.items():
-            if needle in text and path.name != allowed:
+            if needle in text and path.name != allowed and needle not in MODULE_EXCEPTIONS.get(path, set()):
                 errors.append(f"{relative}: {needle} is only allowed in {allowed}")
 
     banner = (ROOT / "Apps/Shared/Sources/DesignSystem/GlassBanner.swift").read_text(encoding="utf-8")
