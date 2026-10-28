@@ -7,6 +7,8 @@ struct PlaybackReportContext: Sendable {
     let mediaSourceID: String
     let playSessionID: String
     let method: PlayMethod
+    var audioStreamIndex: Int? = nil
+    var subtitleStreamIndex: Int? = nil
 }
 
 /// Serializes reports across actor reentrancy so Stopped cannot overtake Playing or Progress.
@@ -31,7 +33,8 @@ actor PlaybackReporter {
                 ItemId: context.itemID, MediaSourceId: context.mediaSourceID,
                 PlaySessionId: context.playSessionID, PlayMethod: context.method.reportValue,
                 PositionTicks: Ticks.outboundPositionTicks(from: position), IsPaused: paused,
-                CanSeek: canSeek, Failed: failed
+                CanSeek: canSeek, Failed: failed,
+                AudioStreamIndex: context.audioStreamIndex, SubtitleStreamIndex: context.subtitleStreamIndex
             )
             for attempt in 0...1 {
                 do {
@@ -69,10 +72,12 @@ private struct PlaybackReportBody: Encodable {
     let IsPaused: Bool
     let CanSeek: Bool
     let Failed: Bool
+    let AudioStreamIndex: Int?
+    let SubtitleStreamIndex: Int?
 }
 
 extension PlayMethod {
-    var reportValue: String {
+    public var reportValue: String {
         switch self {
         case .directPlay: "DirectPlay"
         case .directStream: "DirectStream"
