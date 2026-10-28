@@ -253,6 +253,7 @@ struct LibraryDetailActions: View {
     let session: LibrarySession
     var onPlay: (Bool) -> Void
     var focus: FocusState<SeriesFocus?>.Binding
+    @State private var offersStartOver = false
 
     private var hasProgress: Bool { (target?.userData.playbackPosition ?? .zero) > .zero }
     private var title: String {
@@ -287,6 +288,10 @@ struct LibraryDetailActions: View {
         .designFocusSection()
         .defaultFocus(focus, Optional(.play))
         .onAppear { if focus.wrappedValue == nil { focus.wrappedValue = .play } }
+        .onChange(of: hasProgress, initial: true) { _, hasProgress in
+            // A reset to zero must not remove the action while the player owns focus.
+            if hasProgress { offersStartOver = true }
+        }
     }
 
     private var actions: some View {
@@ -301,7 +306,7 @@ struct LibraryDetailActions: View {
             #if DEBUG
                 .accessibilityValue(playKey.rawValue)
             #endif
-            if hasProgress || focus.wrappedValue == .startOver {
+            if hasProgress || offersStartOver {
                 Button {
                     onPlay(true)
                 } label: {

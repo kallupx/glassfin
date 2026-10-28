@@ -42,10 +42,6 @@ struct PlaybackPresentationHost<Content: View>: View {
                         if let stop { librarySession?.playbackDidEnd(itemID: stop.itemID, finished: stop.finished) }
                         presentation = nil
                     }
-                    // Retain the Home automation container while exposing the player's own root.
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("home.playback")
-                    .accessibilityValue(String(value.request.startTicks))
                 })
     }
 
@@ -71,18 +67,20 @@ private struct PlaybackDestination: View {
     @State private var closing = false
 
     var body: some View {
-        Group {
+        ZStack {
             if let coordinator {
-                PlaybackView(coordinator: coordinator, onClose: close)
+                PlaybackView(coordinator: coordinator, startTicks: request.startTicks, onClose: close)
             } else if failed {
                 PlaybackErrorView(messageKey: PlaybackCopy.couldNotPlayKey, onClose: close)
-                    .accessibilityIdentifier("playback.root")
             } else {
-                ProgressView().accessibilityIdentifier("playback.root")
+                ProgressView()
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("playback.root")
         .interactiveDismissDisabled()
         .task {
+            guard coordinator == nil, !failed, !closing else { return }
             do {
                 let value = try makeCoordinator()
                 coordinator = value

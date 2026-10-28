@@ -6,6 +6,7 @@
 
     struct PlaybackView: View {
         let coordinator: PlaybackCoordinator
+        let startTicks: Int64
         let onClose: @MainActor () -> Void
 
         var body: some View {
@@ -16,7 +17,12 @@
                 } else {
                     NativePlaybackView(
                         player: (coordinator.engine as? AVPlayerEngine)?.player,
-                        trackMenuItems: PlaybackTrackMenus.items(playback: coordinator), onClose: onClose)
+                        trackMenuItems: PlaybackTrackMenus.items(playback: coordinator), onClose: onClose
+                    )
+                    // Keep Home's media-surface identifier on its own accessibility container.
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("home.playback")
+                    .accessibilityValue(String(startTicks))
                     PlaybackSubtitleOverlay(playback: coordinator)
                     if coordinator.state == .loading || coordinator.state == .buffering { ProgressView() }
                     #if DEBUG
@@ -38,8 +44,6 @@
                 }
             }
             .ignoresSafeArea()
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("playback.root")
             .onChange(of: coordinator.state) { _, state in
                 if state == .ended || state == .sessionExpired { onClose() }
             }
