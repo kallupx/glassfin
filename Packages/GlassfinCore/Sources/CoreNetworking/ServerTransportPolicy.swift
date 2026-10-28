@@ -10,15 +10,23 @@ public enum ServerTransportPolicy {
         case invalid
     }
 
-    public static let unencryptedWarningKey = "This connection is not encrypted"
-    public static let publicAddressRequiresHTTPSKey = "Public addresses require HTTPS"
+    public static var unencryptedWarningKey: String { AuthCopy.Key.connectionNotEncrypted.rawValue }
+    public static var publicAddressRequiresHTTPSKey: String { AuthCopy.Key.publicAddressRequiresHTTPS.rawValue }
 
     public static var unencryptedWarning: String {
-        localizedString(unencryptedWarningKey)
+        AuthCopy.localized(.connectionNotEncrypted)
     }
 
     public static var publicAddressRequiresHTTPS: String {
-        localizedString(publicAddressRequiresHTTPSKey)
+        AuthCopy.localized(.publicAddressRequiresHTTPS)
+    }
+
+    public static func messageKey(for verdict: Verdict) -> AuthCopy.Key? {
+        switch verdict {
+        case .unencryptedLocal: .connectionNotEncrypted
+        case .publicHTTPRejected: .publicAddressRequiresHTTPS
+        case .secure, .invalid: nil
+        }
     }
 
     public static func evaluate(_ url: URL) -> Verdict {
@@ -35,18 +43,6 @@ public enum ServerTransportPolicy {
         evaluate(url) == .unencryptedLocal
     }
 
-    /// Catalog key for the verdict's message, or nil when no message should be shown.
-    public static func messageKey(for verdict: Verdict) -> String? {
-        switch verdict {
-        case .unencryptedLocal:
-            return unencryptedWarningKey
-        case .publicHTTPRejected:
-            return publicAddressRequiresHTTPSKey
-        case .secure, .invalid:
-            return nil
-        }
-    }
-
     public static func message(for verdict: Verdict) -> String? {
         switch verdict {
         case .unencryptedLocal:
@@ -61,10 +57,7 @@ public enum ServerTransportPolicy {
     public static func badge(for url: URL) -> ServerSecurityBadge {
         let verdict = evaluate(url)
         return ServerSecurityBadge(
-            showsUnencryptedMark: verdict == .unencryptedLocal,
-            message: message(for: verdict),
-            messageKey: messageKey(for: verdict)
-        )
+            showsUnencryptedMark: verdict == .unencryptedLocal, messageKey: messageKey(for: verdict))
     }
 
     enum HostClass: Sendable, Equatable {
@@ -253,18 +246,17 @@ public enum ServerTransportPolicy {
 
 public struct ServerSecurityBadge: Sendable, Equatable {
     public var showsUnencryptedMark: Bool
-    public var message: String?
-    /// Catalog key for `message`, or nil when no catalog message is associated with the badge.
-    public var messageKey: String?
+    public var messageKey: AuthCopy.Key?
 
-    public init(showsUnencryptedMark: Bool, message: String?, messageKey: String? = nil) {
+    public var message: String? { messageKey.map(AuthCopy.localized) }
+
+    public init(showsUnencryptedMark: Bool, messageKey: AuthCopy.Key?) {
         self.showsUnencryptedMark = showsUnencryptedMark
-        self.message = message
         self.messageKey = messageKey
     }
 }
 
-/// S4.5. http(s) only, userinfo removed, dot segments collapsed, credential queries dropped.
+/// S4.5. http(s) only, userinfo rejected, dot segments collapsed, query and fragment removed.
 public enum ServerAddress {
     public static func canonical(_ raw: URL) throws -> URL {
         let normalized = try ServerURLNormalizer.normalize(raw)
@@ -272,10 +264,7 @@ public enum ServerAddress {
             throw APIError.invalidURL
         }
         components.fragment = nil
-        if let items = components.queryItems {
-            let kept = items.filter { !RedirectPolicy.isCredentialQueryName($0.name) }
-            components.queryItems = kept.isEmpty ? nil : kept
-        }
+        components.query = nil
         components.path = normalizePath(components.path)
         guard let url = components.url, url.host != nil else { throw APIError.invalidURL }
         return url
