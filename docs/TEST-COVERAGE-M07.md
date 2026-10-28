@@ -397,6 +397,24 @@ iOS. No inherited M05 or upstream-main defect requires a separate repair.
   all three iOS design-system UI tests passed. The app suite records fourteen
   passed tests and the single Settings failure described above.
 
+### Other jobs and final run status
+
+Lint, `full-ui`, and `dependabot-macos` passed. The completed `full-ui` job
+(`122646096541`) passed all 38 tvOS UI tests, including T04-03, T04-68, and
+the thirteen M07 UI tests.
+
+The separate `test-tvos` job (`122646096716`) was cancelled at 05:44:46 UTC
+after the remote branch advanced to the M05 merge commit `7fffedc` and started
+run `40639689209`. Its API conclusion is `cancelled`; the only error line is
+`The operation was canceled.` Its final logs and uploaded `tvos-results`
+artifact show a successful Release build and binary scan, successful package
+tests (including both image-stream cancellation tests), and a passed T04-03.
+Cancellation interrupts T04-68 before a result, with no compiler error or
+failing test reported. This is workflow-concurrency cancellation, not a
+twenty-five-minute timeout or evidence of another code defect. The original
+run's final overall conclusion is therefore `cancelled`, while its completed
+iOS job retains the real Settings failure diagnosed above.
+
 ### Merge and test-change audit
 
 After `git fetch origin`, main remained at `d720120`, already an ancestor.
