@@ -127,7 +127,7 @@ struct SearchView: View {
                     .accessibilityIdentifier("search.historyFailure")
             }
         }
-        .focusSection()
+        .designFocusSection()
     }
 }
 
@@ -202,7 +202,7 @@ private struct SearchResultRow: View {
                 }
             }
         }
-        .focusSection()
+        .designFocusSection()
         .defaultFocus($focus, rememberedID ?? group.items.first?.id, priority: .userInitiated)
         .onChange(of: focus) { _, value in
             if let value {
