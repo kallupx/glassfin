@@ -2,7 +2,7 @@ import GlassfinCore
 import SwiftUI
 
 #if DEBUG
-    import Darwin
+    import notify
 #endif
 
 struct AuthRootView: View {

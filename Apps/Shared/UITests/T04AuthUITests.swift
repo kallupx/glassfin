@@ -1,6 +1,6 @@
 import CoreModels
-import Darwin
 import XCTest
+import notify
 
 @MainActor
 final class T04AuthUITests: XCTestCase {

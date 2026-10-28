@@ -176,6 +176,71 @@ xcodebuild test -scheme Glassfin-iOS \
   CODE_SIGNING_ALLOWED=NO
 ```
 
+## CI run 40636959982 investigation
+
+The [run at head 88acbdc](https://github.com/kallupx/glassfin/actions/runs/40636959982)
+fails all three Apple jobs during compilation of the DEBUG app. Complete job logs
+were downloaded through `gh api repos/kallupx/glassfin/actions/jobs/<id>/logs
+--allow-escape-sequences`, rather than the truncated `gh run view --log-failed`
+output:
+
+| Job | Complete-log evidence (UTC) | Root cause |
+| --- | --- | --- |
+| [full-ui](https://github.com/kallupx/glassfin/actions/runs/40636959982/job/122646533906) | First error at 05:40:44; `TEST FAILED` at 05:40:44; exit 65 at 05:40:47 | Missing `notify` module import in AuthRootView.swift |
+| [test-ios](https://github.com/kallupx/glassfin/actions/runs/40636959982/job/122646533921) | First error at 05:47:06; `TEST FAILED` at 05:47:06; exit 65 at 05:47:10 | Same missing import |
+| [test-tvos](https://github.com/kallupx/glassfin/actions/runs/40636959982/job/122646533956) | First error at 05:45:20; `TEST FAILED` at 05:45:20; exit 65 at 05:45:26 | Same missing import |
+
+Each job reports that `notify_register_check`, `notify_cancel`, `notify_get_state`,
+and `NOTIFY_STATUS_OK` cannot be found at AuthRootView.swift lines 423, 427, and
+433, then cancels testing because the build failed. Release builds and binary
+scans passed, as did package tests, including all seven T10SettingsTests. No app
+UI cases ran. None of the complete logs contains `Undefined symbols`,
+`linker command failed`, a failed test case, or a job-timeout failure. These are
+compile failures introduced by M10 CI commit `88acbdc`, not the M05 NIO link issue
+and not pure CI flakes. The earlier Quick Connect timing race originated in
+M04/main; the incorrect import in its synchronization fix belongs to M10.
+
+Apple's [Libnotify module map](https://github.com/apple-oss-distributions/Libnotify/blob/main/notify.modulemap)
+declares a separate `notify` module for notify.h. Replace `import Darwin` with
+`import notify` in the DEBUG app fixture and its UI test. The test needs the same
+import for registration, cancellation, setting approval, and the status constant;
+its compilation was masked by the app failure. The approval protocol, existing
+assertions, screenshots, and timeouts remain unchanged. The app import remains
+inside `#if DEBUG`, so Release does not gain the fixture.
+
+M09 [b7f8e86's run 40636754620](https://github.com/kallupx/glassfin/actions/runs/40636754620)
+passed full-ui, test-ios, and test-tvos. Its
+[tvOS log](https://github.com/kallupx/glassfin/actions/runs/40636754620/job/122645923067)
+uses the same Swift 6.4 build `swiftlang-6.4.0.34.1` and Xcode 27.1 as M10, and
+records T04-03 passing at 05:31:29 followed by `TEST SUCCEEDED`. Comparing sources
+shows that M09 does not contain the notification synchronization added by
+`88acbdc`; the green run therefore does not exercise this missing import.
+
+After `git fetch origin`, main `d720120` was already an ancestor. M05 `79feaa0`
+was merged with a merge commit. Its project.yml is taken verbatim, enabling the
+hosted logic/snapshot targets from `b8c6349` while retaining `79feaa0`'s removal
+of their duplicate GlassfinCore package dependency. The original failing M10
+head had no hosted unit-test targets, so that M05 link regression was absent.
+The merge also imports M05's ci-path-filter.py update verbatim so shared app and
+project changes select iOS CI. No workflow or Info.plist changes are made.
+
+Validation after the merge and import correction: 436 Linux package tests,
+seven existing external-server skips, zero failures, and 92.53% line coverage
+(7363/7957 lines). All requested strict swift-format, design-system, String
+Catalog, DEBUG-only string, and ci-grep checks passed. project.yml matches M05
+`79feaa0` exactly.
+
+Test/assertion changes for this investigation: the import in T04AuthUITests.swift
+must change to compile the existing notification calls. No test bodies,
+assertions, screenshots, or timeouts are changed, added, or removed; no existing
+test sources change through the M05 merge. Earlier T04-03 synchronization and
+T04-68 changes documented above remain in place.
+
+Linux cannot compile Apple's `notify` module, link the hosted bundles, or run
+simulator tests. On macOS, run `bash scripts/macos-ci.sh iOS` and
+`bash scripts/macos-ci.sh tvOS` for the same Release scans, package checks, and
+complete app suites used by these jobs. A green Apple CI rerun remains required.
+
 ## tvOS simulator verification
 
 On a Mac with the project's Xcode and a tvOS 26+ simulator:
@@ -189,10 +254,10 @@ xcodebuild test -scheme Glassfin-tvOS \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-Main's project.yml does not define the hosted Glassfin-tvOSTests or
-Glassfin-iOSTests targets. Their logic/snapshot test sources are retained, but
-they will not run through the generated app schemes until M05's project setup is
-integrated separately. No project changes are made here.
+The merged M05 project.yml defines Glassfin-tvOSUnitTests and
+Glassfin-iOSUnitTests and includes them in the corresponding app schemes.
+Their logic/snapshot sources, including T10SettingsLogicTests, run alongside
+the UI tests when invoking the complete schemes.
 
 The UI tests use the existing DEBUG-only M04 mock launch path and Siri Remote
 helpers. Screenshot attachments show Settings, confirmation, and the sign-out /
