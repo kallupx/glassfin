@@ -2,6 +2,7 @@
 # T01-20 and T01-30 against throwaway jellyfin/jellyfin containers.
 # Pins are the OCI index digests of tags 10.10.7, 10.11.11, and 12.2.
 # Usage: scripts/docker-integration.sh [version ...]
+# GLASSFIN_HLS_PROBE_ARGS: whitespace-separated probe flags (no shell evaluation).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -x /opt/swift/usr/bin/swift ]]; then
@@ -67,6 +68,8 @@ cleanup() {
 trap cleanup EXIT
 
 results=()
+probe_args=()
+read -r -a probe_args <<< "${GLASSFIN_HLS_PROBE_ARGS:-}"
 for version in "${versions[@]}"; do
   image="${images[$version]:-}"
   if [[ -z "$image" ]]; then
@@ -122,12 +125,18 @@ PY
     GLASSFIN_USERNAME="$(tr -d '\n' < "$username_file")"
     export GLASSFIN_USERNAME
   fi
+  echo "docker-integration: probing HLS segment authentication for $version"
+  set +e
+  python3 -u "$root/scripts/probe_hls_segment_auth.py" "${probe_args[@]}"
+  probe_status=$?
+  set -e
+  results+=("$version hls-probe $probe_status")
   echo "docker-integration: testing $version"
   set +e
   run_tests
   status=$?
   set -e
-  results+=("$version $status")
+  results+=("$version tests $status")
   "${docker_cmd[@]}" rm -f "$container" >/dev/null
   container=""
   sudo rm -rf "$work"
