@@ -79,6 +79,21 @@ Linux tests run in GlassfinCore. Apple UI and ImageIO tests are present but cann
 
 ## Validation
 
+2026-10-28, keyboard-container follow-up for head `b0be7a5`: fetched origin; main `d720120` and M05 `d2d780b` are already ancestors, so no new merge is needed. Main's workflows, project.yml and app Info.plists still match exactly.
+
+Run [40633679965](https://github.com/kallupx/glassfin/actions/runs/40633679965) introduces a new M09 test-helper regression, superseding the previous validation's key-focus assumption:
+
+- [full-ui, job 122636093060](https://github.com/kallupx/glassfin/actions/runs/40633679965/job/122636093060): all six search UI cases (T09-07, T09-11, T09-29, T09-33, T09-37 and T09-53) fail at the helper's first typing call with `Search keyboard did not receive focus before typing`. The first case takes 30.606 seconds; the job's test step exits 65 after 20 minutes 52 seconds, within the 25-minute job limit.
+- [test-tvos, job 122636093066](https://github.com/kallupx/glassfin/actions/runs/40633679965/job/122636093066): the same six cases fail at the same guard. The first case takes 27.047 seconds; the test step exits 65 after 20 minutes 44 seconds, within the same limit.
+
+Both exported `xcresult-tests.json` files contain 31 leaf test cases: six search failures and 25 passes. The Release build, Release binary scan and package tests pass in both jobs. Missing text/results and subsequent runner restarts follow the rejected typing operation; these are not compile failures, job timeouts or evidence of a pure CI flake. T09-53 still fails, but it never reaches its original post-detail Delete operation in this run. No M05 or upstream main fix is required.
+
+The T09-07 accessibility hierarchies in the downloadable artifacts (`full-ui-results/readable/screenshots/0C0E47EF-BDD0-4A64-88BD-E3058AA09B08.txt` and `tvos-results/readable/screenshots/640CD53D-00E4-4B33-AE1D-AB022E57F15E.txt`) show the search field as `Keyboard Focused` and the `Keyboard` container as `Focused`, with **no focused Key descendants**. Waiting for a focused key can therefore never recognize this ready input state, even after 24 Up presses.
+
+Unavoidable test-helper change: only the tvOS branch of `typeSearchText` in `Apps/Shared/UITests/T09SearchUITests.swift`. Check the keyboard container's `hasFocus`, and use [XCUIElement.wait(for:toEqual:timeout:)](https://developer.apple.com/documentation/xcuiautomation/xcuielement/wait(for:toequal:timeout:)) to wait up to one second for focus after each Up press. The existing 24-press bound and failure guard remain. Every scenario assertion and existing scenario timeout is unchanged; there are no new tests, sleeps, production changes, UI strings or upstream patches.
+
+With `LD_LIBRARY_PATH=~/.local/lib/swiftcompat` and the swiftly environment sourced, the requested Linux coverage gate passes: **489 tests**, **9 opt-in live-server skips**, no failures, **92.38%** line coverage (8178/8853). Strict `swift-format lint --recursive --strict Package.swift Sources Tests ../../Apps`, the design-system, string-catalog, debug-only-string and ci-grep checks, and `git diff --check` pass. On macOS, run `bash scripts/macos-ci.sh tvOS` to exercise the corrected helper, including T09-37 focus restoration and T09-53 post-detail clearing. Apple SDKs and simulators are unavailable on this Linux host, so a green Apple UI run is not claimed. Live-server and physical-device limits above remain.
+
 2026-10-28, stack base v6: merged main `d720120` with merge commit `19d3b3a` (`Merge main d720120 (stack base v6)`). M05 `d2d780b` was already an ancestor; its remote branch had no newer commits. Main's workflows, project.yml and app Info.plists are retained exactly.
 
 Run [40627723371](https://github.com/kallupx/glassfin/actions/runs/40627723371), head `03202ed`, has the same M09 test-helper failure in both failed jobs:

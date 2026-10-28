@@ -118,15 +118,14 @@ final class T09SearchUITests: XCTestCase {
                 XCTFail("Search keyboard did not appear", file: file, line: line)
                 return
             }
-            // Returning from detail restores the result card, so a visible keyboard
-            // does not imply the search field can receive text yet.
-            let focusedKey = keyboard.descendants(matching: .key)
-                .matching(NSPredicate(format: "hasFocus == true")).firstMatch
+            // The inline keyboard container owns tvOS focus; its individual keys do not.
+            // Returning from detail restores the result card, so visibility is not enough.
             for _ in 0..<24 {
-                if focusedKey.exists { break }
+                if keyboard.hasFocus { break }
                 XCUIRemote.shared.press(.up)
+                if keyboard.wait(for: \.hasFocus, toEqual: true, timeout: 1) { break }
             }
-            guard focusedKey.exists else {
+            guard keyboard.hasFocus else {
                 XCTFail("Search keyboard did not receive focus before typing", file: file, line: line)
                 return
             }
