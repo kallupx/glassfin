@@ -200,7 +200,10 @@ final class T02BehaviorTests: XCTestCase {
             let latest = [Sample.movie(id: Sample.season, name: "Latest")]
             let home = harness.home()
             if cached {
-                XCTAssertTrue(harness.app.snapshots.save(HomeSnapshot(resume: resume, nextUp: next, latest: latest)))
+                var snapshot = HomeSnapshot(resume: resume, nextUp: next, latest: latest)
+                snapshot.libraries = [Library(id: Sample.library, name: "Library")]
+                snapshot.latestByLibrary = [Sample.library: latest]
+                XCTAssertTrue(harness.app.snapshots.save(snapshot))
             } else {
                 harness.library.resumeItems = resume
                 harness.library.nextItems = next
@@ -647,14 +650,18 @@ final class T02BehaviorTests: XCTestCase {
         defer { harness.cleanup() }
         try harness.signIn()
         harness.library.gate = ResumeGate()
+        harness.library.latestGate = harness.library.gate
         harness.library.resumeItems = [Sample.movie()]
         harness.library.latestByID[Sample.library] = .success([Sample.movie(id: Sample.other, name: "Latest")])
         let home = harness.home()
         home.start(libraryIDs: [Sample.library, "not-a-guid"], coldStart: true)
         await waitUntil { home.resume.isLoading }
+        await waitUntil { harness.library.gate?.waiting() == 2 }
         XCTAssertEqual(ended(harness.signposter.snapshot(), .coldStartHomeFirstRow), 0)
         harness.library.gate?.releaseAll()
         await waitUntil { ended(harness.signposter.snapshot(), .coldStartHomeFirstRow) == 1 }
+        await waitUntil { ended(harness.signposter.snapshot(), .homeSectionsLoaded) == 1 }
+        XCTAssertEqual(ended(harness.signposter.snapshot(), .coldStartHomeFirstRow), 1)
         XCTAssertEqual(home.latest.value?.first?.name, "Latest")
         XCTAssertEqual(harness.library.latestIdentifiers(), [Sample.library])
     }
@@ -954,7 +961,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(played?.played, true)
         XCTAssertFalse(pending)
         await home.refreshFromStore()
-        XCTAssertEqual(home.resume.value?.first?.userData.played, true)
+        XCTAssertEqual(home.resume.value, [])
         XCTAssertEqual(ended(harness.signposter.snapshot(), .watchedStateHome), 1)
 
         harness.library.error = .forbidden

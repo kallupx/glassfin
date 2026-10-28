@@ -170,8 +170,8 @@ def wait_for_scan_ready(token: str) -> None:
     fail("scan worker did not become ready within 180s", token)
 
 
-def add_library(token: str, name: str, collection: str) -> None:
-    path = os.path.join(MEDIA_DIR, name)
+def add_library(token: str, name: str, collection: str, path: str | None = None) -> None:
+    path = path or os.path.join(MEDIA_DIR, name)
     options = {
         "PathInfos": [{"Path": path}], "EnableRealtimeMonitor": False,
         "EnableInternetProviders": False, "EnableAutomaticSeriesGrouping": False,
@@ -314,6 +314,41 @@ def wait_for_scan(token: str) -> None:
     fail(f"library scan did not finish with all probed movies and episodes within 240s; GET /Items HTTP {item_status}; GET /ScheduledTasks HTTP {status}", token)
 
 
+def wait_for_movie(token: str, expected: int = 1, timeout: int = 240) -> None:
+    refresh_library(token)
+    deadline = time.monotonic() + timeout
+    next_scan = time.monotonic() + 15
+    status = 0
+    count = 0
+    while time.monotonic() < deadline:
+        status, raw = request(
+            "GET",
+            "/Items",
+            token=token,
+            query={"Recursive": "true", "IncludeItemTypes": "Movie,Series,Episode",
+                   "Limit": "1", "EnableTotalRecordCount": "true"},
+        )
+        if status == 200:
+            items = decoded(raw)
+            count = (items.get("TotalRecordCount") or 0) if isinstance(items, dict) else 0
+            if count >= expected:
+                print("bootstrap: movie is in the library" if expected == 1
+                      else f"bootstrap: search library ready ({count} items)")
+                return
+        if time.monotonic() >= next_scan:
+            task_status, tasks = scheduled_tasks(token)
+            task = scan_task(tasks) if task_status == 200 else None
+            # 12.2's refresh controller logs exceptions but still returns 204.
+            # Start an idle worker directly if refresh did not discover the movie.
+            if task and task.get("State") == "Idle":
+                task_id = urllib.parse.quote(str(task["Id"]), safe="")
+                started, _ = request("POST", f"/ScheduledTasks/Running/{task_id}", token=token)
+                report(f"start RefreshLibrary task HTTP {started}", token)
+            next_scan = time.monotonic() + 30
+        time.sleep(3)
+    fail(f"library scan incomplete ({count}/{expected}) within {timeout}s; GET /Items HTTP {status}", token)
+
+
 def publish_username(name: str) -> None:
     path = os.environ.get("GLASSFIN_USERNAME_FILE", "")
     if not path:
@@ -367,6 +402,8 @@ def main() -> None:
     parser.add_argument("--server-url", default=os.environ.get("GLASSFIN_SERVER_URL"))
     parser.add_argument("--media-dir", default=os.environ.get("GLASSFIN_SERVER_MEDIA_DIR", "/media"),
                         help="media directory as seen by the server (not the caller)")
+    parser.add_argument("--search-seed", action="store_true",
+                        help="add the M09 benchmark libraries after the playback checks")
     args = parser.parse_args()
     BASE = (args.server_url or env("GLASSFIN_SERVER_URL")).rstrip("/")
     MEDIA_DIR = args.media_dir
@@ -383,6 +420,15 @@ def main() -> None:
     publish_username(username)
     token = authenticate(username)
     wait_for_scan_ready(token)
+    if args.search_seed:
+        add_library(token, "Search Movies", "movies", os.path.join(MEDIA_DIR, "movies"))
+        add_library(token, "Search Shows", "tvshows", os.path.join(MEDIA_DIR, "series"))
+        manifest = os.path.join(os.path.dirname(__file__), "..", "Tests", "Fixtures", "search-seed.json")
+        with open(manifest, encoding="utf-8") as handle:
+            expected = json.load(handle)["expectedSearchableItems"]
+        # The earlier playback fixtures remain available alongside the search seed.
+        wait_for_movie(token, expected=expected + 11, timeout=600)
+        return
     configure_server(token)
     create_test_user(token)
     add_library(token, "Movies", "movies")

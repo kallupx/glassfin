@@ -14,6 +14,6 @@ public enum MetadataPolicy {
 
     /// Clean before truncating by extended grapheme clusters. Markup stays literal.
     public static func clean(_ value: String, limit: Int) -> String {
-        MetadataSanitizer.displayText(value, limit: max(0, limit))
+        MetadataSanitizer.displayText(value, limit: limit)
     }
 }

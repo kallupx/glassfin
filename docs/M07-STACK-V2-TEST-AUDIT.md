@@ -740,3 +740,175 @@ skips; 395 passed. Line coverage is 91.71% (7,581/8,266), above the 80% gate.
 Strict recursive swift-format, design-system lint, String Catalog validation,
 DEBUG-string validation and CI grep all passed. The ten inherited bootstrap
 unit tests passed. Apple UI and snapshot tests were not executed on Linux.
+
+## T07-81: distinguish received bytes from fixture-sent bytes
+
+Applies to `T07ImageTests.testT07_81_lyingContentLengthStreamIsCancelledAtTheCap`
+and `testT07_81_missingContentLengthStreamIsCancelledAtTheCap`, through their
+shared `assertStreamIsCancelled` helper. Test IDs and signatures are unchanged.
+
+Slow CI observed 21,299,200 fixture-sent bytes against the old 21,233,664-byte
+bound (20 MiB + four 64 KiB chunks). Cancellation can reach the fixture one
+chunk later even though the downloader has already rejected the response.
+Producer progress therefore cannot establish the receive-side memory limit.
+
+```diff
+- XCTAssertGreaterThan(count, MetadataPolicy.imageMaxBytes)
+- XCTAssertLessThanOrEqual(count, MetadataPolicy.imageMaxBytes + 4 * ImageStreamProtocol.chunkSize)
++ XCTAssertGreaterThan(received, MetadataPolicy.imageMaxBytes)
++ XCTAssertLessThanOrEqual(received, MetadataPolicy.imageMaxBytes + ImageStreamProtocol.chunkSize)
++ XCTAssertGreaterThan(sent, MetadataPolicy.imageMaxBytes)
++ XCTAssertLessThanOrEqual(sent, MetadataPolicy.imageMaxBytes + 1024 * 1024)
+```
+
+`received` now comes from a lock-protected internal downloader counter. It counts
+the delegate chunks processed before stopping, including the rejecting chunk,
+and excludes callbacks discarded after cancellation. The counter survives buffer
+cleanup so the test can inspect it after the download fails. A test hook is needed
+because the downloader is final, creates its own URLSession delegate, and clears
+its private buffer on completion; fixture-side instrumentation only measures
+sent bytes. The counter observes receipt without changing the production byte
+limit, buffering, or cancellation behavior.
+
+The new strict receive bound is 21,037,056 bytes (20 MiB + one 64 KiB chunk).
+Only the send bound is relaxed, to 22,020,096 bytes (20 MiB + 1 MiB), still well
+before the fixture's extra 8 MiB. The decoding-error, cancellation expectation,
+and unfinished-fixture assertions remain unchanged. This separates the security
+property from producer cancellation latency.
+
+Linux validation passed: `swift build --build-system native`, all seven
+`T07ImageTests`, the coverage gate (493 tests, seven live-server skips, zero
+failures; 91.73% line coverage), strict recursive swift-format, and source checks.
+A temporary receive-cap mutation failed both strict receive assertions as
+expected; a temporary five-chunk queued-send simulation passed both tests.
+Neither temporary change is retained. This branch has no
+`scripts/check-unit-test-targets.py`; the existing checker from the adjacent
+`wt-ut-guard` worktree passed its self-test against this branch's `project.yml`.
+Apple simulator tests were not run on Linux.
+
+## Main #28 (M10 Settings) merge — 2026-10-28
+
+Pre-merge M07 head: `3ac7b1a`. Incoming `origin/main`: `eaf26b5`
+(`M10 Settings (PoC) — stacked on #14 + #13 (#28)`). This update uses
+`git fetch origin` and a merge commit; no rebase or force-push.
+
+The five conflicts combine M07's library session, library/overflow destinations,
+feature client, and optional hero content with M10's Settings app state, shared
+tab selection, sign-out confirmation and `isSigningOut` guard, and focus
+restoration. `SettingsView.swift` and `SettingsViewModel.swift` remain identical
+to main. Both catalogs contain the exact union of the parents' keys, with every
+parent's English and Finnish localization preserved (89 app keys, 57 model keys).
+
+### Exact test-file changes relative to the pre-merge M07 head
+
+No test edits, assertion changes, or signature fixes were authored during this
+merge. The complete test-file delta consists of these four files inherited
+byte-for-byte from `origin/main`:
+
+| File | Change and rationale |
+| --- | --- |
+| `Apps/Shared/Tests/Logic/T10SettingsLogicTests.swift` | Added unchanged from #28; preserves bundle-version and English/Finnish Settings catalog coverage. |
+| `Apps/Shared/UITests/T04AuthUITests.swift` | Updated unchanged from #28; inherits its `notify` import and cancellation flow. Main removes the old Home assertion and Settings re-entry because cancelling sign-out now returns directly to Settings; the subsequent sign-out-row assertion is preserved. No assertion was edited to make this merge pass. |
+| `Apps/Shared/UITests/T10SettingsUITests.swift` | Added unchanged from #28; preserves Settings contents, cancel/Menu focus restoration, and sign-out/sign-in coverage. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T10SettingsTests.swift` | Added unchanged from #28; preserves offline content, credential handling, sign-out re-entry guard, failure, and fresh-launch coverage. |
+
+Every other existing test file remains identical to the pre-merge M07 head.
+
+### Download security
+
+`HTTPClient` and `BoundedResponseDownload` retain their cache disabling and
+certificate-pin forwarding. `BoundedImageDownload` now also sets
+`configuration.urlCache = nil` itself before creating its session, so it does
+not depend on the caller's configuration. Both bounded downloaders retain
+their per-chunk checks before appending bytes and their pinned trust delegates.
+
+### Validation
+
+On Linux with Swift 6.4.1, `bash scripts/coverage-gate.sh` runs
+`swift test --enable-code-coverage --build-system native`: 567 tests,
+559 passed, eight existing live-server integration skips, zero failures.
+Line coverage is 91.15% (9,130 / 10,016), above the 80% gate.
+
+SwiftLint 0.65.1, strict recursive swift-format lint, CI source greps,
+design-system, image-pipeline, string-catalog, entitlements, DEBUG-string,
+unit-test-target, license, and artifact-redaction checks pass, including their
+available self-tests. SwiftLint reports the expected Linux SourceKit custom-rule
+skip; the repository's source-check scripts pass. All 33 bootstrap/HLS Python
+unit tests and 22 Docker harness self-test cases pass; both integration shell
+scripts pass syntax checks. `git diff --check` passes.
+
+Apple simulator UI, logic, and snapshot tests were not executed on Linux.
+
+## Main #43 merge and complete test inventory — 2026-10-28
+
+Pre-merge M07 head: `5d12fd15b1a5bb2b8ed79b9fbcf89c11b0446e6b`.
+Incoming `origin/main`: `4f81fedff7271eca4897404951678dd704e4026f`
+(`test: forgetting a server clears a corrupted pin (#43)`). This update uses
+`git fetch origin` and a merge commit, without rebasing or force-pushing.
+
+Changes are additive only: both parents' tests and every existing assertion
+are retained. No assertion is weakened, deleted, or changed. No new feature or
+test is authored for this merge; the inventory below includes tests already
+present on M07 and tests imported from main. Existing fixture and lifecycle
+setup differences relative to main are identified explicitly.
+
+### This merge's conflict resolution and imported tests
+
+The only conflicted file is
+`Packages/GlassfinCore/Tests/CoreStateTests/T02BehaviorTests.swift`, in
+`testColdStartWithoutSnapshotEndsAfterTheFetch`. The resolution keeps M07's
+`XCTAssertEqual(ended(harness.signposter.snapshot(), .coldStartHomeFirstRow), 1)`
+and both signpost waits, including main's wait for `.homeSectionsLoaded` before
+checking Latest. M07's shared Resume/Latest gate and wait for two blocked
+requests remain intact. The resolved file is byte-for-byte identical to the
+pre-merge M07 head: no test body or assertion changes are needed beyond removing
+the conflict markers.
+
+`Packages/GlassfinCore/Tests/CoreStateTests/PinForgetRecoveryTests.swift` is
+imported byte-for-byte from main: four existing tests cover malformed and
+undecodable pins through both server-removal paths, including credential
+cleanup, explicit trust, and fresh sign-in. It is the only test file with a net
+change relative to the pre-merge M07 head (191 added lines). It has no diff
+relative to main and is therefore listed separately from the branch inventory.
+
+### Every test file changed relative to main `4f81fed`
+
+The following 13 files are the complete diff under `Tests/` and `UITests/`.
+All changes in this table predate this merge; existing main assertions remain
+intact. Added files refer to existing M07 coverage, not tests authored now.
+
+| File | Existing M07 change retained relative to main |
+| --- | --- |
+| `Apps/Shared/Tests/Logic/T07ArtworkTests.swift` | Added artwork downsampling test (one method). |
+| `Apps/Shared/UITests/T07LibraryUITests.swift` | Added library/detail navigation, season/episode focus, actions, sanitization, and back-navigation coverage (13 methods; platform conditions remain unchanged). |
+| `Packages/GlassfinCore/Tests/CoreModelsTests/T07MetadataTests.swift` | Added literal metadata, control/bidi removal, grapheme limits, mapping, and technical metadata coverage (eight methods). |
+| `Packages/GlassfinCore/Tests/CoreNetworkingTests/T07ImageTests.swift` | Added image URL/cache-key, thumbnail, and bounded-download coverage (seven methods), preserving the existing receive-side and producer-side byte assertions. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/PinFailureTests.swift` | Preserves the merged M07 and M09 pin tests: main's nine tests, including Search factory pin-read failure and missing-pin coverage, plus M07's existing `testFeatureClientPropagatesPinReadFailure` and its `.tls` and retained-session assertions. No merge-time edit. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/Support.swift` | Preserves `StubLibrary.latestGate` and its extra asynchronous wait in `latest(in:limit:)`, sharing the result/gate snapshot under the lock. Also retains the `nextUp(series:)` fixture adapter. No assertions or timeouts change. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T02BehaviorTests.swift` | Preserves the extra Latest gate setup and wait for two blocked requests, both completion waits, and one additional cold-start signpost assertion. Retains `home.onAppear()` in place of direct current-view assignment and `series.onAppear()` before standalone loading. The sole conflict is resolved as described above; all assertions from both parents survive unchanged. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T02FoundationTests.swift` | Preserves the additional `testT07_77_cachedAndProjectedMetadataKeepsDisplayLimits` for cached/projected metadata. Existing methods and assertions are unchanged. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T04AuthTests.swift` | Preserves two additional Auth Home lifecycle methods and the populated Resume fixture in `testT04_59_launchFailureLoadsCachedHomeAndKeepsToken`; every original assertion is unchanged. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T07DetailTests.swift` | Added detail, season/episode, focus, optimistic-action, stale-response, and outage coverage (21 methods). |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T07LibraryTests.swift` | Added grid paging, caching, query persistence, sanitization, navigation, and outage/recovery coverage (11 methods). |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T07ScreenLifecycleTests.swift` | Added screen registration and retained/empty-content lifecycle coverage (ten methods). |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T07SecurityStateTests.swift` | Added session cancellation, non-401 error handling, request cancellation, and image-cache limit coverage (four methods). |
+
+The additional test-support source
+`Packages/GlassfinCore/Sources/CoreTestSupport/LibraryFixtures.swift` is also
+retained as an added M07 file relative to main. It provides deterministic movie,
+series, season, episode, and malformed-record fixtures and contains no test
+methods. No other test or test-support file differs from main.
+
+### Linux validation
+
+With Swift 6.4.1 and the existing Swift compatibility-library environment,
+`swift test --package-path Packages/GlassfinCore --build-system native` passes:
+648 tests executed, 638 passed, ten existing integration skips, zero failures.
+The four imported `PinForgetRecoveryTests`, all ten `PinFailureTests`, and all
+34 `T02BehaviorTests` pass. Strict swift-format lint passes for the conflicted
+and imported test files, and `git diff --check` passes.
+
+The inventory is checked against the complete test/test-support path diff from
+main. Main's existing assertion lines are retained, the resolved T02 file
+matches the M07 parent, and the imported pin-recovery file matches main.
+Apple simulator verification is delegated to PR #23's CI checks after pushing.

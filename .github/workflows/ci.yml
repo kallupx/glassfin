@@ -52,7 +52,9 @@ jobs:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: python3 scripts/ci-path-filter.py
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - name: Restore Linux SwiftPM cache
+        id: spm-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache/org.swift.swiftpm
@@ -80,6 +82,10 @@ jobs:
         run: |
           python3 scripts/check-debug-only-strings.py --self-test
           python3 scripts/check-debug-only-strings.py
+      - name: Unit-test targets
+        run: |
+          python3 scripts/check-unit-test-targets.py --self-test
+          python3 scripts/check-unit-test-targets.py
       - name: Artifact redaction self-test
         run: python3 scripts/redact_artifacts.py --self-test
       - name: Bootstrap and HLS probe unit tests and shell syntax
@@ -92,6 +98,21 @@ jobs:
           bash scripts/docker-integration.sh --self-test
       - name: Linux package tests and coverage gate
         run: bash scripts/coverage-gate.sh
+      # Fork pull requests and manual runs may restore, but cannot save caches.
+      - name: Save Linux SwiftPM cache
+        if: >
+          steps.spm-cache.outputs.cache-hit != 'true' &&
+          (
+            (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository) ||
+            (github.event_name == 'push' && github.ref == 'refs/heads/main')
+          )
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/org.swift.swiftpm
+            Packages/GlassfinCore/.build
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
   test-tvos:
     needs: lint
@@ -102,27 +123,54 @@ jobs:
       (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') &&
       (needs.lint.outputs.macos == 'true' || github.event_name == 'workflow_dispatch') &&
       (
-        github.actor != 'dependabot[bot]' ||
+        github.event.pull_request.user.login != 'dependabot[bot]' ||
         github.event_name == 'workflow_dispatch' ||
         contains(github.event.pull_request.labels.*.name, 'full-ci')
       )
     runs-on: xcode-27
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - name: Swift version
         run: xcrun swift --version
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - name: SwiftPM cache environment
+        id: spm-environment
+        run: |
+          if [[ -n "${ImageOS:-}" && -n "${ImageVersion:-}" ]]; then
+            xcode_version="$(xcodebuild -version | tr '\n' '-' | tr ' ' '_')"
+            echo "version=${ImageOS}-${ImageVersion}-${xcode_version}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Runner image metadata is unavailable; skipping the SwiftPM cache."
+          fi
+      - name: Restore SwiftPM SourcePackages
+        id: spm-cache
+        if: steps.spm-environment.outputs.version != ''
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
+          # Dependencies only; DerivedData and compiled products stay fresh.
           path: |
+            ${{ github.workspace }}/SourcePackages
             ~/Library/Caches/org.swift.swiftpm
-            Packages/GlassfinCore/.build
-            DerivedData-tvOS
-            DerivedData-release-tvOS
-          key: macos-tvos-${{ hashFiles('Packages/GlassfinCore/Package.resolved', 'project.yml') }}
-          restore-keys: macos-tvos-
+          key: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-
       - name: Test and Release binary check
         run: bash scripts/macos-ci.sh tvOS
+      # Fork pull requests and manual runs may restore, but cannot save caches.
+      - name: Save SwiftPM SourcePackages
+        if: >
+          steps.spm-environment.outputs.version != '' &&
+          steps.spm-cache.outputs.cache-hit != 'true' &&
+          (
+            (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository) ||
+            (github.event_name == 'push' && github.ref == 'refs/heads/main')
+          )
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ github.workspace }}/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -143,26 +191,52 @@ jobs:
         (github.event_name == 'pull_request' && needs.lint.outputs.ios == 'true')
       ) &&
       (
-        github.actor != 'dependabot[bot]' ||
+        github.event.pull_request.user.login != 'dependabot[bot]' ||
         github.event_name == 'workflow_dispatch' ||
         contains(github.event.pull_request.labels.*.name, 'full-ci')
       )
     runs-on: xcode-27
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - name: SwiftPM cache environment
+        id: spm-environment
+        run: |
+          if [[ -n "${ImageOS:-}" && -n "${ImageVersion:-}" ]]; then
+            xcode_version="$(xcodebuild -version | tr '\n' '-' | tr ' ' '_')"
+            echo "version=${ImageOS}-${ImageVersion}-${xcode_version}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Runner image metadata is unavailable; skipping the SwiftPM cache."
+          fi
+      - name: Restore SwiftPM SourcePackages
+        id: spm-cache
+        if: steps.spm-environment.outputs.version != ''
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
+          # Dependencies only; DerivedData and compiled products stay fresh.
           path: |
+            ${{ github.workspace }}/SourcePackages
             ~/Library/Caches/org.swift.swiftpm
-            Packages/GlassfinCore/.build
-            DerivedData-iOS
-            DerivedData-package-iOS
-            DerivedData-release-iOS
-          key: macos-ios-${{ hashFiles('Packages/GlassfinCore/Package.resolved', 'project.yml') }}
-          restore-keys: macos-ios-
+          key: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-
       - name: Test and Release binary check
         run: bash scripts/macos-ci.sh iOS
+      # Fork pull requests and manual runs may restore, but cannot save caches.
+      - name: Save SwiftPM SourcePackages
+        if: >
+          steps.spm-environment.outputs.version != '' &&
+          steps.spm-cache.outputs.cache-hit != 'true' &&
+          (
+            (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository) ||
+            (github.event_name == 'push' && github.ref == 'refs/heads/main')
+          )
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ github.workspace }}/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -186,11 +260,47 @@ jobs:
         )
       )
     runs-on: xcode-27
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: SwiftPM cache environment
+        id: spm-environment
+        run: |
+          if [[ -n "${ImageOS:-}" && -n "${ImageVersion:-}" ]]; then
+            xcode_version="$(xcodebuild -version | tr '\n' '-' | tr ' ' '_')"
+            echo "version=${ImageOS}-${ImageVersion}-${xcode_version}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Runner image metadata is unavailable; skipping the SwiftPM cache."
+          fi
+      - name: Restore SwiftPM SourcePackages
+        id: spm-cache
+        if: steps.spm-environment.outputs.version != ''
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          # Dependencies only; DerivedData and compiled products stay fresh.
+          path: |
+            ${{ github.workspace }}/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-
       - name: Full UI suite
         run: bash scripts/macos-ci.sh tvOS
+      # Fork pull requests and manual runs may restore, but cannot save caches.
+      - name: Save SwiftPM SourcePackages
+        if: >
+          steps.spm-environment.outputs.version != '' &&
+          steps.spm-cache.outputs.cache-hit != 'true' &&
+          (
+            (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository) ||
+            (github.event_name == 'push' && github.ref == 'refs/heads/main')
+          )
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ github.workspace }}/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -201,45 +311,45 @@ jobs:
             artifacts/tvOS/*.txt
           retention-days: 7
 
-  # Lint alone must not turn a Dependabot pull request green. The job always
-  # reports, so branch protection can require it: human pull requests pass,
-  # and a Dependabot pull request fails until full-ci and a macOS job succeed.
+  # After lint succeeds, report even when macOS jobs were skipped or failed.
+  # Dependabot requires full-ci and every path-selected macOS job to pass.
+  # Use the PR author: a maintainer may be the actor on a labeled event.
   dependabot-macos:
     needs: [lint, test-tvos, test-ios]
     if: always() && needs.lint.result == 'success'
     runs-on: ubuntu-latest
+    permissions: {}
     timeout-minutes: 5
     steps:
-      - name: Require a green macOS build
+      - name: Require successful macOS results for selected paths
         env:
-          ACTOR: ${{ github.actor }}
           EVENT: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          TVOS_REQUIRED: ${{ needs.lint.outputs.macos }}
+          IOS_REQUIRED: ${{ needs.lint.outputs.ios }}
           TVOS: ${{ needs.test-tvos.result }}
           IOS: ${{ needs.test-ios.result }}
         run: |
           set -euo pipefail
-          echo "actor=$ACTOR event=$EVENT test-tvos=$TVOS test-ios=$IOS full-ci=$FULL_CI"
-          if [[ "$ACTOR" != "dependabot[bot]" || "$EVENT" != "pull_request" ]]; then
+          if [[ "$EVENT" != "pull_request" || "$PR_AUTHOR" != "dependabot[bot]" ]]; then
             echo "Dependabot macOS gate applies only to Dependabot pull requests."
             exit 0
           fi
           if [[ "$FULL_CI" != "true" ]]; then
-            echo "Dependabot pull requests are not mergeable on lint alone."
-            echo "Add the full-ci label, or run this workflow with workflow_dispatch."
-            echo "Merge only after test-tvos and test-ios are green. Do not enable auto-merge."
+            echo "::error::Maintainers must add the full-ci label to this Dependabot pull request before merging."
             exit 1
           fi
-          for result in "$TVOS" "$IOS"; do
-            case "$result" in
-              success|skipped) ;;
+          require_result() {
+            local job="$1" required="$2" result="$3"
+            echo "$job: $result (selected by path filter: $required)" | tee -a "$GITHUB_STEP_SUMMARY"
+            case "$required:$result" in
+              true:success|false:success|false:skipped) ;;
               *)
-                echo "macOS result '$result' is not success."
+                echo "::error::$job did not satisfy the macOS path filter."
                 exit 1
                 ;;
             esac
-          done
-          if [[ "$TVOS" != "success" && "$IOS" != "success" ]]; then
-            echo "Neither macOS job ran. A path-skipped matrix is not a macOS build."
-            exit 1
-          fi
+          }
+          require_result test-tvos "$TVOS_REQUIRED" "$TVOS"
+          require_result test-ios "$IOS_REQUIRED" "$IOS"

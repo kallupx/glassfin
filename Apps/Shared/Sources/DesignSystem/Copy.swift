@@ -37,6 +37,8 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case tabLibraries = "design.tab.libraries"
     case tabSearch = "design.tab.search"
     case tabSettings = "design.tab.settings"
+    case settingsVersion = "settings.version"
+    case settingsVersionUnavailable = "settings.versionUnavailable"
     case seasonPicker = "design.season.picker"
     case rowPrimary = "design.row.primary"
     case rowPosters = "design.row.posters"
@@ -48,6 +50,17 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case navRoot = "design.nav.root"
     case navLibrary = "design.nav.library"
     case navDetail = "design.nav.detail"
+
+    case homeContinue = "home.continueWatching"
+    case homeNextUp = "home.nextUp"
+    case homeLatest = "home.latest"
+    case homeEmpty = "home.empty"
+    case homeEmptyGuidance = "home.emptyGuidance"
+    case homeRemoveResume = "home.removeResume"
+    case homeGoToSeries = "home.goToSeries"
+    case homeDetailPending = "home.detailPending"
+    case homePlaybackPending = "home.playbackPending"
+    case homeLibrariesRetry = "home.librariesRetry"
 
     case librarySort = "library.sort"
     case libraryName = "library.sort.name"
@@ -85,9 +98,40 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case detailEpisodeNumber = "detail.episodeNumber"
     case detailRuntime = "detail.runtime"
     case detailPlaybackPending = "detail.playbackPending"
+    case searchPrompt = "search.prompt"
+    case searchMovies = "search.movies"
+    case searchSeries = "search.series"
+    case searchEpisodes = "search.episodes"
+    case searchRecent = "search.recent"
+    case searchClearRecent = "search.clearRecent"
+    case searchEmpty = "search.empty"
+    case searchMinimum = "search.minimum"
+    case searchHistoryFailure = "search.historyFailure"
+    case searchBack = "search.back"
 
     var resource: LocalizedStringResource {
         switch self {
+        case .searchPrompt: LocalizedStringResource("search.prompt", bundle: .main)
+        case .searchMovies: LocalizedStringResource("search.movies", bundle: .main)
+        case .searchSeries: LocalizedStringResource("search.series", bundle: .main)
+        case .searchEpisodes: LocalizedStringResource("search.episodes", bundle: .main)
+        case .searchRecent: LocalizedStringResource("search.recent", bundle: .main)
+        case .searchClearRecent: LocalizedStringResource("search.clearRecent", bundle: .main)
+        case .searchEmpty: LocalizedStringResource("search.empty", bundle: .main)
+        case .searchMinimum: LocalizedStringResource("search.minimum", bundle: .main)
+        case .searchHistoryFailure: LocalizedStringResource("search.historyFailure", bundle: .main)
+        case .searchBack: LocalizedStringResource("search.back", bundle: .main)
+        case .homeContinue: LocalizedStringResource("home.continueWatching", bundle: .main)
+        case .homeNextUp: LocalizedStringResource("home.nextUp", bundle: .main)
+        case .homeLatest: LocalizedStringResource("home.latest", bundle: .main)
+        case .homeEmpty: LocalizedStringResource("home.empty", bundle: .main)
+        case .homeEmptyGuidance: LocalizedStringResource("home.emptyGuidance", bundle: .main)
+        case .homeRemoveResume: LocalizedStringResource("home.removeResume", bundle: .main)
+        case .homeGoToSeries: LocalizedStringResource("home.goToSeries", bundle: .main)
+        case .homeDetailPending: LocalizedStringResource("home.detailPending", bundle: .main)
+        case .homePlaybackPending: LocalizedStringResource("home.playbackPending", bundle: .main)
+        case .homeLibrariesRetry: LocalizedStringResource("home.librariesRetry", bundle: .main)
+
         case .librarySort: LocalizedStringResource("library.sort", bundle: .main)
         case .libraryName: LocalizedStringResource("library.sort.name", bundle: .main)
         case .libraryDateAdded: LocalizedStringResource("library.sort.dateAdded", bundle: .main)
@@ -155,6 +199,8 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .tabLibraries: LocalizedStringResource("design.tab.libraries", bundle: .main)
         case .tabSearch: LocalizedStringResource("design.tab.search", bundle: .main)
         case .tabSettings: LocalizedStringResource("design.tab.settings", bundle: .main)
+        case .settingsVersion: LocalizedStringResource("settings.version", bundle: .main)
+        case .settingsVersionUnavailable: LocalizedStringResource("settings.versionUnavailable", bundle: .main)
         case .seasonPicker: LocalizedStringResource("design.season.picker", bundle: .main)
         case .rowPrimary: LocalizedStringResource("design.row.primary", bundle: .main)
         case .rowPosters: LocalizedStringResource("design.row.posters", bundle: .main)

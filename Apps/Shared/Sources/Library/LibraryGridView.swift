@@ -43,8 +43,9 @@ struct LibraryGridView: View {
                     }
                     if let key = session.app.bannerKey {
                         GlassBanner(
+                            messageOverride: AppErrorMessage.localized(key),
                             message: .errorServerUnreachable, systemImage: "exclamationmark.icloud",
-                            identifier: "library.banner", literalMessage: AppErrorMessage.localized(key))
+                            identifier: "library.banner")
                     }
                     if let error = session.actions.lastError ?? model.filterError {
                         LibraryInlineError(error: error)
@@ -331,8 +332,8 @@ struct LibraryBlockingError: View {
     var retry: () -> Void
     var body: some View {
         ErrorStateView(
-            failure: .serverUnreachable, attempts: 0, onRetry: retry, onSwitchServer: {},
-            messageOverride: AppErrorMessage.userFacing(error)
+            messageOverride: AppErrorMessage.userFacing(error),
+            failure: .serverUnreachable, attempts: 0, onRetry: retry, onSwitchServer: {}
         )
         .accessibilityValue(AppErrorMessage.messageKey(for: error) ?? "")
     }

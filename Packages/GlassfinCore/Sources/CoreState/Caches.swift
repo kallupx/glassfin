@@ -10,8 +10,7 @@ public enum CacheBudget {
 
 enum CacheKey {
     static func filename(for key: String) -> String {
-        // Image descriptors already supply the canonical SHA-256 tuple digest.
-        if key.count == 64, key.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) { return key }
+        if key.count == 64, key.allSatisfy(\.isHexDigit) { return key.lowercased() }
         return CertificateFingerprint.sha256Hex(Data(SensitiveRedactor.redact(key).utf8))
     }
 }
@@ -20,6 +19,10 @@ public struct HomeSnapshot: Codable, Sendable, Equatable {
     public var resume: [MediaItem]
     public var nextUp: [MediaItem]
     public var latest: [MediaItem]
+    public var libraries: [Library]?
+    public var latestByLibrary: [String: [MediaItem]]?
+    public var serverID: String?
+    public var userID: String?
 
     public init(resume: [MediaItem], nextUp: [MediaItem], latest: [MediaItem]) {
         self.resume = resume
@@ -37,12 +40,13 @@ public struct HomeSnapshotStore: Sendable {
 
     public func load() -> HomeSnapshot? {
         guard let data = try? Data(contentsOf: file),
-            let snapshot = try? JSONDecoder().decode(HomeSnapshot.self, from: data)
+            var snapshot = try? JSONDecoder().decode(HomeSnapshot.self, from: data)
         else { return nil }
-        return HomeSnapshot(
-            resume: snapshot.resume.map { $0.cleanedForDisplay() },
-            nextUp: snapshot.nextUp.map { $0.cleanedForDisplay() },
-            latest: snapshot.latest.map { $0.cleanedForDisplay() })
+        snapshot.resume = snapshot.resume.map { $0.cleanedForDisplay() }
+        snapshot.nextUp = snapshot.nextUp.map { $0.cleanedForDisplay() }
+        snapshot.latest = snapshot.latest.map { $0.cleanedForDisplay() }
+        snapshot.latestByLibrary = snapshot.latestByLibrary?.mapValues { $0.map { $0.cleanedForDisplay() } }
+        return snapshot
     }
 
     @discardableResult
@@ -112,9 +116,18 @@ public actor DiskImageCache {
 
     @discardableResult
     public func store(key: String, data: Data) -> Bool {
+        store(filename: CacheKey.filename(for: key), data: data)
+    }
+
+    @discardableResult
+    public func store(imageKey: ImageCacheKey, data: Data) -> Bool {
+        guard data.count <= MetadataPolicy.imageMaxBytes else { return false }
+        return store(filename: imageKey.sha256, data: data)
+    }
+
+    private func store(filename name: String, data: Data) -> Bool {
         loadIfNeeded()
         guard data.count <= byteLimit, data.count <= MetadataPolicy.imageMaxBytes, byteLimit > 0 else { return false }
-        let name = CacheKey.filename(for: key)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try data.write(to: directory.appendingPathComponent(name), options: .atomic)
@@ -130,8 +143,16 @@ public actor DiskImageCache {
     }
 
     public func data(for key: String) -> Data? {
+        data(filename: CacheKey.filename(for: key))
+    }
+
+    public func data(for imageKey: ImageCacheKey) -> Data? {
+        guard let data = data(filename: imageKey.sha256), data.count <= MetadataPolicy.imageMaxBytes else { return nil }
+        return data
+    }
+
+    private func data(filename name: String) -> Data? {
         loadIfNeeded()
-        let name = CacheKey.filename(for: key)
         guard let index = entries.firstIndex(where: { $0.name == name }) else { return nil }
         let url = directory.appendingPathComponent(name)
         guard let data = try? Data(contentsOf: url) else {
@@ -229,7 +250,7 @@ public final class MemoryImageCache: @unchecked Sendable {
     public func store(key: String, data: Data) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard data.count <= byteLimit, byteLimit > 0 else { return false }
+        guard data.count <= byteLimit, data.count <= MetadataPolicy.imageMaxBytes, byteLimit > 0 else { return false }
         if let previous = costs[key] {
             total -= previous
             order.removeAll { $0 == key }

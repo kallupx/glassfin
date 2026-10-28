@@ -15,10 +15,54 @@ public final class AuthFlow: ViewContentProviding {
     public private(set) var noticeKey: AuthCopy.Key?
     public private(set) var isProbing = false
     public private(set) var isPolling = false
+    public private(set) var isSigningOut = false
     public private(set) var quickConnectCode: String?
     public private(set) var quickConnectExpired = false
     public private(set) var quickConnectRenewals = 0
     public private(set) var cachedHome: HomeSnapshot?
+    /// Minimal M09 hook: credentials remain inside the core assembly.
+    public func makeSearchFeature(client override: (any JellyfinAPIClient)? = nil) throws(APIError) -> SearchFeature? {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID),
+            let deviceID = try? DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false)
+        else { return nil }
+        let certificatePin = try pins.certificatePin(for: session.server.id, url: session.server.url)
+        let identity = ClientIdentity(deviceName: "Apple TV", deviceID: deviceID, version: "0.1.0", token: token)
+        let client =
+            override
+            ?? HTTPJellyfinClient(
+                server: session.server.url, identity: identity,
+                certificatePin: certificatePin)
+        return SearchFeature(app: app, session: session, client: client)
+    }
+
+    /// Minimal M06 composition hook; authentication remains owned by this flow.
+    public var homeApp: AppState { app }
+
+    public func makeHomeClient() throws(APIError) -> any JellyfinAPIClient {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID),
+            let live = backend as? LiveAuthBackend
+        else { throw .network }
+        return HomeSessionClient(
+            inner: try live.makeClient(for: session.server, token: token), app: app, scope: app.scope)
+    }
+
+    public func makeHomeEvents() throws -> any ServerEventStream {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID),
+            let live = backend as? LiveAuthBackend,
+            let http = try live.makeClient(for: session.server, token: token) as? HTTPJellyfinClient
+        else { throw APIError.network }
+        let app = app
+        let sockets = try URLSessionEventSocketFactory(
+            server: http.server, identity: http.identity, pin: http.certificatePin,
+            onUnauthorized: { await app.handle(.unauthorized) })
+        return ReconnectingServerEventStream(
+            request: try SocketRequestBuilder.make(server: http.server, identity: http.identity),
+            sockets: sockets, clock: SystemGlassfinClock(), jitter: SystemJitter())
+    }
+
     public var appPhase: AppState.Phase { app.phase }
     /// Shared signed-in state for feature composition; authentication still owns the session.
     public var featureApp: AppState { app }
@@ -28,8 +72,7 @@ public final class AuthFlow: ViewContentProviding {
         guard case .signedIn(let session) = app.phase,
             let token = loadToken(serverID: session.server.id, userID: session.userID)
         else { throw .unauthorized }
-        let fingerprint = try? pins.fingerprint(for: session.server.id)
-        let pin = fingerprint.map { OriginCertificatePin(url: session.server.url, sha256: $0) }
+        let pin = try pins.certificatePin(for: session.server.id, url: session.server.url)
         let deviceID: String
         do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
             throw .headerRejected
@@ -43,6 +86,7 @@ public final class AuthFlow: ViewContentProviding {
                 inner: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
                 clock: clock), app: app)
     }
+    public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
     /// The M04 Home tab renders cached sections until the Home feature screen is installed.
     public var hasContent: Bool {
@@ -138,11 +182,6 @@ public final class AuthFlow: ViewContentProviding {
             acceptedCertificatePin = nil
             acceptedPinToStore = nil
         }
-        let certificatePin =
-            acceptedCertificatePin
-            ?? candidates.compactMap { url in
-                pinnedMatch(for: url).map { OriginCertificatePin(url: url, sha256: $0.fingerprint) }
-            }.first
         server = nil
         displayedName = ""
         displayedVersion = ""
@@ -153,6 +192,16 @@ public final class AuthFlow: ViewContentProviding {
         isProbing = true
         inlineError = nil
         httpSkippedByPolicy = false
+        let certificatePin: OriginCertificatePin?
+        do {
+            let storedPin = try candidates.compactMap { url in
+                try pinnedMatch(for: url).map { OriginCertificatePin(url: url, sha256: $0.fingerprint) }
+            }.first
+            certificatePin = acceptedCertificatePin ?? storedPin
+        } catch {
+            failPinLookup()
+            return
+        }
         probeTask = Task {
             let outcome = await backend.probe(address, certificatePin: certificatePin)
             guard !Task.isCancelled else { return }
@@ -183,15 +232,22 @@ public final class AuthFlow: ViewContentProviding {
                 RedirectPolicy.originsMatch($0.url, url)
             })
         else { return }
+        let storedFingerprint: String?
+        do {
+            storedFingerprint = try pinnedMatch(for: url)?.fingerprint
+        } catch {
+            failPinLookup()
+            throw error
+        }
         let outcome = SelfSignedTrustFlow.handle(
             isSystemTrusted: false, leaf: leaf,
-            pinnedSHA256: pinnedMatch(for: url)?.fingerprint,
+            pinnedSHA256: storedFingerprint,
             userAcceptedFingerprint: userAcceptedFingerprint
         )
         switch outcome.decision {
         case .usePinnedCredential:
             // Only the trust outcome supplies new pin bytes. No ID is invented before the probe succeeds.
-            let fingerprint = outcome.pinToStore ?? pinnedMatch(for: url)?.fingerprint
+            let fingerprint = outcome.pinToStore ?? storedFingerprint
             guard let fingerprint else { return }
             acceptedCertificatePin = OriginCertificatePin(url: url, sha256: fingerprint)
             acceptedPinToStore = outcome.pinToStore
@@ -338,7 +394,9 @@ public final class AuthFlow: ViewContentProviding {
     }
 
     public func confirmLogout() async {
-        guard case .signedIn(let session) = app.phase else { return }
+        guard !isSigningOut, case .signedIn(let session) = app.phase else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
         var serverFailed = true
         if let token = loadToken(serverID: session.server.id, userID: session.userID) {
             do {
@@ -370,6 +428,7 @@ public final class AuthFlow: ViewContentProviding {
     }
 
     public func cancelLogout() {
+        guard !isSigningOut else { return }
         screen = .home
         confirmFocus = nil
         focus = homeErrorKey == nil ? .connect : .tryAgain
@@ -416,6 +475,11 @@ public final class AuthFlow: ViewContentProviding {
     }
 
     public func synchronizeSession() async {
+        if case .needsServer = app.phase, screen == .home {
+            screen = .welcome
+            focus = .connect
+            return
+        }
         if case .needsLogin(let saved) = app.phase, screen == .home || screen == .logoutConfirm {
             screen = .signedOut
             noticeKey = .sessionExpired
@@ -516,7 +580,14 @@ public final class AuthFlow: ViewContentProviding {
                 RedirectPolicy.originsMatch($0.url, url)
             }.map { AuthServerName.display($0.name, host: url.host ?? "") }
             ?? AuthServerName.display("", host: url.host ?? "")
-        if let match = pinnedMatch(for: url) {
+        let match: (serverID: String, fingerprint: String)?
+        do {
+            match = try pinnedMatch(for: url)
+        } catch {
+            failPinLookup()
+            return
+        }
+        if let match {
             let decision = SelfSignedTrustFlow.handle(
                 isSystemTrusted: false,
                 leaf: leaf,
@@ -734,10 +805,21 @@ public final class AuthFlow: ViewContentProviding {
         try? vault.loadToken(serverID: serverID, userID: userID)
     }
 
-    private func pinnedMatch(for url: URL) -> (serverID: String, fingerprint: String)? {
+    private func failPinLookup() {
+        isProbing = false
+        acceptedCertificatePin = nil
+        acceptedPinToStore = nil
+        certificate = nil
+        certificateURL = nil
+        inlineError = .loginTransportFailure
+        screen = .address
+        focus = AuthFocusPolicy.address(fieldIsEmpty: addressText.isEmpty)
+    }
+
+    private func pinnedMatch(for url: URL) throws(APIError) -> (serverID: String, fingerprint: String)? {
         for stored in app.preferencesSnapshot().servers where RedirectPolicy.originsMatch(stored.url, url) {
-            if let fingerprint = try? pins.fingerprint(for: stored.id) {
-                return (stored.id, fingerprint)
+            if let pin = try pins.certificatePin(for: stored.id, url: url) {
+                return (stored.id, pin.sha256)
             }
         }
         return nil
