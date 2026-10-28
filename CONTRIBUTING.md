@@ -6,11 +6,13 @@ In CoreNetworking, define each English source sentence once in a catalog key con
 
 ## Dependency pull requests
 
-Dependabot opens one grouped pull request for Swift packages and one for GitHub Actions (`open-pull-requests-limit: 1` in `.github/dependabot.yml`). Those runs execute the Linux `lint` job only.
+Dependabot opens one grouped pull request for Swift packages and one for GitHub Actions (`open-pull-requests-limit: 1` in `.github/dependabot.yml`). Without the `full-ci` label, those runs execute the Linux `lint` job and skip the macOS jobs, including `dependabot-macos`. This is an intentional skip, not evidence of a macOS build.
 
-A grouped dependency pull request is not mergeable on lint alone, and Dependabot auto-merge stays off. Before merging:
+Do not merge a grouped dependency pull request on lint alone, and keep Dependabot auto-merge off. Before merging:
 
-1. Add the `full-ci` label, or start the `ci` workflow with `workflow_dispatch` on that branch. `workflow_dispatch` runs the macOS jobs. The pull request check turns green only after a `pull_request` run with `full-ci` records those jobs.
-2. Wait until `test-tvos` and `test-ios` are green. The `dependabot-macos` check is green for every other pull request, and it fails a Dependabot pull request until `full-ci` is set and at least one of those jobs succeeded. A path-filter skip is not a macOS build. Require that check in branch protection so lint alone cannot merge the pull request.
+1. Add the `full-ci` label to start the macOS jobs selected by the path filters. Dependabot is identified by the pull request author, so a maintainer adding a label does not change this policy. Alternatively, start the `ci` workflow with `workflow_dispatch` on that branch to run both macOS jobs.
+2. Wait until the required `test-tvos` and `test-ios` jobs are green. On a Dependabot pull request with `full-ci`, `dependabot-macos` requires each path-selected job to succeed, rejects failures and cancellations, and accepts a skip only for paths that do not select that job. It skips on other pull requests and events; manual runs must be reviewed directly.
 
 `full-ci` also runs the `full-ui` job.
+
+[GitHub treats skipped jobs as successful checks](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions), so requiring `dependabot-macos` alone cannot enforce macOS review for an unlabeled pull request. Maintainers must request and review macOS CI before merging dependency updates. These runs keep the existing read-only permissions and do not require repository secrets or `pull_request_target`.
