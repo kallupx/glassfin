@@ -7,17 +7,27 @@ final class T10SettingsUITests: XCTestCase {
         let app = openSettings()
         let root = app.descendants(matching: .any)["settings.root"]
         XCTAssertTrue(root.waitForExistence(timeout: 10))
-        let expectedButtons = Set([
-            "settings.signOut", "settings.playback.segment.intro", "settings.playback.segment.recap",
+        let expectedPickers = [
+            "settings.playback.segment.intro", "settings.playback.segment.recap",
             "settings.playback.segment.outro", "settings.playback.segment.preview",
             "settings.playback.segment.commercial",
-        ])
-        // The autoplay toggle can be exposed as a switch or button by the platform.
-        // All remaining buttons must match this exact set, including the five pickers.
-        let buttons = root.buttons.matching(NSPredicate(format: "identifier != %@", "settings.playback.autoplay"))
-        XCTAssertEqual(buttons.count, expectedButtons.count)
-        XCTAssertEqual(Set(buttons.allElementsBoundByIndex.map(\.identifier)), expectedButtons)
-        XCTAssertTrue(root.descendants(matching: .any)["settings.playback.autoplay"].exists)
+        ]
+        // tvOS exposes each segmented choice as a button; iOS exposes one menu button per picker.
+        #if os(tvOS)
+            let buttonsPerPicker = 3
+        #else
+            let buttonsPerPicker = 1
+        #endif
+        XCTAssertEqual(root.buttons.count, 1 + expectedPickers.count * buttonsPerPicker)
+        XCTAssertEqual(root.buttons.matching(identifier: "settings.signOut").count, 1)
+        let preferences = root.descendants(matching: .any)["settings.playback.preferences"]
+        XCTAssertTrue(preferences.exists)
+        for identifier in expectedPickers {
+            let picker = preferences.descendants(matching: .any)[identifier]
+            XCTAssertTrue(picker.exists, identifier)
+            XCTAssertEqual(picker.buttons.count, buttonsPerPicker, identifier)
+        }
+        XCTAssertTrue(preferences.descendants(matching: .any)["settings.playback.autoplay"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["settings.signOut"].exists)
         let version = app.staticTexts["settings.version"]
         XCTAssertTrue(version.exists)
