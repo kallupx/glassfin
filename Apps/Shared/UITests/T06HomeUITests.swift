@@ -201,7 +201,7 @@ final class T06HomeUITests: XCTestCase {
             let lostFocus = XCTNSPredicateExpectation(
                 predicate: NSPredicate(format: "hasFocus == false"), object: second)
             lostFocus.isInverted = true
-            let result = XCTWaiter.wait(for: [refreshed, lostFocus], timeout: 5)
+            let result = await XCTWaiter().fulfillment(of: [refreshed, lostFocus], timeout: 5)
             guard result == .completed, let after = Int(counter.value as? String ?? ""), after > before else {
                 XCTFail("Recovery must complete a new Resume request and keep the same card focused: \(result)")
                 return
