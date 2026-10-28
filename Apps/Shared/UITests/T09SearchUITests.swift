@@ -113,8 +113,21 @@ final class T09SearchUITests: XCTestCase {
     ) {
         #if os(tvOS)
             // Search keeps its inline keyboard beside the results. Menu does not dismiss it.
-            guard app.keyboards.firstMatch.waitForExistence(timeout: 5) else {
+            let keyboard = app.keyboards.firstMatch
+            guard keyboard.waitForExistence(timeout: 5) else {
                 XCTFail("Search keyboard did not appear", file: file, line: line)
+                return
+            }
+            // Returning from detail restores the result card, so a visible keyboard
+            // does not imply the search field can receive text yet.
+            let focusedKey = keyboard.descendants(matching: .key)
+                .matching(NSPredicate(format: "hasFocus == true")).firstMatch
+            for _ in 0..<24 {
+                if focusedKey.exists { break }
+                XCUIRemote.shared.press(.up)
+            }
+            guard focusedKey.exists else {
+                XCTFail("Search keyboard did not receive focus before typing", file: file, line: line)
                 return
             }
             field.typeText(text)
