@@ -63,7 +63,9 @@ final class LiveServerTests: XCTestCase {
                 itemID: item.Id, userID: session.session.userID, start: .zero, maxBitrate: 120_000_000)
             let source = try XCTUnwrap(info.MediaSources?.first, filename)
             let decision = PlaybackDecision.decide(mediaSource: source)
-            XCTAssertEqual(decision, expected, filename)
+            let reasons = VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl)
+            let diagnostic = "\(filename): TranscodeReasons=\(reasons.sorted())"
+            XCTAssertEqual(decision, expected, diagnostic)
             if case .unsupported = decision { continue }
             XCTAssertNotNil(info.PlaySessionId, filename)
             switch expected {
@@ -80,14 +82,9 @@ final class LiveServerTests: XCTestCase {
                     conversion: conversion)
                 XCTAssertTrue(MediaOrigin.matches(target.url, url), filename)
                 XCTAssertFalse(MediaCredentialQuery.contains(url), filename)
-                XCTAssertFalse(VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl), filename)
-                let reasons = VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl)
-                if conversion == .audioTranscode {
-                    XCTAssertTrue(reasons.contains("AudioCodecNotSupported"), filename)
-                    XCTAssertTrue(reasons.allSatisfy { $0 == "ContainerNotSupported" || $0.hasPrefix("Audio") })
-                } else {
-                    XCTAssertEqual(reasons, ["ContainerNotSupported"], filename)
-                }
+                // Reasons vary across server versions. The decision, absence of Video* reasons,
+                // and live TranscodingInfo below establish video copy and audio conversion.
+                XCTAssertFalse(VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl), diagnostic)
                 try await assertRemuxSession(
                     client: client, server: target.url, identity: identity,
                     itemID: item.Id, source: source, info: info, url: url, conversion: conversion)
@@ -144,8 +141,10 @@ final class LiveServerTests: XCTestCase {
             let sessions = try await client.send(APIRequest(method: "GET", path: "/Sessions"), as: [LiveSession].self)
             let active = try XCTUnwrap(sessions.first { $0.NowPlayingItem?.Id == itemID })
             let transcode = try XCTUnwrap(active.TranscodingInfo)
-            XCTAssertEqual(transcode.IsVideoDirect, true)
-            XCTAssertEqual(transcode.IsAudioDirect, conversion == .remux)
+            let reasons = VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl)
+            let diagnostic = "TranscodeReasons=\(reasons.sorted())"
+            XCTAssertEqual(transcode.IsVideoDirect, true, diagnostic)
+            XCTAssertEqual(transcode.IsAudioDirect, conversion == .remux, diagnostic)
             if conversion == .audioTranscode { XCTAssertTrue(["aac", "eac3"].contains(transcode.AudioCodec ?? "")) }
             XCTAssertEqual(transcode.Container, "mp4")
         } catch {
