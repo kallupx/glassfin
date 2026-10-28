@@ -233,7 +233,7 @@ def run_tests(root: Path) -> None:
     private_json(root / "simulator.json", device)
     command = ["xcodebuild", "-scheme", "Glassfin-tvOS", "-destination", f"platform=tvOS Simulator,id={device}",
                "-derivedDataPath", str(root / "DerivedData"), "-clonedSourcePackagesDirPath", str(root / "SourcePackages"),
-               "CODE_SIGNING_ALLOWED=NO", "-parallel-testing-enabled", "NO"]
+               "CODE_SIGNING_ALLOWED=YES", "-parallel-testing-enabled", "NO"]
     with (root / "xcodebuild.log").open("w") as log:
         subprocess.run(command + ["build-for-testing"], cwd=REPO, stdout=log, stderr=subprocess.STDOUT, check=True)
         environment = os.environ.copy()

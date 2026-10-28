@@ -34,7 +34,10 @@ credentials. Pushes to main do not start it.
    `/Library/Refresh`, and poll `/Items` until all items and streams are present.
 5. If `TPOCPlaybackAcceptanceUITests.swift` from draft PR #47 is present, erase
    the tvOS simulator, build for testing, and run only its two acceptance tests
-   through the real network stack. These are the exact environment variables
+   through the real network stack. Simulator test builds use ad hoc signing
+   (`CODE_SIGN_IDENTITY=-`, `CODE_SIGNING_ALLOWED=YES`) so app keychain entitlements
+   are available. No signing certificate or provisioning secret is needed. The
+   Release binary-check build keeps signing disabled. These are the exact environment variables
    consumed by `PoCLiveServerConfiguration`:
 
    - `TEST_RUNNER_GLASSFIN_POC_SERVER_URL=http://127.0.0.1:8096`

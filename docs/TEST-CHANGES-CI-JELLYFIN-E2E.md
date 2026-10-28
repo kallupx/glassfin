@@ -14,6 +14,11 @@ test changes, documented upstream in `docs/TEST-CHANGES-M08a-TRACKS.md`.
   a startup-race regression: public info can succeed while the wizard API still
   returns 503; no setup mutation is sent until that API becomes ready.
 
+The first tvOS CI run exposed missing keychain entitlements (`-34018`) in the
+unsigned simulator test host. Simulator app test builds now use ad hoc signing;
+the failing keychain assertions are preserved exactly. Release build signing
+and app entitlements are unchanged.
+
 The new CI job selects #47's existing tvOS acceptance class only when its source
 is present. It does not copy, rewrite, skip individual assertions, or merge the
 stacked app branches. Full acceptance remains dependent on #47 and its app

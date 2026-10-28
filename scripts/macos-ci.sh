@@ -98,7 +98,7 @@ xcodebuild test \
   -clonedSourcePackagesDirPath "$source_packages" \
   -derivedDataPath "$root/DerivedData-$platform" \
   -resultBundlePath "$artifacts/app.xcresult" \
-  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_ALLOWED=YES \
   | tee "$artifacts/app-test.log" || status=$?
 
 bundles=()
