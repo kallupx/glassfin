@@ -139,7 +139,8 @@ final class T09SearchSnapshotTests: XCTestCase {
             host.view.frame = CGRect(origin: .zero, size: size)
             host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
-            await Task.yield()
+            // Give UIKit's navigation/search presentation a run-loop turn to commit its first frame.
+            try await Task.sleep(for: .milliseconds(600))
             host.view.layoutIfNeeded()
             let format = UIGraphicsImageRendererFormat()
             format.scale = scale
@@ -155,7 +156,7 @@ final class T09SearchSnapshotTests: XCTestCase {
                                 0, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom
                             )),
                         animated: false)
-                    await Task.yield()
+                    try await Task.sleep(for: .milliseconds(100))
                     host.view.layoutIfNeeded()
                 }
                 let image = renderer.image { _ in

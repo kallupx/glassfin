@@ -79,24 +79,27 @@ struct SearchView: View {
                                 set: { model.rememberedIDs[group.id] = $0 }),
                             onSelect: model.open)
                     }
-                    if model.hasContent, model.state.presentedError != nil {
-                        Button(action: model.retry) { Copy.text(.actionRetry) }
-                            .buttonStyle(.glass)
-                            .accessibilityIdentifier("search.retry")
-                    }
                 }
                 .padding(SpacingToken.xl)
             }
+            #if os(iOS)
+                .scrollDismissesKeyboard(.interactively)
+            #endif
             .safeAreaInset(edge: .top) {
                 if let key = model.bannerKey {
                     ContainedGlass {
-                        Text(verbatim: AppErrorMessage.localized(key))
-                            .padding(SpacingToken.s)
-                            .ownGlassSurface(in: Capsule())
-                            .focusable(false)
-                            .accessibilityIdentifier("search.banner")
-                            .accessibilityValue(key)
+                        HStack(spacing: SpacingToken.m) {
+                            Text(verbatim: AppErrorMessage.localized(key))
+                                .padding(SpacingToken.s)
+                                .ownGlassSurface(in: Capsule())
+                                .focusable(false)
+                                .accessibilityIdentifier("search.banner")
+                                .accessibilityValue(key)
+                            if model.hasContent, model.state.presentedError != nil { retryAction }
+                        }
                     }
+                } else if model.hasContent, model.state.presentedError != nil {
+                    retryAction
                 }
             }
             .searchable(
@@ -123,6 +126,12 @@ struct SearchView: View {
             .onDisappear { model.onDisappear() }
             .accessibilityIdentifier("search.root")
         }
+    }
+
+    private var retryAction: some View {
+        Button(action: model.retry) { Copy.text(.actionRetry) }
+            .buttonStyle(.glass)
+            .accessibilityIdentifier("search.retry")
     }
 
     private var recentSearches: some View {
@@ -216,6 +225,7 @@ private struct SearchResultRow: View {
                     }
                     .padding(.vertical, SpacingToken.m)
                 }
+                .accessibilityIdentifier("search.row.\(group.id.rawValue)")
                 .onAppear {
                     if let rememberedID {
                         proxy.scrollTo(rememberedID, anchor: .center)
@@ -232,7 +242,14 @@ private struct SearchResultRow: View {
                 feature.model.focusedKind = group.id
             }
         }
-        .accessibilityIdentifier("search.row.\(group.id.rawValue)")
+        .onChange(of: group.items.map(\.id)) { _, ids in
+            guard let rememberedID, !ids.contains(rememberedID) else { return }
+            let fallback = ids.first
+            self.rememberedID = fallback
+            if feature.model.focusedKind == group.id {
+                DispatchQueue.main.async { focus = fallback }
+            }
+        }
     }
 }
 

@@ -41,6 +41,34 @@ Add only that `self.` qualification to the traversal helper. No test method,
 assertion, expected value, timeout, skip condition or reference comparison is
 changed. The other three MVP test files remain byte-for-byte identical to #41.
 
+## Apple UI and rendering follow-up
+
+CI run `40756344642` compiled the tests and exposed seven failing tvOS UI
+methods and one snapshot assertion. The iOS job reached the UI suite before
+its 40-minute timeout; it did not stall during a build.
+
+Production fixes preserve each row header's own accessibility identifier by
+assigning the row identifier to its horizontal scroll view, restore focus to
+a surviving result when the remembered card disappears, and keep the retry
+action beside the visible banner instead of below lazy offscreen rows.
+Search scrolling can dismiss the phone keyboard, and compact tabs stay
+expanded while Search is selected so other tabs remain reachable.
+
+Two test helpers change without editing any test assertion or expected value:
+
+- `T09SearchMVPTests.swift`: the tab helper enters a selected tvOS tab's content
+  with Down when focus is still in the native tab strip. On iOS it dismisses
+  the keyboard with the scroll gesture before switching away from Search.
+  Tests still assert actual keyboard focus, query retention and tab content.
+- `T09SearchSnapshotTests.swift`: the window renderer waits for the native
+  navigation/search presentation and scrolling to commit to the screen.
+  A single `Task.yield()` captured an incomplete first frame, making glass
+  and opaque images identical. The inequality, dimensions, semantic checks,
+  reference comparisons and missing-reference skip remain unchanged.
+
+The two core MVP files remain byte-for-byte identical to #41. No test method,
+assertion, expected value or reference baseline is removed or weakened.
+
 ## Conflict resolution
 
 Keep main's throwing certificate-pin lookup and search-host error handling.

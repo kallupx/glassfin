@@ -334,7 +334,16 @@ final class T09SearchMVPTests: XCTestCase {
     private func openTab(_ title: String, identifier: String, in app: XCUIApplication) {
         #if os(tvOS)
             activate(element(identifier, in: app), in: app)
+            // Selecting a native tvOS tab leaves focus in the tab strip until Down enters its content.
+            if identifier == "design.tab.search" {
+                let keyboard = app.keyboards.firstMatch
+                if keyboard.waitForExistence(timeout: 5), !keyboard.hasFocus { XCUIRemote.shared.press(.down) }
+            }
         #else
+            // End keyboard interaction before asking the native tab bar to switch destinations.
+            if title != "Search", app.keyboards.firstMatch.exists {
+                element("search.root", in: app).swipeDown()
+            }
             activate(app.tabBars.buttons[title], in: app)
         #endif
     }
