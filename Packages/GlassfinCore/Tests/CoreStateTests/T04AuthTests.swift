@@ -8,13 +8,13 @@ import XCTest
 
 @MainActor
 final class T04AuthFlowTests: XCTestCase {
-    func testT04_05_addressFocusFollowsTheField() {
+    func testT04_05_addressFocusFollowsTheField() async {
         XCTAssertEqual(AuthFocusPolicy.address(fieldIsEmpty: true), .addressField)
         XCTAssertEqual(AuthFocusPolicy.address(fieldIsEmpty: false), .continueButton)
         XCTAssertEqual(AuthFocusPolicy.cleartextAndCertificate, .cancel)
     }
 
-    func testT04_16_serverNameDropsMarkupAndCapsAt64() {
+    func testT04_16_serverNameDropsMarkupAndCapsAt64() async {
         let raw = "<b>Home</b>\u{0007}" + String(repeating: "n", count: 500)
         let shown = AuthServerName.display(raw)
         XCTAssertFalse(shown.contains("<"))
@@ -487,7 +487,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertFalse(snapshot.contains("access-token"))
     }
 
-    func testT04_55_tenServersAndUsersStayUnderTheBudget() throws {
+    func testT04_55_tenServersAndUsersStayUnderTheBudget() async throws {
         var preferences = AppPreferences.empty
         for index in 0..<10 {
             let id = String(format: "server-%02d", index)
