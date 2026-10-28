@@ -740,3 +740,48 @@ skips; 395 passed. Line coverage is 91.71% (7,581/8,266), above the 80% gate.
 Strict recursive swift-format, design-system lint, String Catalog validation,
 DEBUG-string validation and CI grep all passed. The ten inherited bootstrap
 unit tests passed. Apple UI and snapshot tests were not executed on Linux.
+
+## T07-81: distinguish received bytes from fixture-sent bytes
+
+Applies to `T07ImageTests.testT07_81_lyingContentLengthStreamIsCancelledAtTheCap`
+and `testT07_81_missingContentLengthStreamIsCancelledAtTheCap`, through their
+shared `assertStreamIsCancelled` helper. Test IDs and signatures are unchanged.
+
+Slow CI observed 21,299,200 fixture-sent bytes against the old 21,233,664-byte
+bound (20 MiB + four 64 KiB chunks). Cancellation can reach the fixture one
+chunk later even though the downloader has already rejected the response.
+Producer progress therefore cannot establish the receive-side memory limit.
+
+```diff
+- XCTAssertGreaterThan(count, MetadataPolicy.imageMaxBytes)
+- XCTAssertLessThanOrEqual(count, MetadataPolicy.imageMaxBytes + 4 * ImageStreamProtocol.chunkSize)
++ XCTAssertGreaterThan(received, MetadataPolicy.imageMaxBytes)
++ XCTAssertLessThanOrEqual(received, MetadataPolicy.imageMaxBytes + ImageStreamProtocol.chunkSize)
++ XCTAssertGreaterThan(sent, MetadataPolicy.imageMaxBytes)
++ XCTAssertLessThanOrEqual(sent, MetadataPolicy.imageMaxBytes + 1024 * 1024)
+```
+
+`received` now comes from a lock-protected internal downloader counter. It counts
+the delegate chunks processed before stopping, including the rejecting chunk,
+and excludes callbacks discarded after cancellation. The counter survives buffer
+cleanup so the test can inspect it after the download fails. A test hook is needed
+because the downloader is final, creates its own URLSession delegate, and clears
+its private buffer on completion; fixture-side instrumentation only measures
+sent bytes. The counter observes receipt without changing the production byte
+limit, buffering, or cancellation behavior.
+
+The new strict receive bound is 21,037,056 bytes (20 MiB + one 64 KiB chunk).
+Only the send bound is relaxed, to 22,020,096 bytes (20 MiB + 1 MiB), still well
+before the fixture's extra 8 MiB. The decoding-error, cancellation expectation,
+and unfinished-fixture assertions remain unchanged. This separates the security
+property from producer cancellation latency.
+
+Linux validation passed: `swift build --build-system native`, all seven
+`T07ImageTests`, the coverage gate (493 tests, seven live-server skips, zero
+failures; 91.73% line coverage), strict recursive swift-format, and source checks.
+A temporary receive-cap mutation failed both strict receive assertions as
+expected; a temporary five-chunk queued-send simulation passed both tests.
+Neither temporary change is retained. This branch has no
+`scripts/check-unit-test-targets.py`; the existing checker from the adjacent
+`wt-ut-guard` worktree passed its self-test against this branch's `project.yml`.
+Apple simulator tests were not run on Linux.

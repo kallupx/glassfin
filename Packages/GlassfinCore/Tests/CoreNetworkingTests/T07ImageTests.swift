@@ -56,11 +56,15 @@ final class T07ImageTests: XCTestCase {
             XCTAssertEqual(error as? APIError, .decoding)
         }
         await fulfillment(of: [probe.cancelled], timeout: 5)
-        let count = probe.bytesSent
-        XCTAssertGreaterThan(count, MetadataPolicy.imageMaxBytes)
-        // Allow a few queued URLSession callbacks, but require cancellation at the cap,
-        // well before the fixture's extra 8 MB can be transmitted.
-        XCTAssertLessThanOrEqual(count, MetadataPolicy.imageMaxBytes + 4 * ImageStreamProtocol.chunkSize)
+        let received = download.receivedByteCount
+        XCTAssertGreaterThan(received, MetadataPolicy.imageMaxBytes)
+        // The downloader must stop receiving after the first chunk that crosses the cap.
+        XCTAssertLessThanOrEqual(received, MetadataPolicy.imageMaxBytes + ImageStreamProtocol.chunkSize)
+        let sent = probe.bytesSent
+        XCTAssertGreaterThan(sent, MetadataPolicy.imageMaxBytes)
+        // Cancellation can reach the producer later on slow CI, but must still stop it
+        // well before the fixture's extra 8 MiB can be transmitted.
+        XCTAssertLessThanOrEqual(sent, MetadataPolicy.imageMaxBytes + 1024 * 1024)
         XCTAssertFalse(probe.finished)
     }
 

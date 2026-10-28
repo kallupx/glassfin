@@ -58,6 +58,10 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
     private var continuation: CheckedContinuation<(Data, URLResponse, Int?), any Error>?
     private var task: URLSessionDataTask?
     private var stopped = false
+    private var receivedBytes = 0
+
+    /// Test observation: includes the rejecting chunk, excludes callbacks discarded after stopping.
+    var receivedByteCount: Int { lock.withLock { receivedBytes } }
 
     init(limit: Int, redirects: RedirectSessionDelegate, certificatePin: OriginCertificatePin?) {
         self.limit = limit
@@ -111,6 +115,7 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive chunk: Data) {
         lock.lock()
+        if !stopped { receivedBytes += chunk.count }
         // Content-Length is only an early rejection hint. This count is the guarantee,
         // including chunked, compressed, missing-length and dishonest responses.
         let tooLarge = chunk.count > limit - data.count
