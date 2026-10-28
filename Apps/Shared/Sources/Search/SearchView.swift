@@ -29,7 +29,9 @@ struct SearchFeatureHost: View {
 struct SearchView: View {
     let feature: SearchFeature
     @Bindable private var model: SearchViewModel
-    @FocusState private var searchFocused: Bool
+    #if os(iOS)
+        @FocusState private var searchFocused: Bool
+    #endif
 
     init(feature: SearchFeature) {
         self.feature = feature
@@ -87,14 +89,19 @@ struct SearchView: View {
                 text: Binding(get: { model.term }, set: { model.setTerm($0) }),
                 prompt: Text(CopyKey.searchPrompt.resource)
             )
-            .searchFocused($searchFocused)
+            #if os(iOS)
+                .searchFocused($searchFocused)
+            #endif
             .navigationTitle(Copy.string(.tabSearch))
             .navigationDestination(item: $model.selectedItem) { item in
                 SearchItemDetail(feature: feature, initial: item)
             }
             .onAppear {
                 model.onAppear()
-                if model.term.isEmpty { searchFocused = true }
+                // The native tvOS searchable interface manages keyboard and directional focus.
+                #if os(iOS)
+                    if model.term.isEmpty { searchFocused = true }
+                #endif
             }
             .onChange(of: model.bannerKey) { old, new in
                 if old != nil && new == nil { model.retryAfterRecovery() }

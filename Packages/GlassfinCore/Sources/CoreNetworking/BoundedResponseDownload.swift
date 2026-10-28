@@ -26,7 +26,8 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
     func data(for request: URLRequest, configuration: URLSessionConfiguration) async throws -> Result {
         configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
+        // Let successful completion callbacks finish; failure and cancellation paths cancel the task explicitly.
+        defer { session.finishTasksAndInvalidate() }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 lock.withLock {
