@@ -1,8 +1,10 @@
 import CoreModels
 import CoreNetworking
-import CoreState
 import Foundation
+import Observation
 import XCTest
+
+@testable import CoreState
 
 final class T04AuthFlowTests: XCTestCase {
     @MainActor
@@ -37,7 +39,7 @@ final class T04AuthFlowTests: XCTestCase {
         server.name = "<b>" + String(repeating: "n", count: 100) + "</b>"
         rig.backend.probeOutcome = .needsCleartext(server)
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .cleartext)
         XCTAssertEqual(rig.flow.displayedName.count, 64)
         XCTAssertTrue(rig.flow.displayedName.hasPrefix("<b>"))
         await rig.flow.acceptCleartext()
@@ -54,7 +56,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCleartext(rig.server())
         rig.flow.addressText = "http://192.168.1.10:8096"
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .cleartext)
         XCTAssertEqual(rig.flow.screen, .cleartext)
         XCTAssertEqual(rig.flow.focus, .cancel)
         rig.flow.rejectCleartext()
@@ -68,12 +70,12 @@ final class T04AuthFlowTests: XCTestCase {
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .needsCleartext(rig.server())
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .cleartext)
         XCTAssertEqual(rig.flow.focus, AuthFocusPolicy.cleartextAndCertificate)
         rig.flow.rejectCleartext()
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url("https://example.com"))
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         XCTAssertEqual(rig.flow.screen, .certificate)
         XCTAssertEqual(rig.flow.focus, .cancel)
     }
@@ -89,7 +91,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCertificate(leaf, url: Sample.url("https://media.example:8096"))
         rig.flow.addressText = "https://media.example:8096"
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificateMismatch)
         XCTAssertEqual(rig.flow.screen, .certificateMismatch)
         XCTAssertNotNil(rig.flow.mismatchPrevious)
         XCTAssertEqual(rig.flow.mismatchPresented?.sha256, leaf.sha256)
@@ -108,14 +110,14 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
         rig.backend.readyWithPin = rig.server()
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         XCTAssertTrue(rig.flow.canAcceptCertificate)
         XCTAssertTrue(rig.pins.writes.isEmpty)
         let formatted = sampleLeaf().sha256.uppercased().map(String.init).joined(separator: ":")
         try rig.flow.acceptCertificate(userAcceptedFingerprint: formatted)
         // Acceptance is in memory until the retry learns ServerInfo.id.
         XCTAssertTrue(rig.pins.writes.isEmpty)
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         XCTAssertEqual(rig.flow.screen, .loginMethod)
         XCTAssertEqual(rig.backend.probePins.count, 2)
         XCTAssertEqual(rig.backend.probePins.last.flatMap { $0 }?.fingerprint(for: url), sampleLeaf().sha256)
@@ -134,16 +136,16 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: firstURL)
         rig.backend.readyWithPin = rig.server()
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         for secondURL in ["https://other.example", "https://media.example:8920"] {
             rig.flow.goBack()
             let url = Sample.url(secondURL)
             rig.flow.addressText = secondURL
             rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
             rig.flow.submitAddress()
-            await rig.wait()
+            await rig.wait(for: .certificate)
             XCTAssertEqual(rig.flow.screen, .certificate)
             XCTAssertNil(rig.backend.probePins.last!)
             XCTAssertEqual(rig.pins.writes.count, 1)
@@ -164,7 +166,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
         rig.backend.readyWithPin = info
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificateMismatch)
         XCTAssertEqual(rig.flow.screen, .certificateMismatch)
         let probes = rig.backend.probes
         try rig.flow.acceptCertificate(userAcceptedFingerprint: String(repeating: "ef", count: 32))
@@ -172,7 +174,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.backend.probes, probes)
         XCTAssertEqual(try rig.pins.fingerprint(for: Sample.serverID), previous)
         try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         XCTAssertEqual(rig.flow.screen, .loginMethod)
         XCTAssertEqual(rig.pins.writes.map(\.serverID), [Sample.serverID, Sample.serverID])
         XCTAssertEqual(try rig.pins.fingerprint(for: Sample.serverID), sampleLeaf().sha256)
@@ -187,13 +189,13 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: url)
         rig.backend.readyWithPin = rig.server()
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         rig.flow.removeCurrentServer()
         XCTAssertNil(try rig.pins.fingerprint(for: Sample.serverID))
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         XCTAssertNil(rig.backend.probePins.last!)
         XCTAssertEqual(rig.flow.screen, .certificate)
     }
@@ -206,12 +208,12 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .needsCertificate(
             ProbeTransportError.unknownLeaf, url: Sample.url(rig.flow.addressText))
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         let probes = rig.backend.probes
         XCTAssertFalse(rig.flow.canAcceptCertificate)
         try rig.flow.acceptCertificate(userAcceptedFingerprint: "")
         try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)
-        await rig.wait()
+        await rig.wait(for: .certificate)
         XCTAssertEqual(rig.flow.screen, .certificate)
         XCTAssertEqual(rig.backend.probes, probes)
         XCTAssertTrue(rig.pins.writes.isEmpty)
@@ -230,14 +232,14 @@ final class T04AuthFlowTests: XCTestCase {
         rig.flow.addressText = "https://media.example:8096"
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url(rig.flow.addressText))
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificateMismatch)
         XCTAssertEqual(rig.flow.screen, .certificateMismatch)
         XCTAssertEqual(rig.flow.displayedName, "**Home**")
         rig.flow.rejectCertificate()
         rig.flow.addressText = "https://other.example"
         rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url(rig.flow.addressText))
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .certificate)
         XCTAssertEqual(rig.flow.screen, .certificate)
         XCTAssertEqual(rig.flow.displayedName, "other.example")
     }
@@ -250,7 +252,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.flow.addressText = "https://example.com"
         rig.backend.probeOutcome = .ready(rig.server())
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         XCTAssertEqual(rig.flow.screen, .credentials)
         XCTAssertEqual(rig.flow.focus, .username)
         rig.flow.goBack()
@@ -263,8 +265,16 @@ final class T04AuthFlowTests: XCTestCase {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server())
+        let enabledGate = ResumeGate()
+        rig.backend.enabledGate = enabledGate
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.backend.enabledStarted.wait()
+        // The probe is done, but the login method is still awaiting the enabled response.
+        XCTAssertFalse(rig.flow.isProbing)
+        XCTAssertFalse(rig.flow.quickConnectEnabled)
+        XCTAssertEqual(rig.flow.screen, .welcome)
+        enabledGate.releaseAll()
+        await rig.wait(for: .loginMethod)
         XCTAssertEqual(rig.backend.initiates, 0)
         XCTAssertEqual(rig.backend.enabledCalls, 1)
         XCTAssertEqual(rig.backend.publicUserCalls, 0)
@@ -273,6 +283,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.backend.initiateMethods, ["POST"])
         XCTAssertEqual(rig.flow.quickConnectCode, "482913")
         XCTAssertEqual(rig.flow.screen, .quickConnect)
+        XCTAssertTrue(rig.flow.isPolling)
     }
 
     @MainActor
@@ -282,7 +293,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.secret = "super-secret-value"
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
         let settings = rig.harness.settings.allValues().values.joined()
         XCTAssertFalse(settings.contains("super-secret-value"))
@@ -301,9 +312,9 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.pollAuthenticated = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
-        await rig.wait()
+        await rig.wait(until: { rig.flow.quickConnectExpired })
         XCTAssertEqual(rig.backend.initiates, 4)
         XCTAssertEqual(rig.flow.quickConnectRenewals, 3)
         XCTAssertTrue(rig.flow.quickConnectExpired)
@@ -312,7 +323,7 @@ final class T04AuthFlowTests: XCTestCase {
         XCTAssertEqual(rig.flow.focus, .newCode)
         rig.backend.pollAuthenticated = true
         await rig.flow.getNewQuickConnectCode()
-        await rig.wait()
+        await rig.wait(for: .home)
         XCTAssertEqual(rig.backend.initiates, 5)
         XCTAssertFalse(rig.flow.quickConnectExpired)
         XCTAssertEqual(rig.flow.screen, .home)
@@ -325,29 +336,40 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.pollError = .server(status: 503)
         rig.backend.pollThenAuthenticate = true
+        let finishGate = ResumeGate()
+        rig.backend.finishGate = finishGate
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
-        await rig.wait()
+        await rig.backend.finishStarted.wait()
+        // Polling has stopped, but exchanging the secret has not published a session yet.
+        XCTAssertFalse(rig.flow.isPolling)
+        XCTAssertEqual(rig.flow.screen, .quickConnect)
+        XCTAssertEqual(rig.harness.app.phase, .launching)
+        XCTAssertEqual(rig.backend.polls, 2)
+        finishGate.releaseAll()
+        await rig.wait(for: .home)
         guard case .signedIn = rig.harness.app.phase else { return XCTFail("expected home") }
         XCTAssertNotEqual(rig.harness.app.phase, .needsLogin(rig.server()))
     }
 
     @MainActor
-    func testT04_42_backgroundCancelsPolling() async {
+    func testT04_42_backgroundCancelsPolling() async throws {
         let rig = Rig()
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.blockPoll = true
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
         XCTAssertTrue(rig.flow.isPolling)
+        let pollTask = try XCTUnwrap(rig.flow.pollTask)
+        await rig.backend.pollStarted.wait()
         rig.flow.sceneBecameBackground()
         XCTAssertFalse(rig.flow.isPolling)
         let calls = rig.backend.polls
         rig.backend.resumePoll(true)
-        await Task.yield()
+        await pollTask.value
         XCTAssertEqual(rig.backend.polls, calls)
         XCTAssertEqual(rig.flow.screen, .quickConnect)
     }
@@ -360,9 +382,9 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.finishError = .unauthorized
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
-        await rig.wait()
+        await rig.wait(until: { rig.flow.inlineError == .quickConnectUnauthorized })
         XCTAssertEqual(rig.flow.inlineError, .quickConnectUnauthorized)
         XCTAssertNotEqual(rig.flow.inlineError, .invalidCredentials)
         XCTAssertNotNil(try rig.harness.secure.data(for: Sample.account()))
@@ -378,7 +400,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server(id: AuthIDs.server))
         rig.backend.quickConnect = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         rig.flow.choosePassword()
         rig.flow.username = "Ada"
         await rig.flow.signIn(password: "correct")
@@ -407,7 +429,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.quickConnect = false
         rig.backend.signInError = .unauthorized
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "wrong")
         XCTAssertEqual(rig.flow.inlineError, .invalidCredentials)
@@ -425,7 +447,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server(id: AuthIDs.server))
         rig.backend.quickConnect = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "pässi🔑")
         XCTAssertTrue(rig.flow.passwordCleared)
@@ -443,7 +465,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.quickConnect = false
         rig.backend.signInError = .server(status: 500)
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "secret")
         XCTAssertEqual(rig.flow.inlineError, .loginServerFailure)
@@ -458,7 +480,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.quickConnect = false
         rig.backend.capabilitiesError = .server(status: 500)
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "correct")
         guard case .signedIn = rig.harness.app.phase else { return XCTFail("sign-in should proceed") }
@@ -480,7 +502,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server(id: AuthIDs.server))
         rig.backend.quickConnect = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .credentials)
         rig.flow.choosePassword()
         await rig.flow.signIn(password: "correct")
         guard case .signedIn(let session) = rig.harness.app.phase else { return XCTFail("expected session") }
@@ -651,13 +673,13 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .notFound(ProbeFailureDetail(httpSkippedByPolicy: true))
         rig.flow.addressText = "203.0.113.5"
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(until: { rig.flow.inlineError == .serverNotFound })
         XCTAssertEqual(rig.flow.inlineError, .serverNotFound)
         XCTAssertTrue(rig.flow.httpSkippedByPolicy)
         rig.backend.probeOutcome = .publicHTTPRejected
         rig.flow.addressText = "http://203.0.113.5:8096"
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(until: { rig.flow.inlineError == .publicAddressRequiresHTTPS })
         XCTAssertEqual(rig.flow.inlineError, .publicAddressRequiresHTTPS)
         XCTAssertFalse(rig.flow.httpSkippedByPolicy)
     }
@@ -668,13 +690,13 @@ final class T04AuthFlowTests: XCTestCase {
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .setupIncomplete(address: Sample.url("https://media.example"))
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .setupIncomplete)
         XCTAssertEqual(rig.flow.screen, .setupIncomplete)
         XCTAssertEqual(rig.flow.focus, .tryAgain)
         XCTAssertTrue(rig.harness.app.preferencesSnapshot().servers.isEmpty)
         let calls = rig.backend.probes
         rig.flow.retrySetup()
-        await rig.wait()
+        await rig.wait(for: .setupIncomplete)
         XCTAssertEqual(rig.backend.probes, calls + 1)
         XCTAssertEqual(rig.flow.screen, .setupIncomplete)
         XCTAssertEqual(rig.backend.enabledCalls, 0)
@@ -687,7 +709,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.pollAuthenticated = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
         await clock.waitForSleeps(1)
         XCTAssertEqual(rig.backend.polls, 1)
@@ -700,21 +722,22 @@ final class T04AuthFlowTests: XCTestCase {
     }
 
     @MainActor
-    func testT04_39_leavingA4CancelsAllFurtherRequests() async {
+    func testT04_39_leavingA4CancelsAllFurtherRequests() async throws {
         let clock = SuspendingClock()
         let rig = Rig(clock: clock)
         defer { rig.cleanup() }
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.pollAuthenticated = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
         await clock.waitForSleeps(1)
+        let pollTask = try XCTUnwrap(rig.flow.pollTask)
         rig.flow.goBack()
         let calls = rig.backend.polls
         clock.advance(by: .seconds(60))
         clock.resumeAll()
-        for _ in 0..<20 { await Task.yield() }
+        await pollTask.value
         XCTAssertEqual(rig.backend.polls, calls)
         XCTAssertEqual(rig.backend.initiates, 1)
         XCTAssertFalse(rig.flow.isPolling)
@@ -730,7 +753,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.pollAuthenticated = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
         await clock.waitForSleeps(1)
         rig.flow.sceneBecameBackground()
@@ -757,7 +780,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server())
         rig.backend.pollAuthenticated = false
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.chooseQuickConnect()
         await clock.waitForSleeps(1)
         for renewal in 1...3 {
@@ -782,7 +805,7 @@ final class T04AuthFlowTests: XCTestCase {
             defer { rig.cleanup() }
             rig.backend.probeOutcome = .ready(rig.server())
             rig.flow.submitAddress()
-            await rig.wait()
+            await rig.wait(for: .loginMethod)
             rig.backend.signInError = error
             rig.flow.choosePassword()
             await rig.flow.signIn(password: "sample")
@@ -794,7 +817,7 @@ final class T04AuthFlowTests: XCTestCase {
             rig.flow.goBack()
             rig.backend.finishError = error
             await rig.flow.chooseQuickConnect()
-            await rig.wait()
+            await rig.wait(until: { rig.flow.inlineError == expected })
             XCTAssertEqual(rig.flow.inlineError, expected)
             XCTAssertEqual(rig.flow.screen, .quickConnect)
         }
@@ -807,7 +830,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.backend.probeOutcome = .ready(rig.server(id: AuthIDs.server))
         rig.backend.capabilitiesError = .server(status: 503)
         rig.flow.submitAddress()
-        await rig.wait()
+        await rig.wait(for: .loginMethod)
         await rig.flow.signIn(password: "sample")
         XCTAssertEqual(rig.harness.app.preferencesSnapshot().activeUser()?.capabilitiesRetryPending, true)
         let restarted = AuthFlow(
@@ -998,7 +1021,11 @@ private struct Rig {
     }
 
     func cleanup() {
+        flow.cancelProbe()
         flow.sceneBecameBackground()
+        backend.enabledGate?.releaseAll()
+        backend.finishGate?.releaseAll()
+        backend.resumePoll(false)
         harness.app.signOutLocally(notice: nil)
         harness.cleanup()
     }
@@ -1010,10 +1037,48 @@ private struct Rig {
             version: SemVer(major: 10, minor: 11, patch: 0))
     }
 
-    func wait() async {
-        for _ in 0..<100 {
-            if !flow.isProbing && !flow.isPolling { return }
-            try? await Task.sleep(for: .milliseconds(5))
+    func wait(for screen: AuthScreen, file: StaticString = #filePath, line: UInt = #line) async {
+        await wait(until: { flow.screen == screen && !flow.isProbing }, file: file, line: line)
+    }
+
+    func wait(
+        until condition: @escaping @MainActor () -> Bool,
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        let observation = AuthCondition(condition)
+        observation.observe()
+        // Preserve the old helper's 100 x 5 ms failure budget; state changes drive progress.
+        let result = await XCTWaiter.fulfillment(of: [observation.fulfilled], timeout: 0.5)
+        observation.stop()
+        if result != .completed { XCTFail("authentication condition was not met", file: file, line: line) }
+    }
+}
+
+/// Re-arm after each change because Observation callbacks fire before the new value is stored.
+@MainActor
+private final class AuthCondition {
+    let fulfilled = XCTestExpectation(description: "authentication condition")
+    private let condition: @MainActor () -> Bool
+    private var completed = false
+
+    init(_ condition: @escaping @MainActor () -> Bool) {
+        self.condition = condition
+    }
+
+    func stop() {
+        completed = true
+    }
+
+    func observe() {
+        guard !completed else { return }
+        if withObservationTracking(
+            { condition() },
+            onChange: { [weak self] in
+                Task { @MainActor [weak self] in self?.observe() }
+            })
+        {
+            completed = true
+            fulfilled.fulfill()
         }
     }
 }
@@ -1043,6 +1108,11 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
     var probePins: [OriginCertificatePin?] = []
     var quickConnect = true
     var enabledCalls = 0
+    var enabledGate: ResumeGate?
+    let enabledStarted = ResumeGate()
+    var finishGate: ResumeGate?
+    let finishStarted = ResumeGate()
+    let pollStarted = ResumeGate()
     var publicUserCalls = 0
     var probes = 0
     var users: [PublicUser] = []
@@ -1083,6 +1153,8 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
     func quickConnectEnabled(on server: ServerInfo) async throws(APIError) -> Bool {
         _ = server
         lock.withLock { enabledCalls += 1 }
+        enabledStarted.releaseAll()
+        if let enabledGate { await enabledGate.wait() }
         return quickConnect
     }
 
@@ -1126,6 +1198,8 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
         -> AuthenticatedSession
     {
         _ = secret
+        finishStarted.releaseAll()
+        if let finishGate { await finishGate.wait() }
         if let finishError { throw finishError }
         let session = UserSession(server: server, userID: Sample.userID, userName: "Ada", isAdministrator: false)
         return AuthenticatedSession(session: session, accessToken: "access-token")
@@ -1194,6 +1268,7 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
         lock.lock()
         pollWaiter = continuation
         lock.unlock()
+        pollStarted.releaseAll()
     }
 
     private func takePollWaiter() -> CheckedContinuation<Bool, Error>? {
