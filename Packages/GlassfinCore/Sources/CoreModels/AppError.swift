@@ -59,8 +59,6 @@ public enum AppError: Error, Sendable, Equatable {
     case cancelled
     /// A local invariant failed (for example a header value containing CR/LF). Logged, not fatal.
     case internalInvariant
-    /// The user typed `http://` for a public host, or App Transport Security refused the connection.
-    case publicHTTPRejected
 }
 
 public enum RequestAuthentication: Sendable, Equatable {
@@ -133,8 +131,6 @@ public enum AppErrorMapping {
             }
         case .invalidURL, .headerRejected, .invalidItemID:
             return .internalInvariant
-        case .transportSecurity:
-            return .publicHTTPRejected
         }
     }
 
@@ -272,8 +268,6 @@ public enum AppErrorMessage {
             return playbackFailedKey
         case .decoding, .cancelled, .internalInvariant:
             return nil
-        case .publicHTTPRejected:
-            return AuthCopy.Key.publicAddressRequiresHTTPS.rawValue
         }
     }
 
@@ -319,8 +313,6 @@ public enum AppErrorMessage {
             return "cancelled"
         case .internalInvariant:
             return "internalInvariant"
-        case .publicHTTPRejected:
-            return "publicHTTPRejected"
         }
     }
 

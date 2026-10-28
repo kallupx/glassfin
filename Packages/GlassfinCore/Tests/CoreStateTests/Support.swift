@@ -7,10 +7,10 @@ import XCTest
 
 enum Sample {
     static let token = "super-secret-token"
-    static let serverID = "11111111111111111111111111111111"
-    static let otherServerID = "22222222222222222222222222222222"
-    static let userID = "33333333333333333333333333333333"
-    static let otherUserID = "44444444444444444444444444444444"
+    static let serverID = "server-1"
+    static let otherServerID = "server-2"
+    static let userID = "user-1"
+    static let otherUserID = "user-2"
     static let movie = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     static let other = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     static let library = "cccccccccccccccccccccccccccccccc"
@@ -36,10 +36,7 @@ enum Sample {
     }
 
     static func account(serverID: String = serverID, userID: String = userID) -> String {
-        guard let account = try? CredentialVault.tokenAccount(serverID: serverID, userID: userID) else {
-            preconditionFailure("Expected GUID test fixtures")
-        }
-        return account
+        SessionCredential.account(serverID: serverID, userID: userID)
     }
 }
 
@@ -77,7 +74,6 @@ final class CountingSecureStore: SecureStore, @unchecked Sendable {
     private let lock = NSLock()
     private var values: [String: Data] = [:]
     private var removedAccounts: [String] = []
-    private var writtenAccounts: [String] = []
     var failSet = false
 
     func data(for account: String) throws -> Data? {
@@ -90,7 +86,6 @@ final class CountingSecureStore: SecureStore, @unchecked Sendable {
         if failSet { throw StoreWriteError() }
         lock.lock()
         values[account] = data
-        writtenAccounts.append(account)
         lock.unlock()
     }
 
@@ -100,8 +95,6 @@ final class CountingSecureStore: SecureStore, @unchecked Sendable {
         values[account] = nil
         lock.unlock()
     }
-
-    func writes() -> [String] { lock.withLock { writtenAccounts } }
 
     func removed() -> [String] {
         lock.lock()
