@@ -1,3 +1,4 @@
+import CoreModels
 import CoreNetworking
 import Foundation
 import XCTest
@@ -23,20 +24,60 @@ final class StringCatalogTests: XCTestCase {
     }
 
     func testNetworkingCatalogKeysAndLocalizedAccessors() throws {
-        let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
-        let catalogURL = root.appendingPathComponent(
-            "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings"
+        // This constant names an Info.plist field rather than user-facing copy.
+        let englishValues = try catalogEnglishValues(module: "CoreNetworking", excluding: ["infoDictionaryKey"])
+        try assertLocalized(
+            ServerTransportPolicy.unencryptedWarning,
+            key: ServerTransportPolicy.unencryptedWarningKey,
+            englishValues: englishValues
         )
-        let data = try Data(contentsOf: catalogURL)
+        try assertLocalized(
+            ServerTransportPolicy.publicAddressRequiresHTTPS,
+            key: ServerTransportPolicy.publicAddressRequiresHTTPSKey,
+            englishValues: englishValues
+        )
+        try assertLocalized(
+            SessionEndCopy.serverSessionMayRemain,
+            key: SessionEndCopy.serverSessionMayRemainKey,
+            englishValues: englishValues
+        )
+    }
+
+    func testModelsCatalogKeysAndLocalizedAccessor() throws {
+        let englishValues = try catalogEnglishValues(module: "CoreModels")
+        XCTAssertEqual(englishValues.count, 16)
+        for key in englishValues.keys.sorted() {
+            try assertLocalized(AppErrorMessage.localized(key), key: key, englishValues: englishValues)
+        }
+    }
+
+    private func catalogEnglishValues(module: String, excluding nonlocalizedConstants: Set<String> = []) throws
+        -> [String: String]
+    {
+        let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
+        let sources = root.appendingPathComponent("Packages/GlassfinCore/Sources/\(module)")
+        let files = try FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.path < $1.path }
+        let pattern = #"\bstatic\s+let\s+(\w+Key)\s*=\s*"([^"\r\n]+)""#
+        let regex = try NSRegularExpression(pattern: pattern)
+        var keys: Set<String> = []
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for match in regex.matches(in: source, range: NSRange(source.startIndex..., in: source)) {
+                let nameRange = try XCTUnwrap(Range(match.range(at: 1), in: source))
+                if nonlocalizedConstants.contains(String(source[nameRange])) { continue }
+                let range = try XCTUnwrap(Range(match.range(at: 2), in: source))
+                keys.insert(String(source[range]))
+            }
+        }
+        XCTAssertFalse(keys.isEmpty, "\(module): expected source key constants")
+        let data = try Data(contentsOf: sources.appendingPathComponent("Localizable.xcstrings"))
         let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
-        let entries: [(key: String, localized: String)] = [
-            (ServerTransportPolicy.unencryptedWarningKey, ServerTransportPolicy.unencryptedWarning),
-            (ServerTransportPolicy.publicAddressRequiresHTTPSKey, ServerTransportPolicy.publicAddressRequiresHTTPS),
-            (SessionEndCopy.serverSessionMayRemainKey, SessionEndCopy.serverSessionMayRemain),
-        ]
-
-        for (key, localized) in entries {
+        XCTAssertEqual(Set(strings.keys).subtracting(keys), [], "\(module): orphan catalog keys")
+        var englishValues: [String: String] = [:]
+        for key in keys.sorted() {
             let entry = try XCTUnwrap(strings[key] as? [String: Any], "Missing catalog key: \(key)")
             let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], "\(key): missing localizations")
             for locale in ["en", "fi"] {
@@ -54,13 +95,20 @@ final class StringCatalogTests: XCTestCase {
                     value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                     "\(key): \(locale) value must not be empty"
                 )
+                if locale == "en" {
+                    englishValues[key] = value
+                }
             }
-            #if os(Linux)
-                XCTAssertEqual(localized, key)
-            #else
-                XCTAssertFalse(localized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, key)
-            #endif
         }
+        return englishValues
+    }
+
+    private func assertLocalized(_ localized: String, key: String, englishValues: [String: String]) throws {
+        #if os(Linux)
+            XCTAssertEqual(localized, key)
+        #else
+            XCTAssertEqual(localized, try XCTUnwrap(englishValues[key]), key)
+        #endif
     }
 
     func testScannerChecksCatalogsOutsideCoreNetworking() throws {
