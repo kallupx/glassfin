@@ -53,6 +53,36 @@ and every variant, segment, init segment and key URI. Server-generated segment
 query tokens retain the ADR's accepted-risk behavior; RFC 6454 origin identity
 and its documenting test are unchanged.
 
+## D4 playlist authentication (Q8P-23)
+
+GitHub Actions run 40618446435, with F3 on Jellyfin 10.10.7, 10.11.11 and
+12.2, established that segment and EXT-X-MAP URLs inherit the variant request's
+query. Stripping the server credential and using Authorization on playlists
+produced media URLs that returned 401 without a header; keeping that query
+produced server-written media credentials and headerless 200 responses.
+
+`ServerHLSCredentialQuery` preserves the original field name and encoded value
+from TranscodingUrl in memory. The coordinator passes it across URL preparation
+and the loader carrier; both the preparation GET and master/variant loader GETs
+append it only after origin/userinfo/downgrade validation and send no Authorization.
+Keys and other loader resources remain header-only, with no query credential.
+Keys are marked in the wrapper so a key named `*.m3u8` cannot receive the query.
+`MediaAssetScheme.wrap` rejects credentials; the AVURLAsset receives a clean wrapper.
+Segments and EXT-X-MAP keep the existing server-written HTTP(S) behavior and checks.
+No app token is converted into a URI; the Release fallback builder stays disabled.
+The profile's `Container=mp4` and the URL's existing `SegmentContainer=mp4`
+already negotiate fMP4 (the probe observed MAP), so no profile field was added.
+
+T08P-101 covers the portable boundaries, redaction of both credential spellings,
+and the native AVURLAsset URL (Apple execution pending). T08P-102 runs within the
+seed playback decision test for F3, F4 DTS and HEVC/AC3, including the stripped
+401 control and headerless segment/MAP 200 checks. The probe adds a `loader`
+mode; docker-integration defaults assert stripped segment=401 and loader
+segment/MAP=200. Probe and test output are captured privately and scanned for
+unredacted query credentials before display. This focused text check does not
+complete the broader TPOC-80 artifact/recording scanner. Live execution remains
+pending because this workspace has no Docker.
+
 ## Differences resolved against merged main
 
 - Removed the provisional `h265` alias. Only `h264` and `hevc`, matched without
@@ -70,7 +100,7 @@ and its documenting test are unchanged.
   contradictions with the merged PoC codec, profile, reason-parser, retry,
   pinning, string, reporting or token rules. Native validation remains pending.
 
-## Complete test-plan mapping (updated Follow-up 5)
+## Complete test-plan mapping (updated D4 / Q8P-23)
 
 Authoritative plans re-read on 2026-10-27: `/workspace/jellyfin-tvos/test/TESTPLAN-M08a-PoC.md`
 (T08P-01–100) and `TESTPLAN-PoC-ACCEPTANCE.md` (TPOC-01–82). Every ID appears below.
@@ -87,14 +117,14 @@ this table is traceability, not a claim of PoC acceptance.
 | T08P-02 | [`testT08P_02_playbackInfoRequestAndParsing`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift) | L request/auth/DTO. |
 | T08P-03 | [`testT08P_03_firstMediaSourceUsedInURLAndReports`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L first-source model; AVPlayer X pending. |
 | T08P-04 | [`testT08P_04_47_preparationErrorsFailBeforeEngineLoad`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L server-error model; U focus pending. |
-| T08P-05 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: all three live servers not run locally. |
+| T08P-05 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: all three live servers not run locally. |
 | T08P-06 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift) | L method model; decoded X/U pending. |
 | T08P-07 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift) | L method model; decoded HEVC/audio X/U pending. |
 | T08P-08 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift)<br>[`testT08P_08_10_70_hlsLoadsWithVideoCopyAndReportsDirectStream`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L carrier/report model; decoded X/U pending. |
-| T08P-09 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: fetched HLS/session flags. |
+| T08P-09 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: fetched HLS/session flags. |
 | T08P-10 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift)<br>[`testT08P_08_10_70_hlsLoadsWithVideoCopyAndReportsDirectStream`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L carrier/report model; real audio X/U pending. |
-| T08P-11 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: copied video/audio conversion. |
-| T08P-12 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift)<br>[`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | L method + I gated; decoded HEVC X/U pending. |
+| T08P-11 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: copied video/audio conversion. |
+| T08P-12 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift)<br>[`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | L method + I gated; decoded HEVC X/U pending. |
 | T08P-13 | [`testT08P_13_14_unsupportedPreflightMakesZeroPlaybackRequests`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L precheck; X/U deadline/focus pending. |
 | T08P-14 | [`testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift)<br>[`testT08P_13_14_unsupportedPreflightMakesZeroPlaybackRequests`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L codec/decision order; see 82–99. |
 | T08P-15 | [`testT08P_15_supportedPlaybackAfterUnsupportedError`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L recovery; U dismissal/focus pending. |
@@ -116,7 +146,7 @@ this table is traceability, not a claim of PoC acceptance.
 | T08P-31 | [`testT08P_23_31_endAndErrorReportStoppedExactlyOnce`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift)<br>[`testT08P_31_initialRemuxFailureNeverRetries`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L failed/remux stop payload; real segment failure X pending. |
 | T08P-32 | [`testT08P_32_73_reportHTTPFailuresRedactAndKeepHeaderOnlyAuth`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift) | L real HTTPClient + mocked transport auth/redaction. |
 | T08P-33 | — | Pending optimistic UserData/Home refresh and live resume position. |
-| T08P-34 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: active item/session flags only; dashboard/PlayMethod U pending. |
+| T08P-34 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated: active item/session flags only; dashboard/PlayMethod U pending. |
 | T08P-35 | — | Pending explicit post-sign-out report discard test. |
 | T08P-36 | [`testT08P_36_resumeTicksAndSaturation`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackPoCTests.swift)<br>[`testT08P_36_37_resumeAndStartOver`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L ticks/resume model; real seek X/U pending. |
 | T08P-37 | [`testT08P_36_37_resumeAndStartOver`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L start-over model; U journey pending. |
@@ -162,8 +192,8 @@ this table is traceability, not a claim of PoC acceptance.
 | T08P-77 | — | Pending native macOS server-log evidence. |
 | T08P-78 | — | Pending Now Playing/title cleaner integration. |
 | T08P-79 | [`testT08P_13_14_unsupportedPreflightMakesZeroPlaybackRequests`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L zero negotiation/stream precheck model; macOS-server app/job evidence X/U pending. |
-| T08P-80 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated DTS reason/session checks; decoded macOS U pending. |
-| T08P-81 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated exact ContainerNotSupported reason set; decoded macOS U pending. |
+| T08P-80 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated DTS reason/session checks; decoded macOS U pending. |
+| T08P-81 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated exact ContainerNotSupported reason set; decoded macOS U pending. |
 | T08P-82 | [`testT08P_82_VideoCodecNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoProfileNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoRangeTypeNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoCodecTagNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoLevelNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoResolutionNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoBitDepthNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoFramerateNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_RefFramesNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_AnamorphicVideoNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_InterlacedVideoNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoBitrateNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_UnknownVideoStreamInfo`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift)<br>[`testT08P_82_VideoRotationNotSupported`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift) | L all 14 blocking values alone and mixed. |
 | T08P-83 | [`testT08P_83_ignoredReasons`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift) | L ignored/container/audio/subtitle/unknown reasons. |
 | T08P-84 | [`testT08P_84_emptyMissingAndEncodedCommas`](../Packages/GlassfinCore/Tests/CorePlaybackTests/VideoTranscodeReasonsTests.swift) | L empty/missing/encoded comma behavior; missing URL decisions also in profileDecisionMatrix. |
@@ -183,6 +213,8 @@ this table is traceability, not a claim of PoC acceptance.
 | T08P-98 | [`testT08P_98_missingStreamsRefetchExactlyOnce`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L item refetch exactly once with Fields=MediaStreams; success/missing/empty/unsupported outcomes; HTTP-mock X pending. |
 | T08P-99 | [`testT08P_99_retryVideoReasonBlocksBeforeStreamOrPlayer`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L retry video reason: unsupported key, no remux stream/player/job, no third attempt; native X pending. |
 | T08P-100 | [`PlaybackCoordinatorTests.testT08P_100_userPasswordSegmentRejectedBeforePlayerDelivery`, `testT08P_100_userOnlySegmentRejectedBeforePlayerDelivery`, `testT08P_100_userInfoKeyRejectedBeforePlayerDelivery`, `testT08P_100_userInfoMasterURLFailsBeforeMediaRequest`, `testT08P_100_cleanPlaylistPlays`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift)<br>[`MediaUserInfoSecurityTests.testT08P_100_userInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery`, `testT08P_100_userInfoInitialAndResolvedURLsNeverReachTransportOrPlayer`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift)<br>[`AVFoundationMediaSessionTests.testT08P_100_userInfoPlaylistsRejectBeforeAVPlayerDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/AVFoundationMediaSessionTests.swift) | L Debug/Release: all four same-origin placements reject with `PlaybackCopy.couldNotPlayKey` (`playback.error.couldNotPlay`); unsafe playlists deliver zero bytes, unsafe master URLs make zero media requests; request logs contain no userinfo, query credentials or Basic authorization. The same clean playlist reaches `.playing` and sends Playing. Native session test checks zero AVPlayer sink replies on rejection and a delivered clean control; Apple X execution pending. |
+| T08P-101 | [`HLSCredentialQueryTests`](../Packages/GlassfinCore/Tests/CorePlaybackTests/HLSCredentialQueryTests.swift), `PlaybackCoordinatorTests.testT08P_101_serverQuerySurvivesOnlyInPlaylistCarrier`, `AVFoundationMediaSessionTests.testT08P_101_assetURLNeverContainsServerCredential` | L query/header placement, verbatim encoding, keys, segments/MAP, origin checks and redaction; native asset URL X execution pending. |
+| T08P-102 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift), [`probe_hls_segment_auth.py`](../scripts/probe_hls_segment_auth.py), [`docker-integration.sh`](../scripts/docker-integration.sh) | I gated real-server remux segments and EXT-X-MAP without header, stripped 401 control and output leak check; live execution pending. |
 
 ### TPOC
 
@@ -203,10 +235,10 @@ this table is traceability, not a claim of PoC acceptance.
 | TPOC-13 | — | Pending native simulator journey/cross-module integration; no matching playback-slice test. |
 | TPOC-14 | — | Pending native simulator journey/cross-module integration; no matching playback-slice test. |
 | TPOC-15 | — | Pending native simulator journey/cross-module integration; no matching playback-slice test. |
-| TPOC-16 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated HLS/session/reason checks; native U journey pending. |
-| TPOC-17 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated DTS video-copy/audio-transcode/reasons; native U journey pending. |
+| TPOC-16 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated HLS/session/reason checks; native U journey pending. |
+| TPOC-17 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated DTS video-copy/audio-transcode/reasons; native U journey pending. |
 | TPOC-18 | [`testT08P_13_14_unsupportedPreflightMakesZeroPlaybackRequests`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift)<br>[`testT08P_15_supportedPlaybackAfterUnsupportedError`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L precheck/recovery; native U and no-transcode server evidence pending. |
-| TPOC-19 | [`testT08P_05_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated optional HEVC remux; native U pending. |
+| TPOC-19 | [`testT08P_05_T08P_102_seedMediaPlaybackDecisions`](../Packages/GlassfinCore/Tests/IntegrationTests/DockerIntegrationTests.swift) | I gated optional HEVC remux; native U pending. |
 | TPOC-20 | [`testT08P_25_27_29_reportingSequenceAndFields`](../Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift) | L report model; native controls/server-position U/I pending. |
 | TPOC-21 | — | Pending native simulator journey/cross-module integration; no matching playback-slice test. |
 | TPOC-22 | — | Pending native simulator journey/cross-module integration; no matching playback-slice test. |
@@ -311,7 +343,7 @@ Portable cases run in Debug and Release; native X execution is pending.
 | --- | --- | --- |
 | T08P-14/97 | `PlaybackPoCDecisionTests.testT08P_06_07_08_10_12_14_16_profileDecisionMatrix`, `PlaybackCoordinatorTests.testT08P_94_95_96_97_defaultVideoPrecheck` | Canonical codecs still accept mixed case; h265/H265 now reject before negotiation/media. |
 | T08-2-14 | `ADRM08PrototypeTests.testT08_2_14_headerPathStripsCredentialQueriesIgnoringCase` | Query stripping remains covered; userinfo playback stripping is superseded by rejection. |
-| T08P-70/88; T08-2-50 | `MediaLoaderSecurityTests.testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin`, existing cross-origin URI tests | Existing header, segment-query-token and origin/downgrade regressions retained. |
+| T08P-70/88; T08-2-50 | `MediaLoaderSecurityTests.testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin`, existing cross-origin URI tests | D4 playlist-query-only, header-only key, segment/MAP-token and origin/downgrade regressions retained. |
 | T08-2-52/53 (merged plan) | `MediaOriginTests`, `MediaFailurePrecedenceTests` | Existing origin/userinfo documentation and loader failure precedence retained unchanged. |
 | T08P-100 (segment/key) | [`MediaUserInfoSecurityTests.testT08P_100_userInfoSegmentsAndKeysRejectServerPlaylistBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Reject complete fetched playlists with credential-bearing media, map, part or key URLs; no bytes delivered; mock log contains only the clean playlist request, no Basic authorization. |
 | T08P-100 (supplemental variants) | [`MediaUserInfoSecurityTests.testUserInfoVariantPlaylistsRejectServerMasterBeforeDelivery`](../Packages/GlassfinCore/Tests/CorePlaybackTests/MediaUserInfoSecurityTests.swift) | Plain/scheme-relative variants, audio rendition and I-frame URI attributes reject before handoff. |
@@ -379,6 +411,18 @@ Video transcoding is deliberately excluded from this PoC.
 Live-server tests are gated off. Apple compilation, actual AVPlayer/TLS behavior,
 UI/device journeys, the three-version live matrix and Release app binary scans
 were not run on Linux. The model tests do not establish simulator acceptance.
+
+## Local verification (D4 / Q8P-23, 2026-10-28)
+
+- CorePlaybackTests: 182 passed in both Debug and Release on Linux Swift 6.4.1.
+- Full Debug coverage run: 315 tests, seven gated live-server skips, zero failures;
+  coverage gate passed at 93.37% (6079/6511), threshold 80%.
+- `swift build --build-tests` passed, including IntegrationTests.
+- All 33 Python unit tests passed (17 probe tests). Artifact-redactor self-test,
+  debug-string scan and self-test, source greps, strict formatting, shell syntax
+  and `git diff --check` passed. Synthetic output checks verified both credential
+  spellings are rejected before display and the default probe assertions are set.
+- Docker and native Apple/AVPlayer execution were not available locally.
 
 ## Open questions
 

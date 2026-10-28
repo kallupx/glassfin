@@ -20,8 +20,8 @@ final class LiveServerTests: XCTestCase {
         var password: String
     }
 
-    /// T08P-05/09/11/12/80/81: live negotiation and server-side HLS checks; AVPlayer is not involved.
-    func testT08P_05_seedMediaPlaybackDecisions() async throws {
+    /// T08P-05/09/11/12/80/81/102: live negotiation and headerless segment/MAP checks; AVPlayer is not involved.
+    func testT08P_05_T08P_102_seedMediaPlaybackDecisions() async throws {
         let target = try liveTarget()
         let session = try await signIn(target)
         let identity = ClientIdentity(
@@ -108,36 +108,23 @@ final class LiveServerTests: XCTestCase {
         XCTAssertNil(error)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 30
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         let transport = URLSession(configuration: configuration, delegate: StopRedirects(), delegateQueue: nil)
         defer { transport.invalidateAndCancel() }
         do {
-            var next = url
-            var receivedSegment = false
-            for _ in 0..<4 {
-                XCTAssertTrue(MediaOrigin.matches(server, next))
-                guard MediaOrigin.matches(server, next), !MediaOrigin.isHTTPSDowngrade(server, next) else {
-                    throw APIError.invalidURL
-                }
-                var request = URLRequest(url: next)
-                if !MediaCredentialQuery.contains(next) {
-                    request.setValue(try identity.authorizationHeader(), forHTTPHeaderField: "Authorization")
-                }
-                let (bytes, response) = try await transport.data(for: request)
-                XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
-                if !next.path.hasSuffix(".m3u8") {
-                    XCTAssertFalse(bytes.isEmpty)
-                    receivedSegment = true
-                    break
-                }
-                let playlist = try XCTUnwrap(String(data: bytes, encoding: .utf8))
-                guard case .success = HLSPlaylistRewriter.rewrite(playlist: playlist, baseURL: next) else {
-                    throw APIError.invalidURL
-                }
-                let uri = try XCTUnwrap(playlist.split(whereSeparator: \.isNewline).first { !$0.hasPrefix("#") })
-                let resolved = try XCTUnwrap(URL(string: String(uri), relativeTo: next)?.absoluteURL)
-                next = resolved.path.hasSuffix(".m3u8") ? MediaCredentialQuery.stripping(resolved) : resolved
-            }
-            XCTAssertTrue(receivedSegment, "HLS did not reach a media segment")
+            let original = try XCTUnwrap(
+                MediaURLBuilder.resolveTranscodingURL(
+                    server: server, transcodingURL: try XCTUnwrap(source.TranscodingUrl)))
+            let credentials = try XCTUnwrap(ServerHLSCredentialQuery(transcodingURL: original))
+            // T08P-102 control: the old header-only playlist path must fail for AVPlayer's
+            // headerless segment fetch. Then exercise D4 with the same negotiated media.
+            try await assertT08P102HeaderlessHLS(
+                transport: transport, server: server, identity: identity, master: url,
+                credentials: nil, expectedMediaStatus: 401)
+            try await assertT08P102HeaderlessHLS(
+                transport: transport, server: server, identity: identity, master: url,
+                credentials: credentials, expectedMediaStatus: 200)
             let sessions = try await client.send(APIRequest(method: "GET", path: "/Sessions"), as: [LiveSession].self)
             let active = try XCTUnwrap(sessions.first { $0.NowPlayingItem?.Id == itemID })
             let transcode = try XCTUnwrap(active.TranscodingInfo)
@@ -160,6 +147,80 @@ final class LiveServerTests: XCTestCase {
                     URLQueryItem(name: "deviceId", value: identity.deviceID),
                     URLQueryItem(name: "playSessionId", value: context.playSessionID),
                 ]))
+    }
+
+    /// T08P-102: F3 remux, F4 DTS audio conversion and HEVC/AC3 remux on every real server.
+    /// Playlists follow the app's planner. MAP and media requests have no Authorization header.
+    private func assertT08P102HeaderlessHLS(
+        transport: URLSession, server: URL, identity: ClientIdentity, master: URL,
+        credentials: ServerHLSCredentialQuery?, expectedMediaStatus: Int
+    ) async throws {
+        var next = master
+        for _ in 0..<4 {
+            guard MediaURLValidation.hasNoUserInfo(next), MediaOrigin.matches(server, next),
+                !MediaOrigin.isHTTPSDowngrade(server, next),
+                let asset = MediaAssetScheme.wrap(MediaCredentialQuery.stripping(next)),
+                let planned = ResourceLoadPlanner.originRequest(
+                    assetURL: asset, authorizationHeader: try identity.authorizationHeader(),
+                    trust: .cleartext, range: nil, allowedOrigin: server, playlistCredentials: credentials)
+            else { throw APIError.invalidURL }
+            XCTAssertEqual(planned.authorizationHeader == nil, credentials != nil)
+            var request = URLRequest(url: planned.url)
+            if let header = planned.authorizationHeader {
+                request.setValue(header, forHTTPHeaderField: "Authorization")
+            }
+            let (bytes, status) = try await safeHLSFetch(transport, request: request)
+            let diagnostic = MediaLogRedactor.redact(planned.url.absoluteString)
+            XCTAssertEqual(status, 200, "T08P-102 playlist: \(diagnostic)")
+            guard status == 200, let playlist = String(data: bytes, encoding: .utf8),
+                case .success(let rewrite) = HLSPlaylistRewriter.rewrite(playlist: playlist, baseURL: planned.url)
+            else { throw APIError.decoding }
+            let lines = rewrite.playlist.split(whereSeparator: \.isNewline)
+            guard let first = lines.first(where: { !$0.hasPrefix("#") }), let firstURL = URL(string: String(first))
+            else {
+                throw APIError.decoding
+            }
+            if let variant = MediaAssetScheme.unwrap(firstURL) {
+                next = variant
+                continue
+            }
+            var media = [("segment", firstURL)]
+            if let map = lines.first(where: { $0.hasPrefix("#EXT-X-MAP:") }) {
+                guard let start = map.range(of: "URI=\""),
+                    let end = map[start.upperBound...].firstIndex(of: "\""),
+                    let url = URL(string: String(map[start.upperBound..<end]))
+                else { throw APIError.decoding }
+                media.insert(("MAP", url), at: 0)
+            }
+            for (kind, url) in media {
+                guard MediaURLValidation.hasNoUserInfo(url), MediaOrigin.matches(server, url),
+                    !MediaOrigin.isHTTPSDowngrade(server, url)
+                else { throw APIError.invalidURL }
+                if credentials == nil {
+                    XCTAssertFalse(MediaCredentialQuery.contains(url), "T08P-102 stripped control")
+                }
+                let headerless = URLRequest(url: url)
+                XCTAssertNil(headerless.value(forHTTPHeaderField: "Authorization"))
+                let (body, status) = try await safeHLSFetch(transport, request: headerless)
+                XCTAssertEqual(
+                    status, expectedMediaStatus,
+                    "T08P-102 \(kind): \(MediaLogRedactor.redact(url.absoluteString))")
+                if expectedMediaStatus == 200 { XCTAssertFalse(body.isEmpty, "T08P-102 \(kind) returned no bytes") }
+            }
+            return
+        }
+        XCTFail("T08P-102 HLS did not reach a media segment")
+    }
+
+    /// URLSession errors can carry the entire failing credential URL in userInfo.
+    /// Only a fixed APIError may escape to XCTest; response bodies are never diagnostics.
+    private func safeHLSFetch(_ transport: URLSession, request: URLRequest) async throws -> (Data, Int) {
+        do {
+            let (body, response) = try await transport.data(for: request)
+            return (body, (response as? HTTPURLResponse)?.statusCode ?? 0)
+        } catch {
+            throw APIError.network
+        }
     }
 
     private struct LiveSession: Decodable, Sendable {

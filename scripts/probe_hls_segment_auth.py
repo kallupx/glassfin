@@ -4,7 +4,7 @@
 Requires GLASSFIN_SERVER_URL, GLASSFIN_TEST_USERNAME, GLASSFIN_TEST_PASSWORD.
 HTTP outcomes are report-only by default; setup/playlist/transport failures fail.
 Examples of regression checks (repeatable):
-  --assert stripped:segment_noheader=401 --assert kept:segment_noheader=200
+  --assert stripped:segment_noheader=401 --assert loader:segment_noheader=200 --assert loader:map_noheader=200
   --expect-segment-auth kept  # require unauthenticated segment/map GETs to return 200
 Each mode negotiates a separate play session and stops it in a finally block.
 """
@@ -26,7 +26,7 @@ import uuid
 
 LEGACY_KEY = "api" + "_key"
 CREDENTIAL_NAMES = {"apikey", LEGACY_KEY, "token", "accesstoken", "pw", "secret"}
-MODES = ("stripped", "kept")
+MODES = ("stripped", "kept", "loader")
 SUMMARY_FIELDS = (
     "master", "variant", "segment_has_credential", "map_has_credential",
     "segment_noheader", "segment_header", "map_noheader", "map_header",
@@ -63,6 +63,26 @@ def strip_credentials(url: str) -> str:
     query = "&".join(part for part in parts.query.split("&")
                      if part and not credential_name(part.partition("=")[0]))
     return urllib.parse.urlunsplit(parts._replace(netloc=parts.netloc.rsplit("@", 1)[-1], query=query))
+
+
+def server_credential_fields(url: str) -> tuple[str, ...]:
+    """D4: save only the server's ApiKey/legacy query fields without decoding their values."""
+    return tuple(part for part in urllib.parse.urlsplit(url).query.split("&")
+                 if urllib.parse.unquote(part.partition("=")[0]).lower() in {"apikey", LEGACY_KEY})
+
+
+def append_server_credentials(client: Client, url: str, fields: tuple[str, ...]) -> str:
+    """Playlist-only boundary: validate origin/userinfo before appending the server's raw fields."""
+    client.resolve(url, "")
+    parts = urllib.parse.urlsplit(url)
+    query = parts.query
+    names = {urllib.parse.unquote(part.partition("=")[0]).lower() for part in query.split("&")}
+    for field in fields:
+        name = urllib.parse.unquote(field.partition("=")[0]).lower()
+        if name not in names:
+            query += ("&" if query else "") + field
+            names.add(name)
+    return urllib.parse.urlunsplit(parts._replace(query=query))
 
 
 def path_shape(url: str) -> str:
@@ -235,9 +255,12 @@ def probe_mode(client: Client, item_id: str, user_id: str, mode: str, fields: di
         if not session or not transcoding:
             raise ProbeError("PlaybackInfo did not return a play session and MediaSources[0].TranscodingUrl")
         master = client.resolve(client.base + "/", transcoding)
+        server_fields = server_credential_fields(master)
         if mode == "stripped":
             master = strip_credentials(master)
-        fields["master"], raw = client.get(master, authorized=True, read_body=True)
+        if mode == "loader":
+            master = append_server_credentials(client, strip_credentials(master), server_fields)
+        fields["master"], raw = client.get(master, authorized=mode != "loader", read_body=True)
         if fields["master"] != 200:
             raise ProbeError(f"mode={mode} master HTTP {fields['master']}")
         playlist = parse_playlist(raw.decode("utf-8-sig"))
@@ -246,7 +269,10 @@ def probe_mode(client: Client, item_id: str, user_id: str, mode: str, fields: di
         variant = client.resolve(master, playlist["variants"][0])
         if mode == "stripped":
             variant = strip_credentials(variant)
-        fields["variant"], raw = client.get(variant, authorized=True, read_body=True)
+        if mode == "loader":
+            # The app's wrapper strips credentials; the in-memory carrier restores only the server query.
+            variant = append_server_credentials(client, strip_credentials(variant), server_fields)
+        fields["variant"], raw = client.get(variant, authorized=mode != "loader", read_body=True)
         if fields["variant"] != 200:
             raise ProbeError(f"mode={mode} variant HTTP {fields['variant']}")
         playlist = parse_playlist(raw.decode("utf-8-sig"))
@@ -277,7 +303,7 @@ def probe_mode(client: Client, item_id: str, user_id: str, mode: str, fields: di
 
 
 def assertion(value: str) -> tuple[str, str, str]:
-    match = re.fullmatch(r"(stripped|kept):([a-z_]+)=(true|false|na|[0-9]{1,3})", value)
+    match = re.fullmatch(r"(stripped|kept|loader):([a-z_]+)=(true|false|na|[0-9]{1,3})", value)
     if not match or match[2] not in SUMMARY_FIELDS:
         raise argparse.ArgumentTypeError("expected MODE:FIELD=VALUE using a probe summary field")
     return match[1], match[2], match[3]

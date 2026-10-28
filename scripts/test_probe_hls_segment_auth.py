@@ -144,7 +144,7 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual(self.client.get(BASE + "/0.mp4", authorized=False)[0], 500)
             self.assertEqual(now, 60)
 
-    def test_both_modes_reproduce_playlist_credentials_and_header_only_control(self):
+    def test_all_modes_reproduce_playlist_credentials_and_header_only_control(self):
         for mode in probe.MODES:
             calls = []
 
@@ -165,8 +165,8 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual(info.call_args.kwargs["body"], probe.playback_info_body("viewer"))
             self.assertFalse(info.call_args.kwargs["body"]["EnableDirectPlay"])
             for url, authorized in calls[:2]:
-                self.assertTrue(authorized)
-                self.assertEqual(probe.has_credential(url), mode == "kept")
+                self.assertEqual(authorized, mode != "loader")
+                self.assertEqual(probe.has_credential(url), mode != "stripped")
             # Server-written segment/map URLs stay untouched, including in stripped mode.
             self.assertTrue(fields["segment_has_credential"])
             self.assertTrue(fields["map_has_credential"])
@@ -180,6 +180,40 @@ class ProbeTests(unittest.TestCase):
         self.assertNotIn(TOKEN, self.output.getvalue())
         self.assertNotIn(PASSWORD, self.output.getvalue())
         self.assertNotIn("http://", self.output.getvalue())
+
+    def test_loader_restores_raw_query_when_server_variant_omits_it(self):
+        for name in ("ApiKey", probe.LEGACY_KEY.upper()):
+            calls = []
+            credential = name + "=server%2bcanary%2F%3d"
+
+            def get(url, *, authorized, read_body=False):
+                calls.append((url, authorized))
+                if "master.m3u8" in url:
+                    return 200, b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nmain.m3u8?x=%2f\n"
+                if "main.m3u8" in url:
+                    return 200, VARIANT.encode()
+                return 200, b"media"
+
+            with patch.object(self.client, "json", return_value={
+                "PlaySessionId": "session", "MediaSources": [{"TranscodingUrl": "/master.m3u8?" + credential}],
+            }), patch.object(self.client, "get", side_effect=get), \
+                    patch.object(self.client, "request", return_value=(204, b"")):
+                probe.probe_mode(self.client, "item", "viewer", "loader", {})
+            self.assertTrue(calls[0][0].endswith("?" + credential))
+            self.assertTrue(calls[1][0].endswith("?x=%2f&" + credential))
+            self.assertTrue(all(not authorized for _, authorized in calls[:4]))
+            self.assertNotIn("canary", self.output.getvalue())
+
+    def test_server_fields_never_duplicate_or_cross_origin(self):
+        for name in ("ApiKey", probe.LEGACY_KEY):
+            raw = name + "=server%2bcanary"
+            fields = probe.server_credential_fields(BASE + "/master.m3u8?x=1&" + raw + "&Token=ignored")
+            self.assertEqual(fields, (raw,))
+            duplicate = BASE + "/main.m3u8?" + name.upper() + "=existing%2f"
+            self.assertEqual(probe.append_server_credentials(self.client, duplicate, fields), duplicate)
+            for url in ("http://foreign.test/main.m3u8", "http://user:pw@localhost:8096/main.m3u8"):
+                with self.assertRaises(probe.ProbeError):
+                    probe.append_server_credentials(self.client, url, fields)
 
     def test_cleanup_runs_when_variant_is_unauthorized(self):
         fields = {}
@@ -232,10 +266,10 @@ class ProbeTests(unittest.TestCase):
                 stopped.append(probe.urllib.parse.parse_qs(parts.query)["PlaySessionId"][0])
                 return 204, b""
             if parts.path.endswith("master.m3u8"):
-                self.assertTrue(authorized)
+                self.assertEqual(authorized, len(sessions) != 3)
                 return 200, ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100\nmain.m3u8?" + parts.query).encode()
             if parts.path.endswith("main.m3u8"):
-                self.assertTrue(authorized)
+                self.assertEqual(authorized, len(sessions) != 3)
                 return 200, ('#EXTM3U\n#EXT-X-MAP:URI="init.mp4?' + parts.query + '"\n'
                              '#EXTINF:6,\n0.mp4?' + parts.query).encode()
             self.assertTrue(parts.path.endswith(("0.mp4", "init.mp4")))
@@ -246,12 +280,14 @@ class ProbeTests(unittest.TestCase):
                 patch.object(probe, "Client", return_value=self.client), \
                 patch.object(self.client, "request", side_effect=request):
             self.assertEqual(probe.main(["--assert", "stripped:segment_noheader=401",
-                                        "--expect-segment-auth", "kept"]), 0)
-        self.assertEqual(sessions, ["session-0", "session-1"])
+                                        "--expect-segment-auth", "kept",
+                                        "--assert", "loader:segment_noheader=200",
+                                        "--assert", "loader:map_noheader=200"]), 0)
+        self.assertEqual(sessions, ["session-0", "session-1", "session-2"])
         self.assertEqual(stopped, sessions)
         output = self.output.getvalue()
         summaries = [line for line in output.splitlines() if line.startswith("probe-hls:")]
-        self.assertEqual(len(summaries), 2)
+        self.assertEqual(len(summaries), 3)
         self.assertIn("segment_has_credential=false map_has_credential=false segment_noheader=401 segment_header=200", summaries[0])
         self.assertIn("map_noheader=401 map_header=200", summaries[0])
         self.assertIn("segment_has_credential=true map_has_credential=true segment_noheader=200 segment_header=200", summaries[1])
@@ -262,7 +298,7 @@ class ProbeTests(unittest.TestCase):
     def run_main(self, args=(), fail_mode=None):
         def run(client, item, user, mode, fields):
             fields.update(master=200, variant=200, segment_noheader=401 if mode == "stripped" else 200,
-                          segment_header=200, map_noheader=200 if mode == "kept" else None)
+                          segment_header=200, map_noheader=200 if mode != "stripped" else None)
             if mode == fail_mode:
                 raise probe.ProbeError("playlist failure")
 
@@ -278,6 +314,9 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(self.run_main(["--assert", "stripped:segment_noheader=401"]), 0)
         self.assertEqual(self.run_main(["--assert", "stripped:segment_noheader=200"]), 1)
         self.assertEqual(self.run_main(["--expect-segment-auth", "kept"]), 0)
+        self.assertEqual(self.run_main(["--assert", "loader:map_noheader=200"]), 0)
+        self.assertEqual(self.run_main(["--assert", "stripped:map_noheader=200"]), 1)
+        self.assertEqual(self.run_main(fail_mode="loader"), 1)
         self.assertEqual(self.run_main(["--expect-segment-auth", "stripped"]), 1)
         self.assertEqual(self.run_main(fail_mode="stripped"), 1)
         for mode in probe.MODES:

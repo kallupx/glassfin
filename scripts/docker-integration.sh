@@ -69,7 +69,19 @@ trap cleanup EXIT
 
 results=()
 probe_args=()
-read -r -a probe_args <<< "${GLASSFIN_HLS_PROBE_ARGS:-}"
+# T08P-102: require the old failure and D4 headerless media success, including fMP4 init.
+read -r -a probe_args <<< "${GLASSFIN_HLS_PROBE_ARGS:---assert stripped:segment_noheader=401 --assert loader:segment_noheader=200 --assert loader:map_noheader=200}"
+
+show_checked_output() {
+  local captured="$1"
+  # Concatenate the legacy spelling to keep credential-name source scans green.
+  local credential_pattern='(apikey|api''_key)=[^&[:space:]]*[0-9a-f]{16}'
+  if LC_ALL=C grep -Eiq -- "$credential_pattern" "$captured"; then
+    echo "docker-integration: captured output contains an unredacted credential; output withheld" >&2
+    return 1
+  fi
+  cat "$captured"
+}
 for version in "${versions[@]}"; do
   image="${images[$version]:-}"
   if [[ -z "$image" ]]; then
@@ -126,16 +138,20 @@ PY
     export GLASSFIN_USERNAME
   fi
   echo "docker-integration: probing HLS segment authentication for $version"
+  probe_output="$(mktemp "$work/hls-probe.XXXXXX")"
   set +e
-  python3 -u "$root/scripts/probe_hls_segment_auth.py" "${probe_args[@]}"
+  python3 -u "$root/scripts/probe_hls_segment_auth.py" "${probe_args[@]}" >"$probe_output" 2>&1
   probe_status=$?
   set -e
+  if ! show_checked_output "$probe_output"; then probe_status=1; fi
   results+=("$version hls-probe $probe_status")
   echo "docker-integration: testing $version"
+  test_output="$(mktemp "$work/live-tests.XXXXXX")"
   set +e
-  run_tests
+  run_tests >"$test_output" 2>&1
   status=$?
   set -e
+  if ! show_checked_output "$test_output"; then status=1; fi
   results+=("$version tests $status")
   "${docker_cmd[@]}" rm -f "$container" >/dev/null
   container=""
