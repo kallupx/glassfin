@@ -168,7 +168,7 @@ struct LibraryGridView: View {
                     }
                 }
             }
-            .focusSection()
+            .designFocusSection()
             .defaultFocus($focus, model.focusedID ?? items.first?.id)
             if let error = model.state.presentedError, model.hasContent {
                 LibraryInlineError(error: error)
@@ -293,7 +293,7 @@ struct LibraryFilterBar: View {
                 }.buttonStyle(.glass).accessibilityIdentifier("library.year")
             }
         }
-        .focusSection()
+        .designFocusSection()
     }
 
     private func binding(_ path: WritableKeyPath<LibraryChoices, Bool>) -> Binding<Bool> {

@@ -74,7 +74,7 @@ struct SeriesEpisodeSection: View {
                 }.padding(.vertical, SpacingToken.m)
             }
         }
-        .focusSection()
+        .designFocusSection()
         .defaultFocus(focus, model.selectedSeasonID.map { SeriesFocus.season($0) }, priority: .userInitiated)
         .accessibilityIdentifier("series.seasons")
     }
@@ -115,7 +115,7 @@ struct SeriesEpisodeSection: View {
                 .onChange(of: model.preferredEpisodeID) { _, _ in scroll(proxy) }
                 .onChange(of: model.focusedEpisodeID) { _, _ in scroll(proxy) }
             }
-            .focusSection()
+            .designFocusSection()
             .defaultFocus(focus, model.preferredEpisodeID.map { SeriesFocus.episode($0) }, priority: .userInitiated)
             .accessibilityIdentifier("series.episodes")
         }

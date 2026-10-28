@@ -185,7 +185,7 @@ struct ItemDetailScreen: View {
             }
         }
         .padding(.horizontal, SpacingToken.xl)
-        .focusSection()
+        .designFocusSection()
     }
 
     private func play(startOver: Bool) {
@@ -248,6 +248,9 @@ struct LibraryDetailActions: View {
                 }
                 .buttonStyle(.glassProminent).focused(focus, equals: .play)
                 .accessibilityIdentifier("detail.play")
+                #if DEBUG
+                    .accessibilityValue(playKey.rawValue)
+                #endif
                 if hasProgress {
                     Button {
                         onPlay(true)
@@ -275,7 +278,7 @@ struct LibraryDetailActions: View {
                 .buttonStyle(.glass).accessibilityIdentifier("detail.more")
             }
         }
-        .focusSection()
+        .designFocusSection()
         .defaultFocus(focus, Optional(.play))
         .onAppear { if focus.wrappedValue == nil { focus.wrappedValue = .play } }
     }
