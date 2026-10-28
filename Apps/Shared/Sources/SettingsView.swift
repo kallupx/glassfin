@@ -8,10 +8,15 @@ struct SettingsView: View {
     @Binding private var restoreSignOutFocus: Bool
     @FocusState private var signOutFocused: Bool
     @Namespace private var focusScope
+    private let playbackConfiguration: PlaybackConfiguration
 
-    init(flow: AuthFlow, restoreSignOutFocus: Binding<Bool>) {
+    init(
+        flow: AuthFlow, restoreSignOutFocus: Binding<Bool>,
+        playbackConfiguration: PlaybackConfiguration = .poc
+    ) {
         _model = State(initialValue: SettingsViewModel(auth: flow))
         _restoreSignOutFocus = restoreSignOutFocus
+        self.playbackConfiguration = playbackConfiguration
     }
 
     var body: some View {
@@ -28,19 +33,22 @@ struct SettingsView: View {
             #endif
             .accessibilityIdentifier("settings.signOut")
 
-            Toggle(isOn: $convertASS) {
-                Text(verbatim: Copy.string(.playbackConvertASS))
-            }
-            .accessibilityIdentifier("settings.playback.convertASS")
-
-            Picker(selection: $remoteBitrate) {
-                ForEach([5, 10, 20, 40, 80, 120], id: \.self) { value in
-                    Text(verbatim: "\(value) Mbps").tag(value * 1_000_000)
+            // The PoC shell keeps M10's Sign out and version screen (SPEC section 3a).
+            if !playbackConfiguration.isPoC {
+                Toggle(isOn: $convertASS) {
+                    Text(verbatim: Copy.string(.playbackConvertASS))
                 }
-            } label: {
-                Text(verbatim: Copy.string(.playbackRemoteBitrate))
+                .accessibilityIdentifier("settings.playback.convertASS")
+
+                Picker(selection: $remoteBitrate) {
+                    ForEach([5, 10, 20, 40, 80, 120], id: \.self) { value in
+                        Text(verbatim: "\(value) Mbps").tag(value * 1_000_000)
+                    }
+                } label: {
+                    Text(verbatim: Copy.string(.playbackRemoteBitrate))
+                }
+                .accessibilityIdentifier("settings.playback.remoteBitrate")
             }
-            .accessibilityIdentifier("settings.playback.remoteBitrate")
 
             Text(verbatim: versionText)
                 .font(.subheadline)

@@ -69,7 +69,10 @@ subtitles off. Other hooks: `playback.tracks.convertASS`,
 
 The options menu shows PlayMethod, redacted reasons, source/negotiated codecs,
 reported bitrate when available and a buffer snapshot. Settings offers ASS
-conversion and remote bitrate (default 20 Mbps). Local-address servers use the
+conversion and remote bitrate (default 20 Mbps) when initialized with a full
+`PlaybackConfiguration`. The existing PoC shell uses the default `.poc` settings
+configuration and keeps only Sign out and the app version, as required by SPEC
+section 3a and TPOC-42. Local-address servers use the
 spec's 120 Mbps default. All new UI copy uses the app's en/fi String Catalog.
 
 ## Open questions and validation limits
