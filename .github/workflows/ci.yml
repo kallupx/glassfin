@@ -89,6 +89,7 @@ jobs:
           python3 -m unittest scripts/test_jellyfin_bootstrap.py
           python3 -m unittest scripts/test_probe_hls_segment_auth.py
           bash -n scripts/docker-integration.sh scripts/generate-playback-media.sh
+          bash scripts/docker-integration.sh --self-test
       - name: Linux package tests and coverage gate
         run: bash scripts/coverage-gate.sh
 
