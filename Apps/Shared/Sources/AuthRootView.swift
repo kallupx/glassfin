@@ -1,6 +1,10 @@
 import GlassfinCore
 import SwiftUI
 
+#if DEBUG
+    import notify
+#endif
+
 struct AuthRootView: View {
     @Bindable var flow: AuthFlow
     @Environment(\.scenePhase) private var scenePhase
@@ -311,14 +315,10 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             if configuration.useMockServer || configuration.resetState {
-                HomeMockControls.current =
-                    configuration.startOnHome && arguments.contains("-uitest-home-network-controls")
-                    ? HomeMockControls() : nil
-                let path: any ConnectivityPath = HomeMockControls.current?.path ?? StaticConnectivityPath(online: true)
                 let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
                     clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock(),
-                    path: path)
+                    path: StaticConnectivityPath(online: true))
                 if configuration.startOnHome {
                     HomeMockLaunch.seed(flow.homeApp)
                 }
@@ -387,6 +387,25 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
 }
 
 #if DEBUG
+    private final class UITestQuickConnectApproval: Sendable {
+        private let token: Int32?
+
+        init(name: String) {
+            var token: Int32 = 0
+            self.token = notify_register_check(name, &token) == NOTIFY_STATUS_OK ? token : nil
+        }
+
+        deinit {
+            if let token { _ = notify_cancel(token) }
+        }
+
+        var isApproved: Bool {
+            guard let token else { return false }
+            var state: UInt64 = 0
+            return notify_get_state(token, &state) == NOTIFY_STATUS_OK && state == 1
+        }
+    }
+
     private struct UITestExpiryClock: GlassfinClock {
         private let origin = ContinuousClock.now
         func now() -> Duration { origin.duration(to: .now) * 3_000 }
@@ -396,6 +415,13 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
     }
 
     struct UITestAuthBackend: AuthBackend {
+        private let quickConnectApproval: UITestQuickConnectApproval? = {
+            let arguments = ProcessInfo.processInfo.arguments
+            guard let index = arguments.firstIndex(of: "-uitest-qc-approval"), arguments.indices.contains(index + 1)
+            else { return nil }
+            return UITestQuickConnectApproval(name: arguments[index + 1])
+        }()
+
         func probe(_ address: String, certificatePin: OriginCertificatePin?) async -> ServerProbeOutcome {
             let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("http://"), !trimmed.contains("192.168."), !trimmed.contains("10."),
@@ -425,6 +451,8 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
             _ = secret
             let arguments = ProcessInfo.processInfo.arguments
             if arguments.contains("-uitest-qc-expired") || arguments.contains("-uitest-qc-pending") { return false }
+            // Let the code-display test finish its snapshots before simulating approval on another device.
+            if let quickConnectApproval { return quickConnectApproval.isApproved }
             do { try await Task.sleep(for: .seconds(2)) } catch { throw APIError.cancelled }
             return true
         }

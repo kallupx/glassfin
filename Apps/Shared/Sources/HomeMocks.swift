@@ -1,46 +1,7 @@
 import GlassfinCore
-import Observation
 import SwiftUI
 
 #if DEBUG
-    /// A remote-driven control: no timers, external network changes, or focusable test buttons.
-    @MainActor
-    @Observable
-    final class HomeMockControls {
-        static var current: HomeMockControls?
-        let path = HomeMockPath()
-        private(set) var resumeRequests = 0
-
-        func recordResumeRequest() { resumeRequests += 1 }
-        func togglePath() { path.setOnline(!path.isOnline) }
-    }
-
-    /// Feeds the same stream consumed by AppState for NWPathMonitor updates.
-    final class HomeMockPath: ConnectivityPath, @unchecked Sendable {
-        private let lock = NSLock()
-        private var online = true
-        private let stream: AsyncStream<Bool>
-        private let continuation: AsyncStream<Bool>.Continuation
-
-        init() {
-            (stream, continuation) = AsyncStream<Bool>.makeStream()
-            continuation.yield(true)
-        }
-
-        deinit { continuation.finish() }
-
-        var isOnline: Bool { lock.withLock { online } }
-
-        func changes() -> AsyncStream<Bool> { stream }
-
-        func setOnline(_ value: Bool) {
-            lock.withLock {
-                online = value
-                continuation.yield(value)
-            }
-        }
-    }
-
     enum HomeMockLaunch {
         static var enabled: Bool {
             let configuration = LaunchConfiguration(arguments: ProcessInfo.processInfo.arguments)
@@ -83,12 +44,7 @@ import SwiftUI
 
     actor HomeMockLibrary: LibraryService {
         let mode: String
-        private let controls: HomeMockControls?
-
-        init(mode: String, controls: HomeMockControls? = nil) {
-            self.mode = mode
-            self.controls = controls
-        }
+        init(mode: String) { self.mode = mode }
         static let libraryID = "cccccccccccccccccccccccccccccccc"
         static let otherLibraryID = "dddddddddddddddddddddddddddddddd"
 
@@ -108,7 +64,6 @@ import SwiftUI
             ]
         }
         func resume(limit: Int) async throws(APIError) -> [MediaItem] {
-            await controls?.recordResumeRequest()
             if mode == "down" { throw .network }
             if mode == "partial" { throw .server(status: 500) }
             if mode == "empty" || mode == "nextOnly" { return [] }
@@ -116,7 +71,7 @@ import SwiftUI
         }
         func nextUp(limit: Int) async throws(APIError) -> [MediaItem] {
             if mode == "down" { throw .network }
-            return mode == "empty" ? [] : (20..<20 + min(limit, HomePolicy.rowLimit)).map { Self.item($0) }
+            return mode == "empty" ? [] : (20..<24).map { Self.item($0) }
         }
         func latest(in library: String, limit: Int) async throws(APIError) -> [MediaItem] {
             if mode == "down" { throw .network }
