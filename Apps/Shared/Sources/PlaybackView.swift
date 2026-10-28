@@ -25,8 +25,14 @@
                     set: { if !$0 { dismiss() } }
                 )
             ) {
-                Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+                // keyboardShortcut is unavailable on tvOS; the Siri Remote select
+                // button already activates the focused alert action there.
+                #if os(tvOS)
+                    Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
+                #else
+                    Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                #endif
             }
             .onChange(of: coordinator.state) { _, state in
                 if state == .ended || state == .sessionExpired { dismiss() }
