@@ -332,7 +332,7 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             HomeMockControls.current = nil
-            if configuration.resetState {
+            if configuration.resetState && !configuration.useMockServer {
                 do {
                     try UITestStateReset.reset()
                 } catch {

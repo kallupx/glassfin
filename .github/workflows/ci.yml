@@ -322,8 +322,6 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: read
-    env:
-      GLASSFIN_E2E_ROOT: ${{ runner.temp }}/glassfin-e2e-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

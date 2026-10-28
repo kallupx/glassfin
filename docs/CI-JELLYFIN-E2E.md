@@ -57,7 +57,7 @@ credentials. Pushes to main do not start it.
 
 ## DEBUG reset and ATS: Turvallisuus review
 
-`-uitest-reset` now clears app-scoped keychain items, UserDefaults, URLCache and
+Without mock mode, `-uitest-reset` now clears app-scoped keychain items, UserDefaults, URLCache and
 Glassfin disk caches before assembling services. It does not select mocks.
 `-uitest-mock-server` and `-uitest-home` still explicitly select the existing mock
 services. The reset implementation, argument parsing and all calls live entirely

@@ -301,7 +301,8 @@ def main() -> None:
     args = parser.parse_args()
     if os.environ.get("CI") != "true" or not os.environ.get("RUNNER_TEMP"):
         raise RuntimeError("this script runs only inside CI")
-    root = Path(os.environ["GLASSFIN_E2E_ROOT"])
+    root = Path(os.environ["RUNNER_TEMP"]) / (
+        f"glassfin-e2e-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}")
     if root.parent.resolve() != Path(os.environ["RUNNER_TEMP"]).resolve() or not root.name.startswith("glassfin-e2e-"):
         raise RuntimeError("private root must be a dedicated runner-temp child")
     os.umask(0o077)
