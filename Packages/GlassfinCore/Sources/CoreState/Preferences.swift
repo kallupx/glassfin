@@ -166,6 +166,10 @@ public final class UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable
         defaults.string(forKey: key)
     }
 
+    public func containsValue(forKey key: String) -> Bool {
+        defaults.object(forKey: key) != nil
+    }
+
     public func set(_ value: String?, forKey key: String) {
         if let value {
             defaults.set(value, forKey: key)

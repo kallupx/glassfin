@@ -8,6 +8,75 @@ import XCTest
 
 final class T04AuthFlowTests: XCTestCase {
     @MainActor
+    func testPinReadFailureStopsProbeAndShowsExistingError() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.pins.failOnRead = 1
+        rig.flow.addressText = "https://media.example:8096"
+        rig.flow.submitAddress()
+        await rig.wait(for: .address)
+        XCTAssertEqual(rig.flow.inlineError, .loginTransportFailure)
+        XCTAssertEqual(rig.backend.probes, 0)
+        XCTAssertFalse(rig.flow.isProbing)
+        XCTAssertTrue(rig.pins.writes.isEmpty)
+    }
+
+    @MainActor
+    func testPinReadFailureWhilePresentingCertificateStopsAcceptance() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.pins.failOnRead = 2
+        rig.flow.addressText = "https://media.example:8096"
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url(rig.flow.addressText))
+        rig.flow.submitAddress()
+        await rig.wait(until: { rig.flow.inlineError != nil })
+        XCTAssertEqual(rig.flow.screen, .address)
+        XCTAssertEqual(rig.flow.inlineError, .loginTransportFailure)
+        XCTAssertFalse(rig.flow.canAcceptCertificate)
+        XCTAssertEqual(rig.backend.probes, 1)
+        XCTAssertTrue(rig.pins.writes.isEmpty)
+    }
+
+    @MainActor
+    func testPinReadFailureDuringAcceptanceThrowsAndDoesNotRetry() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        rig.flow.addressText = "https://media.example:8096"
+        rig.backend.probeOutcome = .needsCertificate(sampleLeaf(), url: Sample.url(rig.flow.addressText))
+        rig.flow.submitAddress()
+        await rig.wait(for: .certificate)
+        rig.pins.failOnRead = rig.pins.reads + 1
+        XCTAssertThrowsError(try rig.flow.acceptCertificate(userAcceptedFingerprint: sampleLeaf().sha256)) { error in
+            XCTAssertEqual(error as? APIError, .tls)
+        }
+        XCTAssertEqual(rig.flow.screen, .address)
+        XCTAssertEqual(rig.flow.inlineError, .loginTransportFailure)
+        XCTAssertFalse(rig.flow.canAcceptCertificate)
+        XCTAssertEqual(rig.backend.probes, 1)
+        XCTAssertTrue(rig.pins.writes.isEmpty)
+    }
+
+    @MainActor
+    func testSavedPinAndMissingPinKeepProbeConfiguration() async throws {
+        for fingerprint in [String(repeating: "ab", count: 32), nil] {
+            let rig = Rig()
+            defer { rig.cleanup() }
+            try seed(rig.harness, version: "10.11.0", token: Sample.token)
+            if let fingerprint { try rig.pins.save(fingerprint: fingerprint, serverID: Sample.serverID) }
+            rig.flow.addressText = "https://media.example:8096"
+            rig.backend.probeOutcome = .ready(rig.server())
+            rig.flow.submitAddress()
+            await rig.wait(for: .loginMethod)
+            XCTAssertEqual(rig.backend.probes, 1)
+            XCTAssertEqual(rig.backend.probePins.first.flatMap { $0 }?.sha256, fingerprint)
+            XCTAssertNil(rig.flow.inlineError)
+        }
+    }
+
+    @MainActor
     func testT04_05_addressFocusFollowsTheField() async {
         XCTAssertEqual(AuthFocusPolicy.address(fieldIsEmpty: true), .addressField)
         XCTAssertEqual(AuthFocusPolicy.address(fieldIsEmpty: false), .continueButton)
@@ -1305,9 +1374,15 @@ private final class ScriptAuth: AuthBackend, @unchecked Sendable {
 }
 
 private final class MemoryPins: CertificatePinStore, @unchecked Sendable {
+    var failOnRead: Int?
+    var reads = 0
     private var values: [String: String] = [:]
     var writes: [(serverID: String, fingerprint: String)] = []
-    func fingerprint(for serverID: String) throws -> String? { values[serverID] }
+    func fingerprint(for serverID: String) throws -> String? {
+        reads += 1
+        if reads == failOnRead { throw SecurityInvariantError.internalInvariant }
+        return values[serverID]
+    }
     func save(fingerprint: String, serverID: String) throws {
         writes.append((serverID, fingerprint))
         values[serverID] = fingerprint

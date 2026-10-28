@@ -97,6 +97,7 @@ let package = Package(
             swiftSettings: debugSettings
         ),
         .testTarget(name: "CoreModelsTests", dependencies: ["CoreModels"]),
+        .testTarget(name: "CoreAPITests", dependencies: ["CoreAPI", "CoreModels", "CoreNetworking"]),
         .testTarget(
             name: "CoreStateTests",
             dependencies: [

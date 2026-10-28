@@ -173,8 +173,14 @@ public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
 
 public protocol SettingsStore: Sendable {
     func string(forKey key: String) -> String?
+    /// Includes stored values that cannot be read as strings.
+    func containsValue(forKey key: String) -> Bool
     func set(_ value: String?, forKey key: String)
     func removeAll()
+}
+
+extension SettingsStore {
+    public func containsValue(forKey key: String) -> Bool { string(forKey: key) != nil }
 }
 
 public final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
