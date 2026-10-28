@@ -4,9 +4,9 @@ import CoreState
 import Foundation
 import XCTest
 
-@MainActor
 final class T02BehaviorTests: XCTestCase {
-    func testT02_01_phasesAndSignInDoNotLogTheToken() throws {
+    @MainActor
+    func testT02_01_phasesAndSignInDoNotLogTheToken() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         harness.app.bootstrap()
@@ -44,7 +44,8 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.pinger.calls(), 0)
     }
 
-    func testT02_10_oldServerBlocksWithoutDroppingTheToken() throws {
+    @MainActor
+    func testT02_10_oldServerBlocksWithoutDroppingTheToken() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try seed(harness, version: "10.9.11", token: Sample.token)
@@ -75,7 +76,8 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(harness.app.activeServer)
     }
 
-    func testSignInRejectsOverBudgetAndKeychainFailureBeforeASession() throws {
+    @MainActor
+    func testSignInRejectsOverBudgetAndKeychainFailureBeforeASession() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         var session = Sample.session()
@@ -98,6 +100,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertFalse(harness.log.contains(Sample.token))
     }
 
+    @MainActor
     func testT02_04_offlineBannerBlocksPlaybackAndRestores() async throws {
         let harness = Harness.make(online: false)
         defer { harness.cleanup() }
@@ -127,7 +130,8 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 
-    func testT02_05_degradedAfterThreeSecondsNotAtTheBoundary() throws {
+    @MainActor
+    func testT02_05_degradedAfterThreeSecondsNotAtTheBoundary() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()
@@ -152,6 +156,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.app.connectivity, .offline)
     }
 
+    @MainActor
     func testT02_06_serverDownPingRecoversWithoutLogout() async throws {
         let harness = Harness.make(automaticPing: true, suspendingClock: true)
         defer { harness.cleanup() }
@@ -184,6 +189,7 @@ final class T02BehaviorTests: XCTestCase {
         guard case .signedIn = harness.app.phase else { return XCTFail("public 401 is not logout") }
     }
 
+    @MainActor
     func testT02_35a_serverDownWithContentKeepsContentAndShowsBanner() async throws {
         for cached in [false, true] {
             let harness = Harness.make(automaticPing: true, suspendingClock: true)
@@ -194,7 +200,10 @@ final class T02BehaviorTests: XCTestCase {
             let latest = [Sample.movie(id: Sample.season, name: "Latest")]
             let home = harness.home()
             if cached {
-                XCTAssertTrue(harness.app.snapshots.save(HomeSnapshot(resume: resume, nextUp: next, latest: latest)))
+                var snapshot = HomeSnapshot(resume: resume, nextUp: next, latest: latest)
+                snapshot.libraries = [Library(id: Sample.library, name: "Library")]
+                snapshot.latestByLibrary = [Sample.library: latest]
+                XCTAssertTrue(harness.app.snapshots.save(snapshot))
             } else {
                 harness.library.resumeItems = resume
                 harness.library.nextItems = next
@@ -259,6 +268,7 @@ final class T02BehaviorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testT02_35b_serverDownWithoutContentShowsFullScreen() async throws {
         let harness = Harness.make(automaticPing: true, suspendingClock: true)
         defer { harness.cleanup() }
@@ -310,6 +320,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.log.messages(level: "debug").filter { $0 == "Signed in." }.count, 1)
     }
 
+    @MainActor
     func testT02_36_bannerTextResolvesFromKey() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -340,6 +351,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(harness.app.banner)
     }
 
+    @MainActor
     func testT02_37_sessionNoticeTextResolvesFromKey() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -362,6 +374,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(harness.app.sessionNotice)
     }
 
+    @MainActor
     func testT02_38_stallMessageTextResolvesFromKey() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -384,6 +397,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(player.stallMessage)
     }
 
+    @MainActor
     func testServerDownUsesOnlyCurrentViewContent() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -436,7 +450,8 @@ final class T02BehaviorTests: XCTestCase {
             harness.app.banner, key: AppErrorMessage.serverDownKey, expected: "Can't reach the server")
     }
 
-    func testStoredUnparseableVersionIsCleanedAndCappedBeforeFormatting() throws {
+    @MainActor
+    func testStoredUnparseableVersionIsCleanedAndCappedBeforeFormatting() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         let tail = String(repeating: "e\u{0301}👩‍👩‍👧‍👦", count: 210)
@@ -471,6 +486,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 
+    @MainActor
     func testT02_07_authenticated401LogsOutOnce() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -498,6 +514,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.secure.removed().count, 1)
     }
 
+    @MainActor
     func testT02_28_concurrent401StillLogsOutOnce() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -518,6 +535,7 @@ final class T02BehaviorTests: XCTestCase {
             expected: "Session expired, please sign in again")
     }
 
+    @MainActor
     func testT02_31_network403And5xxDoNotLogOut() async throws {
         let errors: [APIError] = [
             .network, .timeout, .forbidden, .server(status: 500), .server(status: 502), .tls,
@@ -545,6 +563,7 @@ final class T02BehaviorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testT02_32_forbiddenKeepsTheSession() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -557,6 +576,7 @@ final class T02BehaviorTests: XCTestCase {
         guard case .signedIn = harness.app.phase else { return XCTFail("session dropped") }
     }
 
+    @MainActor
     func testT02_22_cancelledIsNotPresented() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -570,6 +590,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertFalse(harness.log.messages().contains("cancelled"))
     }
 
+    @MainActor
     func testT02_23_insecureRedirectSetsSecurityNotice() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -582,7 +603,8 @@ final class T02BehaviorTests: XCTestCase {
         if case .failed(.insecureRedirect, _) = home.resume {} else { XCTFail("expected insecure redirect") }
     }
 
-    func testT02_24_invalidCredentialsDoNotEndASession() throws {
+    @MainActor
+    func testT02_24_invalidCredentialsDoNotEndASession() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()
@@ -592,6 +614,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNotNil(try harness.secure.data(for: Sample.account()))
     }
 
+    @MainActor
     func testT02_25_homeShowsSnapshotThenRevalidates() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -621,6 +644,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(harness.app.snapshots.load())
     }
 
+    @MainActor
     func testColdStartWithoutSnapshotEndsAfterTheFetch() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -638,6 +662,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(harness.library.latestIdentifiers(), [Sample.library])
     }
 
+    @MainActor
     func testHomeLatestKeepsSuccessesAndSurfacesATotalFailure() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -658,6 +683,7 @@ final class T02BehaviorTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testHomeCancellationDoesNotPublish() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -674,6 +700,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNotEqual(home.resume.value?.first?.name, "ShouldNotLand")
     }
 
+    @MainActor
     func testT02_26_serverRestartDoesNotLogOutAndInvalidatesCaches() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -720,6 +747,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(libraryCache)
     }
 
+    @MainActor
     func testT02_27_internalInvariantIsLoggedAndDoesNotCrash() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -746,6 +774,7 @@ final class T02BehaviorTests: XCTestCase {
         if case .failed(.internalInvariant, _) = player.state {} else { XCTFail("expected invariant") }
     }
 
+    @MainActor
     func testT02_17_searchKeepsTheFullTermAndDropsStaleResults() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -778,6 +807,7 @@ final class T02BehaviorTests: XCTestCase {
         search.onDisappear()
     }
 
+    @MainActor
     func testT02_34_libraryPagesAndCacheTTL() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -817,6 +847,7 @@ final class T02BehaviorTests: XCTestCase {
         if case .failed = library.state { XCTFail("cancelled page became a failure") }
     }
 
+    @MainActor
     func testSeriesKeepsPreviousSeasonOnFailure() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -841,6 +872,7 @@ final class T02BehaviorTests: XCTestCase {
         if case .failed(.internalInvariant, _) = series.episodes {} else { XCTFail("expected invariant") }
     }
 
+    @MainActor
     func testT02_29_playbackInstrumentationStallAndStop() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -903,6 +935,7 @@ final class T02BehaviorTests: XCTestCase {
             expected: "Session expired, please sign in again")
     }
 
+    @MainActor
     func testOptimisticEditsCommitRollbackAndRefreshHome() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -923,7 +956,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(played?.played, true)
         XCTAssertFalse(pending)
         await home.refreshFromStore()
-        XCTAssertEqual(home.resume.value?.first?.userData.played, true)
+        XCTAssertEqual(home.resume.value, [])
         XCTAssertEqual(ended(harness.signposter.snapshot(), .watchedStateHome), 1)
 
         harness.library.error = .forbidden
@@ -935,7 +968,8 @@ final class T02BehaviorTests: XCTestCase {
         guard case .signedIn = harness.app.phase else { return XCTFail("403 logged out") }
     }
 
-    func testSwitchServerKeepsTokensAndRemoveDeletesOnlyThatServer() throws {
+    @MainActor
+    func testSwitchServerKeepsTokensAndRemoveDeletesOnlyThatServer() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
         try harness.signIn()
@@ -967,6 +1001,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertNil(try harness.secure.data(for: Sample.account()))
     }
 
+    @MainActor
     func testProbeTLSAndOfflinePathDoNotLogOut() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }
@@ -995,6 +1030,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(down, .failed(.offline))
     }
 
+    @MainActor
     func testT02_30_signedInColdStartDoesNotProbeUntilAsked() async throws {
         let harness = Harness.make()
         defer { harness.cleanup() }

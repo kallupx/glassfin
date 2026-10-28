@@ -5,9 +5,11 @@ import Foundation
     public struct LaunchConfiguration: Sendable, Equatable {
         public var useMockServer: Bool
         public var resetState: Bool
+        public var startOnHome: Bool
 
         public init(arguments: [String]) {
-            useMockServer = arguments.contains("-uitest-mock-server")
+            startOnHome = arguments.contains("-uitest-home")
+            useMockServer = arguments.contains("-uitest-mock-server") || startOnHome
             resetState = arguments.contains("-uitest-reset")
         }
     }

@@ -18,7 +18,22 @@ public actor UserDataStore {
     private var slots: [String: Slot] = [:]
     private var warnedNegativePosition: Set<String> = []
 
+    private var playbackObservers: [UUID: AsyncStream<Void>.Continuation] = [:]
+
     public init() {}
+
+    /// M06 observes playback stops without coupling the player to a particular screen.
+    public func playbackChanges() -> AsyncStream<Void> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            playbackObservers[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removePlaybackObserver(id) }
+            }
+        }
+    }
+
+    private func removePlaybackObserver(_ id: UUID) { playbackObservers[id] = nil }
 
     public func state(for id: String) -> UserItemState? {
         slots[id]?.visible
@@ -111,6 +126,7 @@ public actor UserDataStore {
         slot.overlay = visible
         slot.pending = true
         slots[id] = slot
+        for observer in playbackObservers.values { observer.yield(()) }
     }
 
     private func clamped(ticks: Int64, id: String, log: any GlassfinLog) -> Duration {
