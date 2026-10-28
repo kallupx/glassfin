@@ -3,11 +3,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var model: SettingsViewModel
+    @Binding private var restoreSignOutFocus: Bool
     @FocusState private var signOutFocused: Bool
     @Namespace private var focusScope
 
-    init(flow: AuthFlow) {
+    init(flow: AuthFlow, restoreSignOutFocus: Binding<Bool>) {
         _model = State(initialValue: SettingsViewModel(auth: flow))
+        _restoreSignOutFocus = restoreSignOutFocus
     }
 
     var body: some View {
@@ -31,14 +33,17 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.version")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .defaultFocus($signOutFocused, true, priority: .userInitiated)
+        .defaultFocus($signOutFocused, true, priority: restoreSignOutFocus ? .userInitiated : .automatic)
         #if os(tvOS)
             .focusScope(focusScope)
-            .task {
-                // The tab content must join the focus hierarchy before reclaiming the originating row.
+            .task(id: restoreSignOutFocus) {
+                // Tab navigation keeps focus on the tab bar until the user enters its content.
+                // Only returning from confirmation should reclaim the originating row.
+                guard restoreSignOutFocus else { return }
                 await Task.yield()
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, restoreSignOutFocus else { return }
                 signOutFocused = true
+                restoreSignOutFocus = false
             }
         #endif
         .accessibilityElement(children: .contain)

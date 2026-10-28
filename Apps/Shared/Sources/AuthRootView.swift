@@ -12,6 +12,7 @@ struct AuthRootView: View {
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
     @State private var selectedTab = "home"
+    @State private var restoreSettingsFocus = false
 
     var body: some View {
         ZStack {
@@ -28,6 +29,12 @@ struct AuthRootView: View {
                 password = ""
                 focused = .password
             }
+        }
+        .onChange(of: flow.screen) { previous, screen in
+            restoreSettingsFocus = previous == .logoutConfirm && screen == .home && selectedTab == "settings"
+        }
+        .onChange(of: selectedTab) { _, _ in
+            restoreSettingsFocus = false
         }
         .task { await flow.restoreSession() }
         .onChange(of: scenePhase) { _, phase in
@@ -307,7 +314,7 @@ struct AuthRootView: View {
                 .onAppear { flow.settingsApp.currentView = nil }
             }
             Tab(AuthCopy.localized(.settings), systemImage: "gear", value: "settings") {
-                SettingsView(flow: flow)
+                SettingsView(flow: flow, restoreSignOutFocus: $restoreSettingsFocus)
             }
         }
     }
