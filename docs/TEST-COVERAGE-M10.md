@@ -62,9 +62,9 @@ bash scripts/ci-grep.sh
 The coverage gate includes all seven new shared-core tests. Apple-hosted logic and
 UI tests cannot execute on Linux.
 
-Verified on Linux after merging main `45e21b4` and M05 `d2d780b`: the coverage
-gate passed with 434 tests, 7 skipped integration tests, no failures, and 92.52%
-line coverage (7352/7946 lines). Strict swift-format,
+Verified on Linux after merging main `d720120`, with M05 `d2d780b` already in
+the branch's ancestry: the coverage gate passed with 436 tests, 7 skipped
+integration tests, no failures, and 92.53% line coverage (7363/7957 lines). Strict swift-format,
 the design-system check, String Catalog validation, the DEBUG-only string check,
 and ci-grep passed. The skipped tests require an external integration server.
 
@@ -107,6 +107,74 @@ test or assertion changes were needed. The pre-existing T04-68 adjustment remain
 Cancel returns to Settings, so it omits the Home assertion and reopening Settings.
 Apple simulator verification of the merged head is still required; the timeout
 and the M04 race are not claimed resolved by Linux checks.
+
+## CI run 40627712719 investigation
+
+The [run at head 4a076e7](https://github.com/kallupx/glassfin/actions/runs/40627712719)
+passed lint, test-tvos, and full-ui. Its only failing job was
+[test-ios](https://github.com/kallupx/glassfin/actions/runs/40627712719/job/122617041315).
+The full job log from `gh api repos/kallupx/glassfin/actions/jobs/122617041315/logs
+--allow-escape-sequences` and the uploaded
+[ios-results artifact](https://github.com/kallupx/glassfin/actions/runs/40627712719/artifacts/12791533953)
+identify one failing test, not a compile error or a job timeout:
+
+- The Release build completed at 04:06:26 UTC and its binary scan passed.
+  Package testing completed successfully at 04:10:38 UTC, including all seven
+  T10SettingsTests. Seven external-server integration tests were skipped.
+- app-test.log records 17 UI tests with one failure. All three M05 UI tests,
+  all three T10SettingsUITests, and the settings sign-out test T04-68 passed.
+- T04AuthUITests.testT04_03_quickConnectReachesHome failed at line 35 while
+  reading `quickconnect.code.label`. Its elapsed test log finds the code at
+  49.67 seconds and starts the label lookup at 50.72 seconds; the subsequent
+  failure hierarchy already contains `home.root`. M04's DEBUG fixture approves
+  after a fixed two-second sleep, independently of the test's code inspection.
+- The app test command reports `TEST FAILED` at 04:20:57 UTC, and the script
+  exits with code 65 at 04:21:08 UTC. The job ran from 04:03:09 to 04:21:16 UTC,
+  below its 25-minute limit. This is a fixture synchronization race in upstream
+  M04/main, not an M10 settings defect or a pure CI timeout.
+
+The minimal upstream fix is confined to the DEBUG fixture in AuthRootView.swift
+and the affected T04-03 UI test. An opt-in launch argument carries a unique Darwin
+notification name. The fixture reads that name's state during normal Quick
+Connect polling, holding approval until the runner has verified the code and
+saved its screenshot. The runner then sets the state to approved, and the
+existing polling and authentication path must reach Home. Each process releases
+its registration. The unique name prevents approval from an earlier test run
+from being reused. Apple's [notification API documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/notify.3.html)
+describes this state API for synchronization between processes. The hook and its
+Darwin import are DEBUG-only; no user-facing copy is added.
+
+Test/assertion changes authored for this investigation:
+
+- T04-03 registers its unique approval state and passes its name at launch, then
+  signals approval after the existing code assertions and screenshot. This
+  synchronization is required because the fixture could otherwise remove the
+  code between the test's existence check and label lookup.
+- Two new status assertions check notification registration and setting approval.
+  Every existing assertion, screenshot, and timeout in T04-03 is retained.
+- No M10 tests or assertions change. The requested main merge also imports
+  upstream changes to ADRM08PrototypeTests.swift and
+  PlaybackCoordinatorTests.swift exactly as supplied by `d720120`; no further
+  playback test edits are authored here. The pre-existing T04-68 adjustment
+  described above remains unchanged.
+
+Main `d720120` was merged with `Merge main d720120 (stack base v6)`.
+M05's remote tip remains `d2d780b`, already an ancestor, so no extra M05 merge
+or fix is needed. Main's workflows, project.yml, and all Info.plist files are
+retained exactly. Linux verification above passed after the merge and fixture
+change. Linux cannot compile or execute the Apple-only fixture or UI test; a
+green simulator rerun is still required.
+
+On macOS, run `bash scripts/macos-ci.sh iOS` for the same Release, package-test,
+and complete app-test checks as the failing job. For a focused regression run:
+
+```sh
+xcodegen generate
+xcodebuild test -scheme Glassfin-iOS \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:Glassfin-iOSUITests/T04AuthUITests/testT04_03_quickConnectReachesHome \
+  CODE_SIGNING_ALLOWED=NO
+```
 
 ## tvOS simulator verification
 

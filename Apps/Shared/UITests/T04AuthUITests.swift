@@ -1,4 +1,5 @@
 import CoreModels
+import Darwin
 import XCTest
 
 @MainActor
@@ -20,7 +21,11 @@ final class T04AuthUITests: XCTestCase {
     }
 
     func testT04_03_quickConnectReachesHome() {
-        let app = launch()
+        let approvalName = "org.glassfin.uitest-qc-approval.\(UUID().uuidString)"
+        var approvalToken: Int32 = 0
+        XCTAssertEqual(notify_register_check(approvalName, &approvalToken), UInt32(NOTIFY_STATUS_OK))
+        defer { _ = notify_cancel(approvalToken) }
+        let app = launch(arguments: ["-uitest-qc-approval", approvalName])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -34,6 +39,7 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(code.waitForExistence(timeout: 10))
         XCTAssertTrue(code.label.contains("482913") || (code.value as? String)?.contains("482913") == true)
         save(app.screenshot(), name: "quick-connect")
+        XCTAssertEqual(notify_set_state(approvalToken, 1), UInt32(NOTIFY_STATUS_OK))
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 10))
         save(app.screenshot(), name: "home")
     }
