@@ -20,9 +20,10 @@ public struct CertificateInfo: Sendable, Hashable, Equatable {
     public static let unavailable = CertificateInfo(fingerprintSHA256: "", subject: "")
 }
 
-/// Playback failures surfaced after the player has a concrete error.
+/// Playback failures surfaced when preparation or the player has a concrete error.
 /// The direct-play → direct-stream → transcode fallback itself belongs to playback.
 public enum PlaybackError: Error, Sendable, Equatable {
+    case couldNotPlay
     case itemFailed(code: String?)
     case stalled
     case fallbackExhausted
@@ -157,6 +158,7 @@ public enum AppErrorMessage {
     public static let sessionExpiredKey = "Session expired, please sign in again"
     public static let forbiddenKey = "You don't have permission to do this"
     public static let playbackFailedKey = "This file couldn't be played"
+    public static let couldNotPlayKey = "playback.error.couldNotPlay"
     public static let bufferingKey = "Buffering is taking longer than usual"
     public static let playbackOfflineKey = "Playback isn't available without a network connection"
     public static let playbackUnreachableKey = "Playback isn't available because the server can't be reached"
@@ -268,6 +270,8 @@ public enum AppErrorMessage {
             return serverErrorKey
         case .unsupportedServer:
             return unsupportedServerKey
+        case .playback(.couldNotPlay):
+            return couldNotPlayKey
         case .playback:
             return playbackFailedKey
         case .decoding, .cancelled, .internalInvariant:
