@@ -936,6 +936,166 @@
       },
       "extractionState" : "manual"
     },
+    "home.continueWatching" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue watching"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jatka katsomista"
+          }
+        }
+      }
+    },
+    "home.detailPending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Item details will be available in a later module."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kohteen tiedot tulevat saataville myöhemmässä moduulissa."
+          }
+        }
+      }
+    },
+    "home.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your library is empty"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kirjastosi on tyhjä"
+          }
+        }
+      }
+    },
+    "home.emptyGuidance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add videos to your Jellyfin libraries, then try again."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lisää videoita Jellyfin-kirjastoihisi ja yritä uudelleen."
+          }
+        }
+      }
+    },
+    "home.goToSeries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Go to series"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siirry sarjaan"
+          }
+        }
+      }
+    },
+    "home.latest" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently added · %@"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viimeksi lisätyt · %@"
+          }
+        }
+      }
+    },
+    "home.librariesRetry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not load your libraries."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kirjastojasi ei voitu ladata."
+          }
+        }
+      }
+    },
+    "home.nextUp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Up"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seuraavat jaksot"
+          }
+        }
+      }
+    },
+    "home.playbackPending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback will be available in a later module."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toisto tulee saataville myöhemmässä moduulissa."
+          }
+        }
+      }
+    },
+    "home.removeResume" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from Continue Watching"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poista jatka katsomista -listalta"
+          }
+        }
+      }
+    },
     "library.count.items" : {
       "localizations" : {
         "en" : {
@@ -1259,407 +1419,290 @@
       },
       "extractionState" : "manual"
     },
-    "welcome.connect" : {
-      "extractionState" : "manual",
+    "playback.autoplay" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect"
+            "value" : "Play the next episode automatically"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yhdistä"
+            "value" : "Toista seuraava jakso automaattisesti"
           }
         }
       }
     },
-    "welcome.designSystem" : {
-      "extractionState" : "manual",
+    "playback.cancel" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Design system"
+            "value" : "Cancel"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Design-järjestelmä"
+            "value" : "Peru"
           }
         }
       }
     },
-    "welcome.title" : {
-      "extractionState" : "manual",
+    "playback.next.countdown" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Glassfin"
+            "value" : "Playing in %lld seconds"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Glassfin"
+            "value" : "Toistetaan %lld sekunnin kuluttua"
           }
         }
       }
     },
-    "home.continueWatching" : {
+    "playback.next.title" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Continue watching"
+            "value" : "Next: %@"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jatka katsomista"
+            "value" : "Seuraava: %@"
           }
         }
       }
     },
-    "home.nextUp" : {
+    "playback.scrub" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Next Up"
+            "value" : "Scrub"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seuraavat jaksot"
+            "value" : "Kelaa"
           }
         }
       }
     },
-    "home.latest" : {
+    "playback.segment.commercial" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recently added · %@"
+            "value" : "Commercial"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Viimeksi lisätyt · %@"
+            "value" : "Mainos"
           }
         }
       }
     },
-    "home.empty" : {
+    "playback.segment.intro" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your library is empty"
+            "value" : "Intro"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kirjastosi on tyhjä"
+            "value" : "Intro"
           }
         }
       }
     },
-    "home.emptyGuidance" : {
+    "playback.segment.outro" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add videos to your Jellyfin libraries, then try again."
+            "value" : "Credits"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lisää videoita Jellyfin-kirjastoihisi ja yritä uudelleen."
+            "value" : "Lopputekstit"
           }
         }
       }
     },
-    "home.removeResume" : {
+    "playback.segment.preview" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove from Continue Watching"
+            "value" : "Preview"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Poista jatka katsomista -listalta"
+            "value" : "Ennakko"
           }
         }
       }
     },
-    "home.goToSeries" : {
+    "playback.segment.recap" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Go to series"
+            "value" : "Recap"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Siirry sarjaan"
+            "value" : "Kertaus"
           }
         }
       }
     },
-    "home.detailPending" : {
+    "playback.segmentBehavior.ask" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Item details will be available in a later module."
+            "value" : "Ask"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kohteen tiedot tulevat saataville myöhemmässä moduulissa."
+            "value" : "Kysy"
           }
         }
       }
     },
-    "home.playbackPending" : {
+    "playback.segmentBehavior.automatic" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Playback will be available in a later module."
+            "value" : "Skip automatically"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toisto tulee saataville myöhemmässä moduulissa."
+            "value" : "Ohita automaattisesti"
           }
         }
       }
     },
-    "home.librariesRetry" : {
+    "playback.segmentBehavior.ignore" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Could not load your libraries."
+            "value" : "Do nothing"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kirjastojasi ei voitu ladata."
+            "value" : "Älä tee mitään"
           }
         }
       }
     },
-    "search.prompt" : {
+    "playback.skip.commercial" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search your library"
+            "value" : "Skip commercial"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hae kirjastosta"
+            "value" : "Ohita mainos"
           }
         }
       }
     },
-    "search.movies" : {
+    "playback.skip.intro" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Movies"
+            "value" : "Skip intro"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elokuvat"
+            "value" : "Ohita intro"
           }
         }
       }
     },
-    "search.series" : {
+    "playback.skip.outro" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Series"
+            "value" : "Skip credits"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sarjat"
+            "value" : "Ohita lopputekstit"
           }
         }
       }
     },
-    "search.episodes" : {
+    "playback.skip.preview" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Episodes"
+            "value" : "Skip preview"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jaksot"
+            "value" : "Ohita ennakko"
           }
         }
       }
     },
-    "search.recent" : {
+    "playback.skip.recap" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recent searches"
+            "value" : "Skip recap"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Viimeisimmät haut"
-          }
-        }
-      }
-    },
-    "search.clearRecent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear recent searches"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tyhjennä viimeisimmät haut"
-          }
-        }
-      }
-    },
-    "search.empty" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No results for %@"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ei tuloksia haulle %@"
-          }
-        }
-      }
-    },
-    "search.minimum" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter at least two characters to search."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kirjoita vähintään kaksi merkkiä hakeaksesi."
-          }
-        }
-      }
-    },
-    "search.historyFailure" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent searches could not be updated. Try again."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Viimeisimpiä hakuja ei voitu päivittää. Yritä uudelleen."
-          }
-        }
-      }
-    },
-    "search.back" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Back to search"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Takaisin hakuun"
-          }
-        }
-      }
-    },
-    "settings.version" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version %@"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Versio %@"
-          }
-        }
-      }
-    },
-    "settings.versionUnavailable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Version unavailable"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Versio ei saatavilla"
+            "value" : "Ohita kertaus"
           }
         }
       }
@@ -1779,6 +1822,251 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tekstitykset"
+          }
+        }
+      }
+    },
+    "search.back" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to search"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Takaisin hakuun"
+          }
+        }
+      }
+    },
+    "search.clearRecent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear recent searches"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tyhjennä viimeisimmät haut"
+          }
+        }
+      }
+    },
+    "search.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No results for %@"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ei tuloksia haulle %@"
+          }
+        }
+      }
+    },
+    "search.episodes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Episodes"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jaksot"
+          }
+        }
+      }
+    },
+    "search.historyFailure" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent searches could not be updated. Try again."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viimeisimpiä hakuja ei voitu päivittää. Yritä uudelleen."
+          }
+        }
+      }
+    },
+    "search.minimum" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter at least two characters to search."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kirjoita vähintään kaksi merkkiä hakeaksesi."
+          }
+        }
+      }
+    },
+    "search.movies" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movies"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elokuvat"
+          }
+        }
+      }
+    },
+    "search.prompt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search your library"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hae kirjastosta"
+          }
+        }
+      }
+    },
+    "search.recent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent searches"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viimeisimmät haut"
+          }
+        }
+      }
+    },
+    "search.series" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Series"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sarjat"
+          }
+        }
+      }
+    },
+    "settings.version" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %@"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versio %@"
+          }
+        }
+      }
+    },
+    "settings.versionUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version unavailable"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versio ei saatavilla"
+          }
+        }
+      }
+    },
+    "welcome.connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yhdistä"
+          }
+        }
+      }
+    },
+    "welcome.designSystem" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design system"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design-järjestelmä"
+          }
+        }
+      }
+    },
+    "welcome.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glassfin"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glassfin"
           }
         }
       }

@@ -6,6 +6,7 @@ struct PosterFace: View {
     var content: PosterContent
     var style: CardStyle
     var isFocused: Bool
+    var titleHeight = CardMetrics.titleHeight
 
     private var size: CGSize {
         CardMetrics.size(for: style)
@@ -46,7 +47,7 @@ struct PosterFace: View {
             .frame(width: size.width, height: size.height)
             .clipShape(ContentShape.concentric)
             title
-                .frame(width: size.width, height: CardMetrics.titleHeight, alignment: .topLeading)
+                .frame(width: size.width, height: titleHeight, alignment: .topLeading)
         }
     }
 

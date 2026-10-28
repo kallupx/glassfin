@@ -13,10 +13,26 @@
         }
 
         var body: some View {
+            if scenario == "series-playback" || scenario == "series-playback-error" {
+                PlaybackPresentationHost(
+                    makeCoordinator: makePlaybackCoordinator, librarySession: session
+                ) { _ in browser }
+            } else {
+                browser
+            }
+        }
+
+        private func makePlaybackCoordinator() -> PlaybackCoordinator {
+            MockPlaybackFactory.makeCoordinator(
+                cannotPlay: scenario == "series-playback-error",
+                onStopped: { await session.app.recordPlaybackStop($0) })
+        }
+
+        private var browser: some View {
             Group {
                 if scenario.hasPrefix("series") {
                     NavigationStack {
-                        ItemDetailScreen(id: LibraryFixtureClient.series, session: session)
+                        ItemDetailScreen(id: LibraryFixtureClient.series, kind: .series, session: session)
                             .navigationDestination(for: ItemID.self) { id in
                                 ItemDetailScreen(id: id.value, session: session)
                             }

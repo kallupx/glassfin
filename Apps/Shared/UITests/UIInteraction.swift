@@ -12,7 +12,11 @@ func activate(
     }
     #if os(tvOS)
         guard moveFocus(to: element, in: app, file: file, line: line) else { return false }
-        XCUIRemote.shared.press(.select)
+        // Native tabs select their content as focus moves onto them. Home can
+        // immediately restore focus to a card, so an extra Select would open it.
+        if !element.identifier.hasPrefix("design.tab.") {
+            XCUIRemote.shared.press(.select)
+        }
     #elseif os(iOS)
         element.tap()
     #endif

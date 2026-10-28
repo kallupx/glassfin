@@ -3,15 +3,18 @@ import SwiftUI
 
 struct ItemDetailScreen: View {
     let id: String
+    let kind: MediaKind?
     let session: LibrarySession
     @State private var model: ItemDetailViewModel
     @State private var series: SeriesViewModel
-    @State private var playbackNotice = false
     @State private var playbackError: String?
     @FocusState private var focus: SeriesFocus?
+    @Environment(\.startPlayback) private var startPlayback
+    @Environment(\.playbackFocusReturn) private var playbackFocusReturn
 
-    init(id: String, session: LibrarySession) {
+    init(id: String, kind: MediaKind? = nil, session: LibrarySession) {
         self.id = id
+        self.kind = kind
         self.session = session
         _model = State(initialValue: ItemDetailViewModel(library: session.service, app: session.app))
         _series = State(
@@ -26,7 +29,17 @@ struct ItemDetailScreen: View {
             VStack(alignment: .leading, spacing: SpacingToken.l) {
                 if let item {
                     hero(item)
-                    if isSeries { SeriesEpisodeSection(model: series, session: session, focus: $focus) }
+                    if isSeries {
+                        SeriesEpisodeSection(
+                            model: series, session: session, focus: $focus,
+                            onPlay: startPlayback == nil
+                                ? nil
+                                : { episode in
+                                    play(
+                                        startOver: false, targetOverride: episode,
+                                        focusID: "series.episode.\(episode.id)")
+                                })
+                    }
                     metadata(item)
                     if let error = model.similar.presentedError { LibraryInlineError(error: error) }
                     if let items = model.similar.value, !items.isEmpty {
@@ -54,9 +67,6 @@ struct ItemDetailScreen: View {
                     Text(verbatim: AppErrorMessage.localized(playbackError)).accessibilityIdentifier(
                         "detail.playback.error")
                 }
-                if playbackNotice {
-                    Copy.text(.detailPlaybackPending).accessibilityIdentifier("detail.playback.pending")
-                }
             }
         }
         .accessibilityIdentifier("detail.root")
@@ -75,6 +85,21 @@ struct ItemDetailScreen: View {
                 await model.refreshFromStore()
                 await series.refreshFromStore()
                 await session.actions.refreshFromStore()
+            }
+        }
+        .onChange(of: playbackFocusReturn) { _, value in
+            guard let value else { return }
+            if value.id == "detail.play" { focus = .play }
+            if value.id == "detail.startOver" { focus = .startOver }
+            Task {
+                await model.refreshFromStore()
+                await series.refreshFromStore()
+                await session.actions.refreshFromStore()
+                if value.id == "detail.play" { focus = .play }
+                if value.id == "detail.startOver" { focus = .startOver }
+                if value.id.hasPrefix("series.episode.") {
+                    focus = .episode(String(value.id.dropFirst("series.episode.".count)))
+                }
             }
         }
         .onChange(of: session.playbackReturn) { _, result in
@@ -96,12 +121,7 @@ struct ItemDetailScreen: View {
     }
 
     private func load() async {
-        await model.load(id: id)
-        guard !Task.isCancelled, let item else { return }
-        if item.kind == .series { await series.load(seriesID: item.id) }
-        if item.kind == .season, let seriesID = item.seriesID {
-            await series.load(seriesID: seriesID, seasonID: item.id)
-        }
+        await model.load(id: id, kind: kind, series: series)
     }
 
     private func hero(_ item: MediaItem) -> some View {
@@ -143,10 +163,10 @@ struct ItemDetailScreen: View {
             }
             Text(verbatim: (item.detail?.genres ?? []).joined(separator: " · "))
             Text(verbatim: (item.detail?.studios ?? []).joined(separator: " · "))
-            if let streams = item.detail?.streams, !streams.isEmpty {
+            if let streams = item.detail?.technicalStreams, !streams.isEmpty {
                 Copy.text(.detailTechnical).font(.title3)
                 ForEach(Array(streams.enumerated()), id: \.offset) { _, stream in
-                    Text(verbatim: stream.technicalValue).accessibilityIdentifier("detail.technical.\(stream.id)")
+                    Text(verbatim: stream.technicalLabel).accessibilityIdentifier("detail.technical.\(stream.id)")
                 }
             }
             if let people = item.detail?.people, !people.isEmpty {
@@ -174,7 +194,9 @@ struct ItemDetailScreen: View {
                 LazyHStack(spacing: CardMetrics.spacing) {
                     ForEach(items) { item in
                         if let target = ItemID(item.id) {
-                            NavigationLink(value: target) {
+                            NavigationLink {
+                                ItemDetailScreen(id: target.value, kind: item.kind, session: session)
+                            } label: {
                                 LibraryMediaCardFace(
                                     item: session.actions.visible(item), focused: true, session: session)
                             }
@@ -189,23 +211,34 @@ struct ItemDetailScreen: View {
         .designFocusSection()
     }
 
-    private func play(startOver: Bool) {
+    private func play(startOver: Bool, targetOverride: MediaItem? = nil, focusID: String? = nil) {
         guard !session.app.playbackBlocked else {
-            playbackNotice = false
             playbackError = session.app.playbackBlockedMessageKey
             return
         }
         playbackError = nil
         let target: MediaItem?
-        if case .episode(let id) = focus {
+        if let targetOverride {
+            target = targetOverride
+        } else if case .episode(let id) = focus {
             target = series.episodes.value?.first { $0.id == id }
         } else {
             target = isSeries ? series.playTarget : item
         }
         guard let intent = model.playbackIntent(for: target, startOver: startOver) else { return }
         session.requestPlayback(intent)
-        // TODO(Q7-08): inject the M08 playback presentation closure and pass this intent.
-        playbackNotice = true
+        let origin: String
+        if let focusID {
+            origin = focusID
+        } else if case .episode(let id) = focus {
+            origin = "series.episode.\(id)"
+        } else {
+            origin = startOver ? "detail.startOver" : "detail.play"
+        }
+        startPlayback?(
+            PlaybackRequest(
+                itemID: intent.itemID, startTicks: Ticks.outboundPositionTicks(from: intent.start),
+                audioStreamIndex: intent.audioStreamIndex, subtitleStreamIndex: intent.subtitleStreamIndex), origin)
     }
 }
 
@@ -252,13 +285,13 @@ struct LibraryDetailActions: View {
                 #if DEBUG
                     .accessibilityValue(playKey.rawValue)
                 #endif
-                if hasProgress {
+                if hasProgress || focus.wrappedValue == .startOver {
                     Button {
                         onPlay(true)
                     } label: {
                         Copy.text(.detailStartOver)
                     }
-                    .buttonStyle(.glass).accessibilityIdentifier("detail.startOver")
+                    .buttonStyle(.glass).focused(focus, equals: .startOver).accessibilityIdentifier("detail.startOver")
                 }
                 Button {
                     Task { await session.actions.togglePlayed(item) }

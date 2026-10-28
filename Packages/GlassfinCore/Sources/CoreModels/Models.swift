@@ -154,6 +154,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
     public var name: String
     public var overview: String?
     public var seriesID: String?
+    public var seriesName: String?
     public var seasonID: String?
     public var indexNumber: Int?
     public var parentIndexNumber: Int?
@@ -173,6 +174,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
         name: String,
         overview: String? = nil,
         seriesID: String? = nil,
+        seriesName: String? = nil,
         seasonID: String? = nil,
         indexNumber: Int? = nil,
         parentIndexNumber: Int? = nil,
@@ -191,6 +193,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
         self.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
         self.overview = overview
         self.seriesID = seriesID
+        self.seriesName = seriesName
         self.seasonID = seasonID
         self.indexNumber = indexNumber
         self.parentIndexNumber = parentIndexNumber

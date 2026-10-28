@@ -105,6 +105,26 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case detailEpisodeNumber = "detail.episodeNumber"
     case detailRuntime = "detail.runtime"
     case detailPlaybackPending = "detail.playbackPending"
+    case playbackScrub = "playback.scrub"
+    case playbackNextTitle = "playback.next.title"
+    case playbackCountdown = "playback.next.countdown"
+    case playbackCancel = "playback.cancel"
+    case playbackAutoplay = "playback.autoplay"
+
+    case playbackSegmentIntro = "playback.segment.intro"
+    case playbackSkipIntro = "playback.skip.intro"
+    case playbackSegmentRecap = "playback.segment.recap"
+    case playbackSkipRecap = "playback.skip.recap"
+    case playbackSegmentOutro = "playback.segment.outro"
+    case playbackSkipOutro = "playback.skip.outro"
+    case playbackSegmentPreview = "playback.segment.preview"
+    case playbackSkipPreview = "playback.skip.preview"
+    case playbackSegmentCommercial = "playback.segment.commercial"
+    case playbackSkipCommercial = "playback.skip.commercial"
+    case playbackSegmentBehaviorAsk = "playback.segmentBehavior.ask"
+    case playbackSegmentBehaviorAutomatic = "playback.segmentBehavior.automatic"
+    case playbackSegmentBehaviorIgnore = "playback.segmentBehavior.ignore"
+
     case searchPrompt = "search.prompt"
     case searchMovies = "search.movies"
     case searchSeries = "search.series"
@@ -125,6 +145,27 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .playbackConvertASS: LocalizedStringResource("playback.tracks.convertASS", bundle: .main)
         case .playbackOptions: LocalizedStringResource("playback.tracks.options", bundle: .main)
         case .playbackRemoteBitrate: LocalizedStringResource("playback.tracks.remoteBitrate", bundle: .main)
+        case .playbackSegmentIntro: LocalizedStringResource("playback.segment.intro", bundle: .main)
+        case .playbackSkipIntro: LocalizedStringResource("playback.skip.intro", bundle: .main)
+        case .playbackSegmentRecap: LocalizedStringResource("playback.segment.recap", bundle: .main)
+        case .playbackSkipRecap: LocalizedStringResource("playback.skip.recap", bundle: .main)
+        case .playbackSegmentOutro: LocalizedStringResource("playback.segment.outro", bundle: .main)
+        case .playbackSkipOutro: LocalizedStringResource("playback.skip.outro", bundle: .main)
+        case .playbackSegmentPreview: LocalizedStringResource("playback.segment.preview", bundle: .main)
+        case .playbackSkipPreview: LocalizedStringResource("playback.skip.preview", bundle: .main)
+        case .playbackSegmentCommercial: LocalizedStringResource("playback.segment.commercial", bundle: .main)
+        case .playbackSkipCommercial: LocalizedStringResource("playback.skip.commercial", bundle: .main)
+        case .playbackSegmentBehaviorAsk: LocalizedStringResource("playback.segmentBehavior.ask", bundle: .main)
+        case .playbackSegmentBehaviorAutomatic:
+            LocalizedStringResource("playback.segmentBehavior.automatic", bundle: .main)
+        case .playbackSegmentBehaviorIgnore: LocalizedStringResource("playback.segmentBehavior.ignore", bundle: .main)
+
+        case .playbackScrub: LocalizedStringResource("playback.scrub", bundle: .main)
+        case .playbackNextTitle: LocalizedStringResource("playback.next.title", bundle: .main)
+        case .playbackCountdown: LocalizedStringResource("playback.next.countdown", bundle: .main)
+        case .playbackCancel: LocalizedStringResource("playback.cancel", bundle: .main)
+        case .playbackAutoplay: LocalizedStringResource("playback.autoplay", bundle: .main)
+
         case .searchPrompt: LocalizedStringResource("search.prompt", bundle: .main)
         case .searchMovies: LocalizedStringResource("search.movies", bundle: .main)
         case .searchSeries: LocalizedStringResource("search.series", bundle: .main)
@@ -231,6 +272,11 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
 }
 
 enum Copy {
+    static func playbackFeature(_ key: String) -> String {
+        guard let value = CopyKey(rawValue: key) else { return key }
+        return string(value)
+    }
+
     static func text(_ key: CopyKey) -> Text {
         Text(key.resource)
     }

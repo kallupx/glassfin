@@ -113,6 +113,22 @@ public final class ItemDetailViewModel: ViewContentProviding {
         app.currentView = self
     }
 
+    /// Loads the hero and the embedded series section for a detail destination.
+    public func load(id: String, kind: MediaKind?, series: SeriesViewModel) async {
+        if kind == .series {
+            async let seasons: Void = series.load(seriesID: id)
+            await load(id: id)
+            await seasons
+            return
+        }
+        await load(id: id)
+        guard !Task.isCancelled, let item = state.value else { return }
+        if item.kind == .series { await series.load(seriesID: item.id) }
+        if item.kind == .season, let seriesID = item.seriesID {
+            await series.load(seriesID: seriesID, seasonID: item.id)
+        }
+    }
+
     public func load(id: String) async {
         app.currentView = self
         guard ItemID(id) != nil else {
