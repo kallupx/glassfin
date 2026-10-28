@@ -17,10 +17,10 @@ final class ServerStartingPlaybackTests: XCTestCase {
             let item = try playbackItemFixture(from: fixture)
             let client = PoCAPIClient { request throws(APIError) in
                 if request.method == "GET" && request.path.contains("/Items/") {
-                    if failItem { throw .server(status: 503) }
+                    if failItem { throw .serverStarting }
                     return item
                 }
-                throw .server(status: 503)
+                throw .serverStarting
             }
             let session = makeSession(client)
             let engine = MockPlaybackEngine()
@@ -57,7 +57,7 @@ final class ServerStartingPlaybackTests: XCTestCase {
         let client = PoCAPIClient { request throws(APIError) in
             if request.method == "GET" && request.path.contains("/Items/") { return item }
             if request.path.hasSuffix("PlaybackInfo") { return fixture }
-            throw .server(status: 503)
+            throw .serverStarting
         }
         let session = makeSession(client)
         let timer = ManualPlaybackTimer()
@@ -91,5 +91,5 @@ final class ServerStartingPlaybackTests: XCTestCase {
 }
 
 private struct StartingCurrentUser: CurrentUserProbing {
-    func currentUser() async throws(APIError) { throw .server(status: 503) }
+    func currentUser() async throws(APIError) { throw .serverStarting }
 }

@@ -30,7 +30,7 @@ public struct HomeSessionClient: JellyfinAPIClient {
         } catch {
             let failure = error as? APIError ?? .network
             if failure == .unauthorized { await app.handle(.unauthorized) }
-            if failure == .server(status: 503) { await app.handle(.serverStarting) }
+            if failure == .serverStarting { await app.handle(.serverStarting) }
             throw failure
         }
     }

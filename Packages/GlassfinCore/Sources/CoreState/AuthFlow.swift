@@ -633,7 +633,7 @@ public final class AuthFlow: ViewContentProviding {
             quickConnectEnabled = try await backend.quickConnectEnabled(on: info)
         } catch {
             quickConnectEnabled = false
-            if error == .server(status: 503) {
+            if error == .serverStarting {
                 screen = .address
                 inlineError = .serverStarting
                 focus = .tryAgain
@@ -704,7 +704,7 @@ public final class AuthFlow: ViewContentProviding {
                     let accepted = try await backend.pollQuickConnect(on: server, secret: QuickConnectSecret(revealed))
                     return accepted ? .authenticated : .pending
                 } catch {
-                    if (error as? APIError) == .server(status: 503) {
+                    if (error as? APIError) == .serverStarting {
                         return .serverStarting
                     }
                     return .pending
@@ -789,7 +789,7 @@ public final class AuthFlow: ViewContentProviding {
             app.setCapabilitiesRetryPending(false, serverID: session.session.server.id, userID: session.session.userID)
         } catch {
             log.warning("Capabilities registration failed; one retry is pending.")
-            if error == .server(status: 503) { app.handle(.serverStarting) }
+            if error == .serverStarting { app.handle(.serverStarting) }
         }
     }
 
@@ -806,7 +806,7 @@ public final class AuthFlow: ViewContentProviding {
             try await backend.postCapabilities(on: session.server, token: token)
         } catch {
             log.warning("Capabilities registration retry failed.")
-            if error == .server(status: 503) { app.handle(.serverStarting) }
+            if error == .serverStarting { app.handle(.serverStarting) }
         }
     }
 
@@ -814,7 +814,7 @@ public final class AuthFlow: ViewContentProviding {
         switch error {
         case .cancelled: nil
         case .unauthorized: quickConnect ? .quickConnectUnauthorized : .invalidCredentials
-        case .server(status: 503): .serverStarting
+        case .serverStarting: .serverStarting
         case .server: .loginServerFailure
         default: .loginTransportFailure
         }

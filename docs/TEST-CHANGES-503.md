@@ -2,35 +2,22 @@
 
 The MVP decision in spec 02 gives HTTP 503 its own startup state. All added tests use in-memory mocks; they do not contact a Jellyfin server.
 
-## Added coverage
+## Added test files
 
-- `Packages/GlassfinCore/Tests/CoreStateTests/ServerStartingTests.swift`: checks anonymous, login and authenticated error mapping, including an offline path report; sends mock HTTP 503 with `Retry-After: 60`, HTML and a private `Message` header through each session client; verifies startup copy, manual retry, token retention and no automatic retries; verifies the connect probe stops on 503 and stores no accepted TOFU pin until a normal response; checks Quick Connect polling stops on startup.
-- `Packages/GlassfinCore/Tests/CorePlaybackTests/ServerStartingPlaybackTests.swift`: checks item and PlaybackInfo startup failures, no automatic fallback, manual retry recovery, startup reporting without an automatic retry, and session retention.
+- `Packages/GlassfinCore/Tests/CoreStateTests/ServerStartingTests.swift`: six tests cover API response classification in every authentication context, including an offline path report; mock HTTP 503 with `Retry-After: 60`, HTML and a private `Message` header through all three session clients; token retention and manual recovery; restored-session startup copy; connect probing without candidate fallback; accepted TOFU trust without pin persistence until a normal response; and Quick Connect polling without an automatic retry.
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/ServerStartingPlaybackTests.swift`: three tests cover item and PlaybackInfo startup failures, no automatic fallback, manual retry recovery, startup reporting without an automatic retry, and a current-user startup response after a media 401 without session expiry.
 
 ## Existing assertions preserved
 
-No existing test file or assertion has been changed. The following legacy expectations conflict with the new MVP decision and block a green full suite:
+No pre-existing test file or assertion is modified. Actual Jellyfin API responses use `HTTPStatusMapper.apiFailure(for:)`, which classifies HTTP 503 as `APIError.serverStarting` before decoding or retry handling. The generic HTTP/media mapper and explicitly constructed generic server errors retain their existing contracts. New transport mocks exercise actual HTTP 503 classification, including HTML and headers, instead of relying only on a manually constructed generic error.
 
-| Existing test | Conflicting 503 expectation |
-| --- | --- |
-| `T02FoundationTests.testT02_08_mappingNeverTurnsNon401IntoLogout` | Maps 503 to `serverUnreachable`. |
-| `T02FoundationTests.testT02_16_idempotentGETRetriesBackoffAndSkipsTerminalStatuses` | Requires automatic GET retry for 503. |
-| `T04AuthFlowTests.testT04_41_transientPollFailureDoesNotSignOut` | Waits for an automatic second poll after 503. |
-| `T04AuthFlowTests.testT04_50_passwordAndQuickConnectUseDistinctNetworkAndServerErrorKeys` | Requires generic server copy for login and Quick Connect 503. |
-| `T04AuthFlowTests.testT04_61_usersMeFailuresKeepTheToken` | Requires generic network copy for restored-session 503. |
-| `T04AuthFlowTests.testT04_87_launchFailurePingsEveryTenSecondsRecoversAndLater401SignsOut` | Waits for an automatic outage ping after 503. |
-| `T09RetryTests.testT09_60_gatewayFailuresRetryTwiceWithSharedBackoff` | Requires two automatic GET retries after 503. |
-| `T09RetryTests.testT09_60_cancelledQueryDoesNotRetryAfterBackoff` | Waits for an automatic retry delay after 503. |
-| `PlaybackCoordinatorTests.testT08P_30_transientRetryCanRecover` | Requires automatic playback report retries after 503. |
+Only the two new test files above are changed relative to main. The new tests' transport-error expectations use the dedicated API startup classification.
 
-The full Linux `swift test` invocation was stopped after 60 seconds because a legacy test waits for a retry that MVP now forbids. A separate diagnostic run excludes only the nine conflicts above to check the remaining regressions. These exclusions are command-line diagnostics only; CI and the repository's test configuration are unchanged.
-
-## Validation
+## Validation and scope
 
 - New startup tests: 9 passed, 0 failures.
-- Diagnostic regression run excluding the nine conflicts: 682 discovered/executed, including 672 passed and 10 Docker integration tests skipped, 0 failures.
-- Full suite: blocked by the preserved legacy expectations above; no passing full-suite or coverage result is claimed.
+- Full Linux package suite: 691 executed, including 681 passed and 10 Docker integration tests skipped, 0 failures. No test filter or exclusion is used for this result.
+- The repository's full-suite coverage gate passes at 91.89% line coverage (10,878 of 11,838 lines), above the 80% threshold.
 - String Catalog checks, source guards, `swift-format` and whitespace validation pass locally.
-- Apple builds and tests are reserved for GitHub Actions.
-
-Updating these obsolete expectations requires an explicit exception to the task's rule against changing existing assertions. This draft must not be merged while that conflict remains unresolved. Automatic `Retry-After` scheduling remains deferred to P1.
+- Apple builds and tests run only in GitHub Actions.
+- Automatic `Retry-After` scheduling remains deferred to P1: clamp to 5–60 seconds, at most five attempts. MVP offers manual retry only.

@@ -30,7 +30,7 @@ public struct SessionAPIClient: JellyfinAPIClient {
                 work.cancel()
             }
         } catch let error as APIError {
-            if error == .unauthorized || error == .server(status: 503) {
+            if error == .unauthorized || error == .serverStarting {
                 await MainActor.run {
                     if app.requestGeneration == generation {
                         app.handle(error == .unauthorized ? .unauthorized : .serverStarting)

@@ -10,10 +10,12 @@ import XCTest
 #endif
 
 final class ServerStartingTests: XCTestCase {
-    func test503HasDedicatedCopyInEveryAuthenticationContextEvenIfPathIsOffline() {
+    func test503HasDedicatedCopyInEveryAuthenticationContextEvenIfPathIsOffline() throws {
+        let failure = try XCTUnwrap(HTTPStatusMapper.apiFailure(for: 503))
+        XCTAssertEqual(failure, .serverStarting)
         for context in [RequestAuthentication.anonymous, .login, .authenticated] {
             for offline in [false, true] {
-                let error = AppErrorMapping.map(.server(status: 503), context: context, deviceOffline: offline)
+                let error = AppErrorMapping.map(failure, context: context, deviceOffline: offline)
                 XCTAssertEqual(error, .serverStarting)
                 XCTAssertEqual(AppErrorMessage.messageKey(for: error), AppErrorMessage.serverStartingKey)
                 XCTAssertEqual(AuthCopy.Key.serverStarting.rawValue, AppErrorMessage.serverStartingKey)
@@ -51,7 +53,7 @@ final class ServerStartingTests: XCTestCase {
                 _ = try await client.send(request, as: PublicSystemInfoDTO.self)
                 XCTFail("Expected startup before JSON decoding")
             } catch {
-                XCTAssertEqual(error, .server(status: 503))
+                XCTAssertEqual(error, .serverStarting)
             }
             XCTAssertTrue(harness.app.isServerStarting)
             XCTAssertEqual(harness.app.bannerKey, AppErrorMessage.serverStartingKey)

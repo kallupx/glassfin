@@ -113,9 +113,12 @@ public enum AppErrorMapping {
             return .forbidden
         case .notFound:
             return .notFound
+        case .serverStarting:
+            return .serverStarting
         case .server(let status):
-            if status == 503 { return .serverStarting }
-            if status == 502 || status == 504 {
+            // Unclassified gateway errors retain the generic connectivity policy.
+            // HTTP API responses classify 503 before reaching this branch.
+            if status == 502 || status == 503 || status == 504 {
                 return deviceOffline ? .offline : .serverUnreachable
             }
             return .serverError(status: status)

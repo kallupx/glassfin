@@ -430,7 +430,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
             _ = try await backend.currentUser(on: server, token: token)
             return .ok
         } catch {
-            if error == .server(status: 503) { return .failed(.serverStarting) }
+            if error == .serverStarting { return .failed(.serverStarting) }
             return .failed(error == .unauthorized ? .unauthorized : .serverUnreachable)
         }
     }

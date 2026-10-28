@@ -279,7 +279,7 @@ public final class PlaybackCoordinator {
                 guard case .resourceLoader(let value) = plan.primary else { throw PlaybackFailure.couldNotPlay }
                 carrier = value
             case .rejected(.transport(status: 401)): throw APIError.unauthorized
-            case .rejected(.transport(status: 503)): throw APIError.server(status: 503)
+            case .rejected(.transport(status: 503)): throw APIError.serverStarting
             case .rejected(.insecureRedirect): throw PlaybackFailure.insecureRedirect
             case .rejected: throw PlaybackFailure.couldNotPlay
             }
@@ -325,7 +325,7 @@ public final class PlaybackCoordinator {
             } else {
                 await expireSession(run: run)
             }
-        } else if error as? APIError == .server(status: 503) {
+        } else if error as? APIError == .serverStarting {
             await serverStarting()
         } else {
             let reason = (error as? PlaybackFailure) ?? .couldNotPlay
@@ -581,6 +581,7 @@ public final class PlaybackCoordinator {
             let error = await finish(state: .ended, failed: false)
             if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
         case .failed(.unauthorized): await mediaUnauthorized()
+        case .failed(.serverStarting): await serverStarting()
         case .failed(.server(status: 503)): await serverStarting()
         case .failed(.cancelled): break
         case .failed: await attemptFailed(run: run, fromEngineEvent: true)
@@ -604,7 +605,7 @@ public final class PlaybackCoordinator {
         let error = await reporter.send(
             event, context: context, position: engine.position, paused: paused, canSeek: engine.canSeek
         )
-        if error == .server(status: 503), generation == run { await serverStarting() }
+        if error == .serverStarting, generation == run { await serverStarting() }
         return error
     }
 

@@ -81,7 +81,7 @@ public enum MediaUnauthorizedPolicy {
             if case .unauthorized = error {
                 return .logOut
             }
-            if error == .server(status: 503) { return .serverStarting }
+            if error == .serverStarting { return .serverStarting }
             return .playbackError
         }
     }
