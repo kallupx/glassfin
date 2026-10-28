@@ -132,11 +132,6 @@ public final class AuthFlow {
             acceptedCertificatePin = nil
             acceptedPinToStore = nil
         }
-        let certificatePin =
-            acceptedCertificatePin
-            ?? candidates.compactMap { url in
-                pinnedMatch(for: url).map { OriginCertificatePin(url: url, sha256: $0.fingerprint) }
-            }.first
         server = nil
         displayedName = ""
         displayedVersion = ""
@@ -147,6 +142,16 @@ public final class AuthFlow {
         isProbing = true
         inlineError = nil
         httpSkippedByPolicy = false
+        let certificatePin: OriginCertificatePin?
+        do {
+            let storedPin = try candidates.compactMap { url in
+                try pinnedMatch(for: url).map { OriginCertificatePin(url: url, sha256: $0.fingerprint) }
+            }.first
+            certificatePin = acceptedCertificatePin ?? storedPin
+        } catch {
+            failPinLookup()
+            return
+        }
         probeTask = Task {
             let outcome = await backend.probe(address, certificatePin: certificatePin)
             guard !Task.isCancelled else { return }
@@ -177,15 +182,22 @@ public final class AuthFlow {
                 RedirectPolicy.originsMatch($0.url, url)
             })
         else { return }
+        let storedFingerprint: String?
+        do {
+            storedFingerprint = try pinnedMatch(for: url)?.fingerprint
+        } catch {
+            failPinLookup()
+            throw error
+        }
         let outcome = SelfSignedTrustFlow.handle(
             isSystemTrusted: false, leaf: leaf,
-            pinnedSHA256: pinnedMatch(for: url)?.fingerprint,
+            pinnedSHA256: storedFingerprint,
             userAcceptedFingerprint: userAcceptedFingerprint
         )
         switch outcome.decision {
         case .usePinnedCredential:
             // Only the trust outcome supplies new pin bytes. No ID is invented before the probe succeeds.
-            let fingerprint = outcome.pinToStore ?? pinnedMatch(for: url)?.fingerprint
+            let fingerprint = outcome.pinToStore ?? storedFingerprint
             guard let fingerprint else { return }
             acceptedCertificatePin = OriginCertificatePin(url: url, sha256: fingerprint)
             acceptedPinToStore = outcome.pinToStore
@@ -515,7 +527,14 @@ public final class AuthFlow {
                 RedirectPolicy.originsMatch($0.url, url)
             }.map { AuthServerName.display($0.name, host: url.host ?? "") }
             ?? AuthServerName.display("", host: url.host ?? "")
-        if let match = pinnedMatch(for: url) {
+        let match: (serverID: String, fingerprint: String)?
+        do {
+            match = try pinnedMatch(for: url)
+        } catch {
+            failPinLookup()
+            return
+        }
+        if let match {
             let decision = SelfSignedTrustFlow.handle(
                 isSystemTrusted: false,
                 leaf: leaf,
@@ -733,10 +752,21 @@ public final class AuthFlow {
         try? vault.loadToken(serverID: serverID, userID: userID)
     }
 
-    private func pinnedMatch(for url: URL) -> (serverID: String, fingerprint: String)? {
+    private func failPinLookup() {
+        isProbing = false
+        acceptedCertificatePin = nil
+        acceptedPinToStore = nil
+        certificate = nil
+        certificateURL = nil
+        inlineError = .loginTransportFailure
+        screen = .address
+        focus = AuthFocusPolicy.address(fieldIsEmpty: addressText.isEmpty)
+    }
+
+    private func pinnedMatch(for url: URL) throws(APIError) -> (serverID: String, fingerprint: String)? {
         for stored in app.preferencesSnapshot().servers where RedirectPolicy.originsMatch(stored.url, url) {
-            if let fingerprint = try? pins.fingerprint(for: stored.id) {
-                return (stored.id, fingerprint)
+            if let pin = try pins.certificatePin(for: stored.id, url: url) {
+                return (stored.id, pin.sha256)
             }
         }
         return nil

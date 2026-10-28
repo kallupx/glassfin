@@ -92,6 +92,7 @@ public struct LiveAuthBackend: AuthBackend {
     }
 
     func makeClient(for server: ServerInfo, token: String?) throws(APIError) -> any JellyfinAPIClient {
+        let certificatePin = try pins?.certificatePin(for: server.id, url: server.url)
         let deviceID: String
         do {
             deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: secureStore, reset: false)
@@ -103,8 +104,6 @@ public struct LiveAuthBackend: AuthBackend {
         return clientOverride
             ?? HTTPJellyfinClient(
                 server: server.url, identity: identity, log: log,
-                certificatePin: (try? pins?.fingerprint(for: server.id)).map {
-                    OriginCertificatePin(url: server.url, sha256: $0)
-                })
+                certificatePin: certificatePin)
     }
 }
