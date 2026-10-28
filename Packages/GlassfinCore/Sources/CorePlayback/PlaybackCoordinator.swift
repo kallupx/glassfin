@@ -396,6 +396,8 @@ public final class PlaybackCoordinator {
         guard id == nil || track != nil else { return }
         if kind == .audio && track == nil { return }
         if (kind == .audio ? selection.audio : selection.subtitle ?? -1) == (id ?? -1) { return }
+        let trackInterval = DevicePerformance.begin(.playbackTrackApply)
+        defer { trackInterval?.end(completed: false) }
         let run = generation
         let oldSubtitle = tracks.first { $0.kind == .subtitle && $0.id == selection.subtitle }
         let mustReload =
@@ -429,6 +431,7 @@ public final class PlaybackCoordinator {
             context?.audioStreamIndex = selection.audio
             context?.subtitleStreamIndex = selection.subtitle
             if kind == .subtitle && track?.delivery != .externalVTT { subtitleCues = [] }
+            trackInterval?.end()
             await progress()
             return
         }
@@ -448,6 +451,7 @@ public final class PlaybackCoordinator {
         await startAttempt(
             itemID: oldContext.itemID, start: position, run: nextRun,
             previousSessionID: oldContext.playSessionID)
+        if isCurrent(nextRun), engineLoaded, context != nil { trackInterval?.end() }
     }
 
     public func setASSConversion(_ enabled: Bool) async {

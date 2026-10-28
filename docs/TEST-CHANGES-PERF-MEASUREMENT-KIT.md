@@ -26,3 +26,10 @@ server session while benchmarks run. Run/Profile/Archive actions are unchanged.
 project generation. Test suites remain in their existing schemes and therefore
 run in the regular tvOS/iOS CI jobs. Existing synthetic performance tests remain
 intact. Source-check assertions and artifact redaction rules remain intact.
+
+The kit is rebased onto `085582b` (PR #44). Its existing full-playback and default
+audio-selection tests and assertions are preserved. Conflict resolution keeps
+main's track state/cleanup and playback negotiation, and classifies the new
+first-frame interval from the negotiated PlayMethod. Full M08a track selection
+also gets a fixed-name application/handoff interval. Neither instrument changes
+negotiation, playback state, selected tracks, fallback policy, or rendering.
