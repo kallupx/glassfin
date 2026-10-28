@@ -378,6 +378,7 @@ final class FakeEvents: ServerEventStream, @unchecked Sendable {
 
 final class StubLibrary: LibraryService, @unchecked Sendable {
     private let lock = NSLock()
+    var viewItems: [Library] = []
     var resumeItems: [MediaItem] = []
     var nextItems: [MediaItem] = []
     var latestByID: [String: Result<[MediaItem], APIError>] = [:]
@@ -396,9 +397,10 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
     private var itemCalls = 0
     private var playedWrites: [(String, Bool)] = []
     private var favoriteWrites: [(String, Bool)] = []
+    private var dataWrites: [(String, Duration, Bool)] = []
     private var resumeFinished = false
 
-    func userViews() async throws(APIError) -> [Library] { [] }
+    func userViews() async throws(APIError) -> [Library] { value { viewItems } }
 
     func items(in library: Library.ID, query: ItemQuery, page: PageRequest) async throws(APIError) -> Page<MediaItem> {
         let (error, stored) = value { () -> (APIError?, Page<MediaItem>?) in
@@ -488,7 +490,13 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
 
     func userData(id: MediaItem.ID) async throws(APIError) -> UserItemState { UserItemState() }
 
-    func updateUserData(id: MediaItem.ID, position: Duration, played: Bool) async throws(APIError) {}
+    func updateUserData(id: MediaItem.ID, position: Duration, played: Bool) async throws(APIError) {
+        let error = value { () -> APIError? in
+            dataWrites.append((id, position, played))
+            return self.error
+        }
+        if let error { throw error }
+    }
 
     func resumeCallCount() -> Int { value { resumeCalls } }
     func nextCallCount() -> Int { value { nextCalls } }
@@ -496,6 +504,7 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
     func latestIdentifiers() -> [String] { value { latestIDs } }
     func played() -> [(String, Bool)] { value { playedWrites } }
     func favorites() -> [(String, Bool)] { value { favoriteWrites } }
+    func userDataWrites() -> [(String, Duration, Bool)] { value { dataWrites } }
     func didFinishResume() -> Bool { value { resumeFinished } }
 
     private func value<T>(_ body: () -> T) -> T {

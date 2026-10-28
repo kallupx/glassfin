@@ -96,11 +96,11 @@ struct GlassActionBar: View {
 }
 
 struct ErrorStateView: View {
+    var messageOverride: String? = nil
     var failure: DesignFailure
     var attempts: Int
     var onRetry: () -> Void
     var onSwitchServer: () -> Void
-    var messageOverride: String? = nil
 
     private var actions: [GlassAction] {
         guard case .blocking(_, let retry, let switchServer) = failure.screen else {

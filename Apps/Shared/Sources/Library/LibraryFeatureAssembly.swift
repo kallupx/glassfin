@@ -24,9 +24,10 @@ enum LibraryFeatureAssembly {
 
 struct LibraryOverflowView: View {
     let session: LibrarySession
+    var libraries: [Library]? = nil
     var body: some View {
         NavigationStack {
-            List(session.overflowLibraries) { library in
+            List(libraries ?? session.overflowLibraries) { library in
                 NavigationLink {
                     LibraryGridView(library: library, session: session)
                 } label: {

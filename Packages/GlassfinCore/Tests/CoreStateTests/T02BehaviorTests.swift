@@ -200,7 +200,10 @@ final class T02BehaviorTests: XCTestCase {
             let latest = [Sample.movie(id: Sample.season, name: "Latest")]
             let home = harness.home()
             if cached {
-                XCTAssertTrue(harness.app.snapshots.save(HomeSnapshot(resume: resume, nextUp: next, latest: latest)))
+                var snapshot = HomeSnapshot(resume: resume, nextUp: next, latest: latest)
+                snapshot.libraries = [Library(id: Sample.library, name: "Library")]
+                snapshot.latestByLibrary = [Sample.library: latest]
+                XCTAssertTrue(harness.app.snapshots.save(snapshot))
             } else {
                 harness.library.resumeItems = resume
                 harness.library.nextItems = next
@@ -954,7 +957,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(played?.played, true)
         XCTAssertFalse(pending)
         await home.refreshFromStore()
-        XCTAssertEqual(home.resume.value?.first?.userData.played, true)
+        XCTAssertEqual(home.resume.value, [])
         XCTAssertEqual(ended(harness.signposter.snapshot(), .watchedStateHome), 1)
 
         harness.library.error = .forbidden

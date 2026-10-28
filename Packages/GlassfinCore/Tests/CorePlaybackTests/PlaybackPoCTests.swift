@@ -297,7 +297,7 @@ private actor PoCTransport: RequestTransport {
         self.data = data
         self.status = status
     }
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         requests.append(request)
         let url = try XCTUnwrap(request.url)
         let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil))

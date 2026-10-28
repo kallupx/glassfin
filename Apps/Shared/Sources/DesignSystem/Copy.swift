@@ -49,6 +49,17 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case navLibrary = "design.nav.library"
     case navDetail = "design.nav.detail"
 
+    case homeContinue = "home.continueWatching"
+    case homeNextUp = "home.nextUp"
+    case homeLatest = "home.latest"
+    case homeEmpty = "home.empty"
+    case homeEmptyGuidance = "home.emptyGuidance"
+    case homeRemoveResume = "home.removeResume"
+    case homeGoToSeries = "home.goToSeries"
+    case homeDetailPending = "home.detailPending"
+    case homePlaybackPending = "home.playbackPending"
+    case homeLibrariesRetry = "home.librariesRetry"
+
     case librarySort = "library.sort"
     case libraryName = "library.sort.name"
     case libraryDateAdded = "library.sort.dateAdded"
@@ -88,6 +99,17 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
 
     var resource: LocalizedStringResource {
         switch self {
+        case .homeContinue: LocalizedStringResource("home.continueWatching", bundle: .main)
+        case .homeNextUp: LocalizedStringResource("home.nextUp", bundle: .main)
+        case .homeLatest: LocalizedStringResource("home.latest", bundle: .main)
+        case .homeEmpty: LocalizedStringResource("home.empty", bundle: .main)
+        case .homeEmptyGuidance: LocalizedStringResource("home.emptyGuidance", bundle: .main)
+        case .homeRemoveResume: LocalizedStringResource("home.removeResume", bundle: .main)
+        case .homeGoToSeries: LocalizedStringResource("home.goToSeries", bundle: .main)
+        case .homeDetailPending: LocalizedStringResource("home.detailPending", bundle: .main)
+        case .homePlaybackPending: LocalizedStringResource("home.playbackPending", bundle: .main)
+        case .homeLibrariesRetry: LocalizedStringResource("home.librariesRetry", bundle: .main)
+
         case .librarySort: LocalizedStringResource("library.sort", bundle: .main)
         case .libraryName: LocalizedStringResource("library.sort.name", bundle: .main)
         case .libraryDateAdded: LocalizedStringResource("library.sort.dateAdded", bundle: .main)

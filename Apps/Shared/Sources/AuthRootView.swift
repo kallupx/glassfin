@@ -8,13 +8,14 @@ import SwiftUI
 struct AuthRootView: View {
     @Bindable var flow: AuthFlow
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
     @State private var librarySession: LibrarySession?
 
     var body: some View {
         ZStack {
-            ContentPaint.scrim.ignoresSafeArea()
+            Color.black.ignoresSafeArea()
             panel
                 .padding(flow.screen == .home ? 0 : 48)
         }
@@ -47,8 +48,14 @@ struct AuthRootView: View {
         case .home:
             home
         default:
-            GlassEffectContainer {
-                content.ownGlassSurface(in: ContentShape.concentric)
+            Group {
+                if reduceTransparency {
+                    content.background(.background, in: ConcentricRectangle())
+                } else {
+                    GlassEffectContainer {
+                        content.glassEffect(.regular, in: ConcentricRectangle())
+                    }
+                }
             }
         }
     }
@@ -275,79 +282,17 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        TabView {
-            Tab(AuthCopy.localized(.home), systemImage: "house") {
-                VStack(spacing: 16) {
-                    Text(verbatim: AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
-                    if let key = flow.bannerKey {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.banner")
-                    }
-                    if let key = flow.homeErrorKey {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.error")
-                        Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryHome() } }
-                            .accessibilityIdentifier("home.retry")
-                            .focused($focused, equals: .tryAgain)
-                    } else if let snapshot = flow.cachedHome {
-                        ForEach(snapshot.resume + snapshot.nextUp + snapshot.latest, id: \.id) { item in
-                            Text(verbatim: item.name)
-                        }
-                    }
-                }
-                .defaultFocus($focused, flow.focus)
-                .onAppear { flow.onAppear() }
-            }
-            #if os(iOS)
-                // Keep Settings reachable when library tabs overflow into the native More menu.
-                Tab(AuthCopy.localized(.settings), systemImage: "gear") { settings }
-            #endif
-            if let librarySession {
-                ForEach(librarySession.directLibraries) { library in
-                    Tab {
-                        LibraryNavigationRoot(library: library, session: librarySession)
-                    } label: {
-                        Text(verbatim: library.name)
-                    }
-                }
-                if !librarySession.overflowLibraries.isEmpty || librarySession.directLibraries.isEmpty {
-                    Tab(Copy.string(.tabLibraries), systemImage: "books.vertical") {
-                        if librarySession.directLibraries.isEmpty {
-                            LibraryIndexStateView(session: librarySession)
-                        } else {
-                            LibraryOverflowView(session: librarySession)
-                        }
-                    }
+        HomeRootView(flow: flow, librarySession: librarySession)
+            .task {
+                do {
+                    if librarySession == nil { librarySession = try LibraryFeatureAssembly.make(flow: flow) }
+                    await librarySession?.load()
+                } catch let error as APIError {
+                    flow.featureApp.handle(AppErrorMapping.map(error, context: .authenticated, deviceOffline: false))
+                } catch {
+                    flow.featureApp.handle(.internalInvariant)
                 }
             }
-            #if os(tvOS)
-                Tab(AuthCopy.localized(.settings), systemImage: "gear") { settings }
-            #endif
-        }
-        .task {
-            do {
-                if librarySession == nil { librarySession = try LibraryFeatureAssembly.make(flow: flow) }
-                await librarySession?.load()
-            } catch let error as APIError {
-                flow.featureApp.handle(AppErrorMapping.map(error, context: .authenticated, deviceOffline: false))
-            } catch {
-                flow.featureApp.handle(.internalInvariant)
-            }
-        }
-    }
-
-    private var settings: some View {
-        VStack(spacing: 16) {
-            Text(verbatim: flow.displayedName)
-                .accessibilityIdentifier("settings.serverName")
-            Button(AuthCopy.localized(.signOut)) { flow.requestLogout() }
-                .accessibilityIdentifier("settings.signOut")
-            Text(
-                verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-                    ?? ""
-            )
-            .accessibilityIdentifier("settings.version")
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("settings.root")
     }
 
     private var logoutConfirm: some View {
@@ -382,9 +327,14 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             if configuration.useMockServer || configuration.resetState {
-                return assemble(
+                let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
-                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock())
+                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock(),
+                    path: StaticConnectivityPath(online: true))
+                if configuration.startOnHome {
+                    HomeMockLaunch.seed(flow.homeApp)
+                }
+                return flow
             }
         #else
             _ = arguments
@@ -399,14 +349,15 @@ enum AuthAssembly {
     @MainActor
     private static func assemble(
         backend: any AuthBackend, secure: any SecureStore, settings: any SettingsStore,
-        clock: any GlassfinClock = SystemGlassfinClock()
+        clock: any GlassfinClock = SystemGlassfinClock(),
+        path: any ConnectivityPath = SystemPathMonitor()
     ) -> AuthFlow {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Glassfin", isDirectory: true)
         let app = AppState(
             secureStore: secure,
             settings: settings,
-            path: SystemPathMonitor(),
+            path: path,
             pinger: AuthAssemblyPinger(backend: backend, settings: settings, secure: secure),
             cacheRoot: root
         )
@@ -535,6 +486,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         }
 
         func currentUser(on server: ServerInfo, token: String) async throws(APIError) -> UserSession {
+            if HomeMockLaunch.mode == "down" { throw .network }
             _ = token
             return UserSession(server: server, userID: Self.user, userName: "Ada", isAdministrator: false)
         }

@@ -216,7 +216,7 @@ private final class ImageStreamProbes: @unchecked Sendable {
 
 private struct OversizeImageTransport: RequestTransport {
     let url: URL
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         (
             Data(repeating: 0, count: MetadataPolicy.imageMaxBytes + 1),
             HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, nil

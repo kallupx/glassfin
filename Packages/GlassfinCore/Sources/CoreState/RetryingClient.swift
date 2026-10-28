@@ -53,24 +53,23 @@ public struct RetryingAPIClient: JellyfinAPIClient {
 
 public final class RequestScope: @unchecked Sendable {
     private let lock = NSLock()
-    private var tasks: [UUID: Task<Void, Never>] = [:]
+    private var tasks: [UUID: @Sendable () -> Void] = [:]
 
     public init() {}
 
     @discardableResult
-    public func track(_ task: Task<Void, Never>) -> UUID {
-        let id = UUID()
+    public func track<T: Sendable, E: Error>(_ task: Task<T, E>, id: UUID = UUID()) -> UUID {
         lock.lock()
-        tasks[id] = task
+        tasks[id] = { task.cancel() }
         lock.unlock()
         Task { [weak self] in
-            await task.value
-            self?.remove(id)
+            _ = try? await task.value
+            self?.untrack(id)
         }
         return id
     }
 
-    public func remove(_ id: UUID) {
+    public func untrack(_ id: UUID) {
         lock.lock()
         tasks[id] = nil
         lock.unlock()
@@ -82,7 +81,7 @@ public final class RequestScope: @unchecked Sendable {
         tasks.removeAll()
         lock.unlock()
         for task in current {
-            task.cancel()
+            task()
         }
     }
 }

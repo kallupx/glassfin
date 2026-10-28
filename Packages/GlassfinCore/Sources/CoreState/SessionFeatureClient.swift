@@ -31,7 +31,7 @@ public final class SessionFeatureClient: JellyfinAPIClient {
             }
         }
         let identifier = app.scope.track(watcher)
-        defer { app.scope.remove(identifier) }
+        defer { app.scope.untrack(identifier) }
         let result = await withTaskCancellationHandler {
             await operation.value
         } onCancel: {

@@ -377,6 +377,31 @@ final class LiveServerTests: XCTestCase {
         }
     }
 
+    // T06-37: canonical spec/TESTPLAN-M06.md.
+    func testT06_37_homeEndpointsAndResetPosition() async throws {
+        let target = try liveTarget()
+        let auth = try await signIn(target)
+        let identity = ClientIdentity(
+            deviceName: "Glassfin CI", deviceID: "glassfin-home-integration", version: "0.1.0", token: auth.accessToken)
+        let service = JellyfinLibraryService(client: HTTPJellyfinClient(server: target.url, identity: identity))
+        async let resume = service.resume(limit: 20)
+        async let next = service.nextUp(limit: 20)
+        let libraries = try await service.userViews()
+        XCTAssertFalse(libraries.isEmpty)
+        var item: MediaItem?
+        for library in libraries {
+            let latest = try await service.latest(in: library.id, limit: 20)
+            XCTAssertLessThanOrEqual(latest.count, 20)
+            if item == nil { item = latest.first }
+        }
+        _ = try await (resume, next)
+        let found = try XCTUnwrap(item)
+        try await service.updateUserData(id: found.id, position: .zero, played: false)
+        let state = try await service.userData(id: found.id)
+        XCTAssertEqual(state.playbackPosition, .zero)
+        XCTAssertFalse(state.played)
+    }
+
     /// T08-2-08. Direct-play and HLS plan text omit the access token.
     /// The Jellyfin container log is not read from this process.
     func testT08_2_08_livePlaybackInfoURLOmitsTheAccessToken() async throws {

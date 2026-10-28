@@ -45,8 +45,9 @@ struct ItemDetailScreen: View {
             VStack(spacing: SpacingToken.s) {
                 if let key = session.app.bannerKey {
                     GlassBanner(
+                        messageOverride: AppErrorMessage.localized(key),
                         message: .errorServerUnreachable, systemImage: "exclamationmark.icloud",
-                        identifier: "detail.banner", literalMessage: AppErrorMessage.localized(key))
+                        identifier: "detail.banner")
                 }
                 if let error = session.actions.lastError { LibraryInlineError(error: error) }
                 if let playbackError {
