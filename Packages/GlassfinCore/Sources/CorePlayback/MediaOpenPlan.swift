@@ -58,19 +58,23 @@ public struct ResourceLoaderCarrier: Sendable, Equatable, CustomStringConvertibl
     public var authorizationHeader: String
     public var trust: ServerTrustClass
     public var segmentPolicy: SegmentPolicy
+    /// D4: server query only; never included in assetURL/originURL or descriptions.
+    public var playlistCredentials: ServerHLSCredentialQuery?
 
     public init(
         assetURL: URL,
         originURL: URL,
         authorizationHeader: String,
         trust: ServerTrustClass,
-        segmentPolicy: SegmentPolicy
+        segmentPolicy: SegmentPolicy,
+        playlistCredentials: ServerHLSCredentialQuery? = nil
     ) {
         self.assetURL = assetURL
         self.originURL = originURL
         self.authorizationHeader = authorizationHeader
         self.trust = trust
         self.segmentPolicy = segmentPolicy
+        self.playlistCredentials = playlistCredentials
     }
 
     public var description: String {
@@ -202,7 +206,8 @@ public enum MediaOpenPlanner {
         delivery: MediaDelivery,
         resolvedURL: URL?,
         authorizationHeader: String?,
-        options: MediaOpenOptions
+        options: MediaOpenOptions,
+        playlistCredentials: ServerHLSCredentialQuery? = nil
     ) -> MediaOpenPlan {
         if let resolvedURL, !MediaURLValidation.hasNoUserInfo(resolvedURL) {
             return blocked(.missingMediaURL, findings: [])
@@ -211,7 +216,9 @@ public enum MediaOpenPlanner {
         case .directFile:
             return directFile(resolvedURL: resolvedURL, authorizationHeader: authorizationHeader, options: options)
         case .serverHLS:
-            return serverHLS(resolvedURL: resolvedURL, authorizationHeader: authorizationHeader, options: options)
+            return serverHLS(
+                resolvedURL: resolvedURL, authorizationHeader: authorizationHeader, options: options,
+                playlistCredentials: playlistCredentials)
         }
     }
 
@@ -270,7 +277,8 @@ public enum MediaOpenPlanner {
     private static func serverHLS(
         resolvedURL: URL?,
         authorizationHeader: String?,
-        options: MediaOpenOptions
+        options: MediaOpenOptions,
+        playlistCredentials: ServerHLSCredentialQuery?
     ) -> MediaOpenPlan {
         if case .unpinnedSelfSigned = options.trust {
             return blocked(
@@ -295,7 +303,8 @@ public enum MediaOpenPlanner {
             originURL: origin,
             authorizationHeader: header,
             trust: options.trust,
-            segmentPolicy: .leaveServerURLs
+            segmentPolicy: .leaveServerURLs,
+            playlistCredentials: playlistCredentials ?? ServerHLSCredentialQuery(transcodingURL: resolvedURL)
         )
         var findings: [MediaFinding] = [
             .resourceLoaderSeesPlaylistsAndKeysOnly,
@@ -421,15 +430,20 @@ public struct PlaybackPreparation: Sendable {
         delivery: MediaDelivery,
         initialURL: URL,
         authorizationHeader: String?,
-        options: MediaOpenOptions
+        options: MediaOpenOptions,
+        playlistCredentials: ServerHLSCredentialQuery? = nil
     ) async throws(APIError) -> PlaybackPreparationResult {
+        let credentials =
+            delivery == .serverHLS
+            ? (playlistCredentials ?? ServerHLSCredentialQuery(transcodingURL: initialURL)) : nil
         let method = delivery == .directFile ? "HEAD" : "GET"
         let resolver = PlaybackURLResolver(client: client, log: log, maxRedirects: maxRedirects)
         let resolution = try await resolver.resolve(
             start: initialURL,
             method: method,
             authorizationHeader: authorizationHeader,
-            trust: options.trust
+            trust: options.trust,
+            playlistCredentials: credentials
         )
         switch resolution {
         case .rejected(let failure):
@@ -440,7 +454,8 @@ public struct PlaybackPreparation: Sendable {
                     delivery: delivery,
                     resolvedURL: url,
                     authorizationHeader: authorizationHeader,
-                    options: options
+                    options: options,
+                    playlistCredentials: credentials
                 )
             )
         }

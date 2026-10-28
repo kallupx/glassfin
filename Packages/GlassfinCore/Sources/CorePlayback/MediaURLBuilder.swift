@@ -20,6 +20,8 @@ public enum MediaURLBuilder {
 
     /// M08a-PoC: keep the negotiated URL but prohibit video encoding and subtitle burn-in.
     /// `Container=mp4` in the DeviceProfile negotiates fMP4; the URL enforces the segment format too.
+    /// D4: the coordinator saves the original server credential query in memory separately;
+    /// this credential-free result is safe to wrap for AVURLAsset.
     public static func videoCopyHLS(
         server: URL, transcodingURL: String, conversion: PlaybackDecision.StreamConversion
     ) throws(PlaybackFailure) -> URL {

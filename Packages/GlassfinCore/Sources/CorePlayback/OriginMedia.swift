@@ -93,25 +93,37 @@ public protocol MediaOriginClient: Sendable {
 }
 
 public enum ResourceLoadPlanner {
-    /// Maps a `glassfin-media` URL back to the allowed HTTP(S) origin only.
+    /// D4: only same-origin playlists receive the verbatim server credential query, without
+    /// Authorization. Keys and other resources use the header and credential-free URLs.
     public static func originRequest(
         assetURL: URL,
         authorizationHeader: String,
         trust: ServerTrustClass,
         range: HTTPByteRange?,
-        allowedOrigin: URL
+        allowedOrigin: URL,
+        playlistCredentials: ServerHLSCredentialQuery? = nil
     ) -> OriginMediaRequest? {
         guard MediaURLValidation.hasNoUserInfo(assetURL), MediaURLValidation.hasNoUserInfo(allowedOrigin) else {
             return nil
         }
         guard let origin = MediaAssetScheme.unwrap(assetURL) else { return nil }
-        guard MediaOrigin.matches(origin, allowedOrigin) else { return nil }
+        guard MediaOrigin.matches(origin, allowedOrigin), !MediaOrigin.isHTTPSDowngrade(allowedOrigin, origin) else {
+            return nil
+        }
         let scheme = origin.scheme?.lowercased()
         guard scheme == "https" || scheme == "http" else { return nil }
+        let isPlaylist = PlaylistSniffer.isPlaylistURL(origin) && !MediaAssetScheme.isKey(assetURL)
+        let requestURL: URL
+        if isPlaylist, let playlistCredentials {
+            guard let authenticated = playlistCredentials.appending(toPlaylist: origin) else { return nil }
+            requestURL = authenticated
+        } else {
+            requestURL = origin
+        }
         return OriginMediaRequest(
             method: "GET",
-            url: origin,
-            authorizationHeader: authorizationHeader,
+            url: requestURL,
+            authorizationHeader: MediaCredentialQuery.contains(requestURL) ? nil : authorizationHeader,
             range: PlaylistSniffer.isPlaylistURL(origin)
                 ? nil : ChunkedRangePlanner.next(range: range, received: 0, totalLength: nil),
             trust: trust
