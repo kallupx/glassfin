@@ -123,7 +123,7 @@ jobs:
       (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') &&
       (needs.lint.outputs.macos == 'true' || github.event_name == 'workflow_dispatch') &&
       (
-        github.actor != 'dependabot[bot]' ||
+        github.event.pull_request.user.login != 'dependabot[bot]' ||
         github.event_name == 'workflow_dispatch' ||
         contains(github.event.pull_request.labels.*.name, 'full-ci')
       )
@@ -191,7 +191,7 @@ jobs:
         (github.event_name == 'pull_request' && needs.lint.outputs.ios == 'true')
       ) &&
       (
-        github.actor != 'dependabot[bot]' ||
+        github.event.pull_request.user.login != 'dependabot[bot]' ||
         github.event_name == 'workflow_dispatch' ||
         contains(github.event.pull_request.labels.*.name, 'full-ci')
       )
@@ -311,45 +311,45 @@ jobs:
             artifacts/tvOS/*.txt
           retention-days: 7
 
-  # Lint alone must not turn a Dependabot pull request green. The job always
-  # reports, so branch protection can require it: human pull requests pass,
-  # and a Dependabot pull request fails until full-ci and a macOS job succeed.
+  # After lint succeeds, report even when macOS jobs were skipped or failed.
+  # Dependabot requires full-ci and every path-selected macOS job to pass.
+  # Use the PR author: a maintainer may be the actor on a labeled event.
   dependabot-macos:
     needs: [lint, test-tvos, test-ios]
     if: always() && needs.lint.result == 'success'
     runs-on: ubuntu-latest
+    permissions: {}
     timeout-minutes: 5
     steps:
-      - name: Require a green macOS build
+      - name: Require successful macOS results for selected paths
         env:
-          ACTOR: ${{ github.actor }}
           EVENT: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          TVOS_REQUIRED: ${{ needs.lint.outputs.macos }}
+          IOS_REQUIRED: ${{ needs.lint.outputs.ios }}
           TVOS: ${{ needs.test-tvos.result }}
           IOS: ${{ needs.test-ios.result }}
         run: |
           set -euo pipefail
-          echo "actor=$ACTOR event=$EVENT test-tvos=$TVOS test-ios=$IOS full-ci=$FULL_CI"
-          if [[ "$ACTOR" != "dependabot[bot]" || "$EVENT" != "pull_request" ]]; then
+          if [[ "$EVENT" != "pull_request" || "$PR_AUTHOR" != "dependabot[bot]" ]]; then
             echo "Dependabot macOS gate applies only to Dependabot pull requests."
             exit 0
           fi
           if [[ "$FULL_CI" != "true" ]]; then
-            echo "Dependabot pull requests are not mergeable on lint alone."
-            echo "Add the full-ci label, or run this workflow with workflow_dispatch."
-            echo "Merge only after test-tvos and test-ios are green. Do not enable auto-merge."
+            echo "::error::Maintainers must add the full-ci label to this Dependabot pull request before merging."
             exit 1
           fi
-          for result in "$TVOS" "$IOS"; do
-            case "$result" in
-              success|skipped) ;;
+          require_result() {
+            local job="$1" required="$2" result="$3"
+            echo "$job: $result (selected by path filter: $required)" | tee -a "$GITHUB_STEP_SUMMARY"
+            case "$required:$result" in
+              true:success|false:success|false:skipped) ;;
               *)
-                echo "macOS result '$result' is not success."
+                echo "::error::$job did not satisfy the macOS path filter."
                 exit 1
                 ;;
             esac
-          done
-          if [[ "$TVOS" != "success" && "$IOS" != "success" ]]; then
-            echo "Neither macOS job ran. A path-skipped matrix is not a macOS build."
-            exit 1
-          fi
+          }
+          require_result test-tvos "$TVOS_REQUIRED" "$TVOS"
+          require_result test-ios "$IOS_REQUIRED" "$IOS"
