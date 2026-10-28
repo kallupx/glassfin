@@ -68,6 +68,7 @@ public struct BaseItemDTO: Decodable, Sendable {
     public var `Type`: String?
     public var Overview: String?
     public var SeriesId: String?
+    public var SeriesName: String?
     public var SeasonId: String?
     public var IndexNumber: Int?
     public var ParentIndexNumber: Int?

@@ -180,6 +180,7 @@ private struct SearchResultRow: View {
             Copy.text(title)
                 .font(.title3)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("search.header.\(group.id.rawValue)")
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: CardMetrics.spacing) {
@@ -221,7 +222,7 @@ private struct SearchResultRow: View {
     }
 }
 
-private struct SearchResultCard: View {
+struct SearchResultCard: View {
     let feature: SearchFeature
     let item: MediaItem
     let style: CardStyle
@@ -243,15 +244,15 @@ private struct SearchResultCard: View {
             PosterFace(
                 image: image,
                 content: PosterContent(
-                    id: item.id, title: item.name,
+                    id: item.id, title: item.searchCardTitle,
                     progress: PlaybackProgress.measure(position: item.userData.playbackPosition, runtime: item.runtime),
                     isWatched: item.userData.played, unplayedCount: item.userData.unplayedCount,
                     blurHash: item.images.primaryBlurHash),
-                style: style, isFocused: focused)
+                style: style, isFocused: focused, titleHeight: CardMetrics.titleHeight * 2)
         }
         .posterButtonStyle()
         .accessibilityIdentifier("search.item.\(item.id)")
-        .accessibilityLabel(Text(verbatim: item.name))
+        .accessibilityLabel(Text(verbatim: item.searchCardTitle))
         .task(id: request?.cacheKey.sha256) {
             image = nil
             guard let request else { return }
