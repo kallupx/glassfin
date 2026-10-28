@@ -15,13 +15,13 @@ final class T04AuthFlowTests: XCTestCase {
     }
 
     @MainActor
-    func testT04_16_serverNamePreservesLiteralMarkupAndCapsAt64() async {
+    func testT04_16_serverNameDropsMarkupAndCapsAt64() async {
         let raw = "<b>Home</b>\u{0007}" + String(repeating: "n", count: 500)
         let shown = AuthServerName.display(raw)
-        XCTAssertTrue(shown.hasPrefix("<b>Home</b>"))
+        XCTAssertFalse(shown.contains("<"))
         XCTAssertFalse(shown.contains("\u{0007}"))
         XCTAssertEqual(shown.count, 64)
-        XCTAssertEqual(shown, "<b>Home</b>" + String(repeating: "n", count: MetadataPolicy.displayNameMax - 11))
+        XCTAssertEqual(shown, "Home" + String(repeating: "n", count: 60))
     }
 
     @MainActor
@@ -41,7 +41,7 @@ final class T04AuthFlowTests: XCTestCase {
         rig.flow.submitAddress()
         await rig.wait(for: .cleartext)
         XCTAssertEqual(rig.flow.displayedName.count, 64)
-        XCTAssertTrue(rig.flow.displayedName.hasPrefix("<b>"))
+        XCTAssertFalse(rig.flow.displayedName.contains("<"))
         await rig.flow.acceptCleartext()
         XCTAssertEqual(rig.flow.screen, .userPicker)
         XCTAssertEqual(rig.flow.displayedName.count, 64)
