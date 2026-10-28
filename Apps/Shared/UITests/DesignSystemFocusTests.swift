@@ -87,11 +87,14 @@ final class DesignSystemFocusTests: XCTestCase {
             require(collapsed)
             XCTAssertFalse(collapsed.hasFocus)
             remote(.up)
+            // Finish the native tab-bar focus transition before sending the return command.
+            waitUntilFocused(element(app, "design.tab.home"))
             XCTAssertFalse(collapsed.hasFocus)
             remote(.down)
             waitUntilFocused(play)
-            for _ in 0..<3 {
+            for identifier in ["design.hero.watched", "design.hero.favorite", "design.hero.more"] {
                 remote(.right)
+                waitUntilFocused(element(app, identifier))
             }
             waitUntilFocused(element(app, "design.hero.more"))
             remote(.select)
@@ -231,16 +234,44 @@ final class DesignSystemFocusTests: XCTestCase {
         func testT05_54_tabShellExposesHomeSearchAndSettings() {
             let app = launch("-uitest-design-system-tabs-3")
             require(element(app, "design.shell.root"))
-            require(element(app, "design.tab.home"))
-            require(element(app, "design.tab.search"))
-            require(element(app, "design.tab.settings"))
-            require(element(app, "design.tab.library.0"))
+            // iOS exposes native tab buttons by their labels; launch() pins the catalog language to English.
+            require(app.tabBars.buttons["1"])
+            selectTab(app, label: "Home")
+            require(element(app, "design.home.root"))
+            selectTab(app, label: "Search")
+            require(element(app, "design.search.root"))
+            selectTab(app, label: "Settings")
+            require(element(app, "design.settings.root"))
+        }
+
+        private func selectTab(
+            _ app: XCUIApplication,
+            label: String,
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) {
+            let button = app.tabBars.buttons[label]
+            if button.exists {
+                button.tap()
+            } else {
+                // Six tabs exceed the iPhone tab bar capacity; the system puts the rest under More.
+                let more = app.tabBars.buttons["More"]
+                require(more, file: file, line: line)
+                more.tap()
+                let overflowTab = app.tables.cells.containing(.staticText, identifier: label).firstMatch
+                require(overflowTab, file: file, line: line)
+                overflowTab.tap()
+            }
         }
     #endif
 
     private func launch(_ argument: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [argument]
+        #if os(iOS)
+            // Keep the system-generated More button deterministic as well as the app's catalog copy.
+            app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        #endif
         app.launch()
         return app
     }

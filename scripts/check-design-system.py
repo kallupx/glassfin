@@ -145,7 +145,8 @@ def main() -> int:
 
     for path in apps:
         text = path.read_text(encoding="utf-8")
-        if "AVPlayerViewController" in text:
+        # M08 owns the native player; only the M05 component prototype excludes it.
+        if "DesignSystem" in path.parts and "AVPlayerViewController" in text:
             errors.append(f"{path.relative_to(ROOT)}: AVPlayerViewController is out of scope (T05-48)")
         if FINNISH.search(text):
             errors.append(f"{path.relative_to(ROOT)}: Finnish letters belong in the String Catalog")
