@@ -98,6 +98,45 @@ final class PinFailureTests: XCTestCase {
         }
         guard case .signedIn = harness.app.phase else { return XCTFail("A pin read failure must keep the session") }
     }
+
+    @MainActor
+    func testSearchFactoryPropagatesPinReadFailureBeforeUsingAnyClient() throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let pins = UnreadablePins()
+        let flow = AuthFlow(
+            app: harness.app, backend: LiveAuthBackend(secureStore: harness.secure, pins: pins), pins: pins,
+            vault: CredentialVault(secureStore: harness.secure, settings: harness.settings, accessGroup: ""),
+            clock: harness.clock)
+        let client = PinRequestRecorder()
+        let overrides: [(any JellyfinAPIClient)?] = [nil, client]
+        for override in overrides {
+            XCTAssertThrowsError(try flow.makeSearchFeature(client: override)) { error in
+                XCTAssertEqual(error as? APIError, .tls)
+            }
+        }
+        XCTAssertTrue(client.requests.isEmpty)
+        guard case .signedIn = harness.app.phase else { return XCTFail("A pin read failure must keep the session") }
+    }
+
+    @MainActor
+    func testSearchFactoryWithMissingPinAllowsClientCreation() throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let pins = SettingsCertificatePinStore(settings: harness.settings)
+        let flow = AuthFlow(
+            app: harness.app, backend: LiveAuthBackend(secureStore: harness.secure, pins: pins), pins: pins,
+            vault: CredentialVault(secureStore: harness.secure, settings: harness.settings, accessGroup: ""),
+            clock: harness.clock)
+        let client = PinRequestRecorder()
+        let overrides: [(any JellyfinAPIClient)?] = [nil, client]
+        for override in overrides {
+            XCTAssertNotNil(try flow.makeSearchFeature(client: override))
+        }
+        XCTAssertTrue(client.requests.isEmpty)
+    }
 }
 
 private struct UnreadablePins: CertificatePinStore {
