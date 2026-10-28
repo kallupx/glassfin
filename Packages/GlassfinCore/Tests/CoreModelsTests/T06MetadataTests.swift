@@ -52,9 +52,19 @@ final class T06MetadataTests: XCTestCase {
 
             let stream: [String: Any] = ["Type": "Audio", "DisplayTitle": raw, "Language": raw, "Codec": raw]
             let subtitle = stream.merging(["Type": "Subtitle"]) { _, value in value }
+            var transcodingURL = URLComponents()
+            transcodingURL.path = "/master.m3u8"
+            transcodingURL.queryItems = [URLQueryItem(name: "TranscodeReasons", value: raw)]
             let playback = try decode(
                 PlaybackInfoResponseDTO.self,
-                ["MediaSources": [["Id": "source", "MediaStreams": [stream, subtitle], "TranscodeReasons": [raw]]]])
+                [
+                    "MediaSources": [
+                        [
+                            "Id": "source", "MediaStreams": [stream, subtitle],
+                            "TranscodingUrl": try XCTUnwrap(transcodingURL.string),
+                        ]
+                    ]
+                ])
             let source = try XCTUnwrap(
                 DTOMapper.playbackSource(playback, server: URL(string: "https://media.example")!))
             XCTAssertEqual(source.audioTracks.first?.displayTitle, expected)
