@@ -121,6 +121,79 @@ final class PlaybackCoordinatorTests: XCTestCase {
         await rig.coordinator.stop()
     }
 
+    /// Q8P-24: no server credential means no playlist probe, loader or segment requests.
+    func testT08P_103_missingServerQueryRejectsRemuxBeforeMediaRequests() async throws {
+        for transcodingURL in [
+            "/master.m3u8",
+            "https://server.example/jellyfin/master.m3u8?PlaySessionId=keep",
+            "/master.m3u8?Token=fake-unsupported-credential",
+        ] {
+            for (audio, trust) in [
+                ("aac", ServerTrustClass.publiclyTrusted), ("dts", .publiclyTrusted),
+                ("aac", .pinnedSelfSigned(fingerprintSHA256: String(repeating: "a", count: 64))),
+            ] {
+                let sink = PoCLogCapture()
+                let original = try XCTUnwrap(
+                    MediaURLBuilder.resolveTranscodingURL(
+                        server: URL(string: "https://server.example/jellyfin")!, transcodingURL: transcodingURL))
+                XCTAssertNil(ServerHLSCredentialQuery(transcodingURL: original))
+                let rig = try rig(
+                    data: playbackFixture(
+                        container: "mkv", audio: audio, direct: false, transcodingURL: transcodingURL), log: sink)
+                rig.session.trust = trust
+                await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+                if case .pinnedSelfSigned = trust {
+                    // Q8P-13 keeps precedence: pinned servers never attempt remux and keep their own message.
+                    XCTAssertEqual(rig.coordinator.failure, .hlsSegmentsBypassPinnedTrust)
+                    XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: "playback.selfSignedRemuxBlocked"))
+                    let pinnedRequests = await rig.origin.requests
+                    XCTAssertTrue(pinnedRequests.isEmpty, "No playlist or segment request may be sent")
+                    XCTAssertTrue(rig.engine.loadAttempts.isEmpty)
+                    continue
+                }
+                XCTAssertEqual(rig.coordinator.appError, .playback(.couldNotPlay))
+                XCTAssertEqual(
+                    AppErrorMessage.messageKey(for: try XCTUnwrap(rig.coordinator.appError)),
+                    "playback.error.couldNotPlay")
+                XCTAssertEqual(rig.coordinator.failure, .couldNotPlay)
+                XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: "playback.error.couldNotPlay"))
+                let requests = await rig.origin.requests
+                XCTAssertTrue(requests.isEmpty, "No playlist or segment request may be sent")
+                XCTAssertTrue(rig.engine.loadAttempts.isEmpty)
+                let calls = await rig.client.calls
+                XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 1)
+                XCTAssertFalse(calls.contains { $0.path == "/Sessions/Playing" })
+                XCTAssertEqual(sink.messages, ["Remux rejected: server playlist credential query is missing"])
+                for message in sink.messages {
+                    XCTAssertFalse(message.contains("://"))
+                    XCTAssertFalse(message.contains("server.example"))
+                    XCTAssertFalse(message.contains("master.m3u8"))
+                    XCTAssertFalse(message.contains("fake-unsupported-credential"))
+                }
+            }
+        }
+    }
+
+    func testT08P_103_missingServerQueryAlsoBlocksRemuxRetry() async throws {
+        let sink = PoCLogCapture()
+        let rig = try retryRig(
+            retryData: playbackFixture(
+                container: "mkv", direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session"),
+            log: sink)
+        rig.engine.loadError = .network
+        await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+        XCTAssertEqual(rig.coordinator.appError, .playback(.couldNotPlay))
+        XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: "playback.error.couldNotPlay"))
+        await assertAttempts(rig, info: 2, streams: 1)
+        let requests = await rig.origin.requests
+        XCTAssertEqual(requests.first?.method, "HEAD")
+        XCTAssertEqual(requests.first?.url.path, "/jellyfin/Videos/\(pocItemID)/stream")
+        XCTAssertEqual(rig.engine.loadAttempts.count, 1)
+        XCTAssertEqual(
+            sink.messages.filter { $0.hasPrefix("Remux rejected:") },
+            ["Remux rejected: server playlist credential query is missing"])
+    }
+
     /// T08P-55: pinned DirectPlay keeps the trust policy and header through the loader.
     func testT08P_55_pinnedDirectPlayUsesLoader() async throws {
         let rig = try rig()
@@ -145,7 +218,10 @@ final class PlaybackCoordinatorTests: XCTestCase {
         XCTAssertEqual(calls.filter { $0.path.hasSuffix("PlaybackInfo") }.count, 2)
         let requests = await rig.origin.requests
         XCTAssertEqual(requests.count, 2)
-        XCTAssertFalse(requests.contains { MediaCredentialQuery.contains($0.url) })
+        XCTAssertFalse(MediaCredentialQuery.contains(try XCTUnwrap(requests.first?.url)))
+        XCTAssertNotNil(requests.first?.authorizationHeader)
+        XCTAssertTrue(MediaCredentialQuery.contains(try XCTUnwrap(requests.last?.url)))
+        XCTAssertNil(requests.last?.authorizationHeader)
         if !HeaderFieldsKeyPolicy.isAllowedInCurrentBuild {
             let server = try XCTUnwrap(URL(string: "https://server.example"))
             XCTAssertNil(MediaURLBuilder.queryCredentialFallback(strippedURL: server, token: "secret"))
@@ -325,7 +401,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
     private func checkMediaUnauthorized(meError: APIError?, remux: Bool) async throws {
         let data = try playbackFixture(
             container: remux ? "mkv" : "mp4", direct: !remux,
-            transcodingURL: remux ? "/master.m3u8" : nil)
+            transcodingURL: remux ? "/master.m3u8?ApiKey=fake-server-query" : nil)
         let rig = try rig(
             data: data,
             handler: { request throws(APIError) in
@@ -396,7 +472,9 @@ final class PlaybackCoordinatorTests: XCTestCase {
     /// T08P-23/T08P-31: terminal events send Stopped once, with Failed true only for an error.
     func testT08P_23_31_endAndErrorReportStoppedExactlyOnce() async throws {
         for event in [PlaybackEngineEvent.ended, .failed(.network)] {
-            let rig = try rig(data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"))
+            let rig = try rig(
+                data: playbackFixture(
+                    container: "mkv", direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query"))
             await started(rig)
             rig.engine.position = .seconds(3)
             rig.engine.emit(event)
@@ -469,7 +547,9 @@ final class PlaybackCoordinatorTests: XCTestCase {
             XCTAssertTrue(rig.engine.loads.isEmpty)
             XCTAssertEqual(rig.session.expirationCount, 0)
         }
-        let rig = try rig(data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"))
+        let rig = try rig(
+            data: playbackFixture(
+                container: "mkv", direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query"))
         rig.session.trust = .pinnedSelfSigned(fingerprintSHA256: String(repeating: "a", count: 64))
         await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
         XCTAssertTrue(rig.engine.loads.isEmpty)
@@ -633,20 +713,24 @@ final class PlaybackCoordinatorTests: XCTestCase {
         XCTAssertEqual(
             sink.messages.filter { $0.contains("PlaybackPositionTicks") && $0.contains(pocItemID) }.count, 1)
     }
-    private func retryRig(audio: String = "aac", retryData: Data? = nil) throws -> Rig {
+    private func retryRig(
+        audio: String = "aac", retryData: Data? = nil, log: any GlassfinLog = SilentLog()
+    ) throws -> Rig {
         let first = try playbackFixture()
         let second =
             try retryData
             ?? playbackFixture(
-                audio: audio, direct: true, transcodingURL: "/master.m3u8?TranscodeReasons=DirectPlayError",
+                audio: audio, direct: true,
+                transcodingURL: "/master.m3u8?ApiKey=fake-server-query&TranscodeReasons=DirectPlayError",
                 playSessionID: "remux-session")
-        return try rig(handler: { request throws(APIError) in
-            if request.path.hasSuffix("PlaybackInfo") {
-                let direct = (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) ?? true
-                return direct ? first : second
-            }
-            return Data()
-        })
+        return try rig(
+            handler: { request throws(APIError) in
+                if request.path.hasSuffix("PlaybackInfo") {
+                    let direct = (try? jsonBody(request.body)["EnableDirectPlay"] as? Bool) ?? true
+                    return direct ? first : second
+                }
+                return Data()
+            }, log: log)
     }
 
     private func assertAttempts(_ rig: Rig, info: Int, streams: Int, file: StaticString = #filePath, line: UInt = #line)
@@ -816,7 +900,9 @@ final class PlaybackCoordinatorTests: XCTestCase {
     }
 
     func testT08P_31_initialRemuxFailureNeverRetries() async throws {
-        let rig = try rig(data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"))
+        let rig = try rig(
+            data: playbackFixture(
+                container: "mkv", direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query"))
         await started(rig)
         rig.engine.emit(.failed(.network))
         await settle { rig.coordinator.failure == .couldNotPlay }
@@ -831,7 +917,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
         for dismiss in [false, true] {
             let first = try playbackFixture()
             let remux = try playbackFixture(
-                direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session")
+                direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query", playSessionID: "remux-session")
             let gate = PoCRequestGate()
             let rig = try rig(handler: { request throws(APIError) in
                 if request.path.hasSuffix("Stopped"), (try? jsonBody(request.body)["Failed"] as? Bool) == true {
@@ -906,7 +992,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
 
     func testT08P_17_56_stopDuringRetryDiscardsLatePlaybackInfo() async throws {
         let first = try playbackFixture()
-        let remux = try playbackFixture(direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session")
+        let remux = try playbackFixture(
+            direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query", playSessionID: "remux-session")
         let gate = PoCRequestGate()
         let rig = try rig(handler: { request throws(APIError) in
             if request.path.hasSuffix("PlaybackInfo") {
@@ -933,7 +1020,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
         for cancelAtStopped in [false, true] {
             let first = try playbackFixture()
             let remux = try playbackFixture(
-                direct: false, transcodingURL: "/master.m3u8", playSessionID: "remux-session")
+                direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query", playSessionID: "remux-session")
             let gate = PoCRequestGate()
             let rig = try rig(handler: { request throws(APIError) in
                 if cancelAtStopped && request.path.hasSuffix("Stopped") { await gate.wait() }
@@ -960,7 +1047,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
     }
 
     func testT08P_17_retryRequiresNewPlaySessionID() async throws {
-        let rig = try retryRig(retryData: playbackFixture(direct: false, transcodingURL: "/master.m3u8"))
+        let rig = try retryRig(
+            retryData: playbackFixture(direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query"))
         rig.engine.loadError = .network
         await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
         XCTAssertEqual(rig.coordinator.failure, .couldNotPlay)
@@ -1076,7 +1164,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
             #EXT-X-ENDLIST
             """
         let rig = try rig(
-            data: playbackFixture(container: "mkv", direct: false, transcodingURL: "/master.m3u8"),
+            data: playbackFixture(
+                container: "mkv", direct: false, transcodingURL: "/master.m3u8?ApiKey=fake-server-query"),
             originResponse: OriginMediaResponse(
                 status: 200, contentType: "application/vnd.apple.mpegurl", body: Data(playlist.utf8)))
         let delivered = PoCPlaylistDelivery()
@@ -1085,7 +1174,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
             guard
                 let request = ResourceLoadPlanner.originRequest(
                     assetURL: carrier.assetURL, authorizationHeader: carrier.authorizationHeader,
-                    trust: carrier.trust, range: nil, allowedOrigin: carrier.originURL)
+                    trust: carrier.trust, range: nil, allowedOrigin: carrier.originURL,
+                    playlistCredentials: carrier.playlistCredentials)
             else { throw .invalidURL }
             try await ChunkedMediaLoader.load(
                 request: request, range: nil, client: origin, isCancelled: { false },
@@ -1125,9 +1215,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
                 URLComponents(url: request.url, resolvingAgainstBaseURL: true), file: file, line: line)
             XCTAssertNil(components.user, file: file, line: line)
             XCTAssertNil(components.password, file: file, line: line)
-            XCTAssertFalse(MediaCredentialQuery.contains(request.url), file: file, line: line)
-            XCTAssertEqual(
-                request.authorizationHeader, try rig.session.identity.authorizationHeader(), file: file, line: line)
+            XCTAssertTrue(MediaCredentialQuery.contains(request.url), file: file, line: line)
+            XCTAssertNil(request.authorizationHeader, file: file, line: line)
             XCTAssertFalse(
                 request.authorizationHeader?.lowercased().hasPrefix("basic ") == true, file: file, line: line)
         }
