@@ -1,6 +1,7 @@
 """Exercise bootstrap recovery without Docker or a live Jellyfin server."""
 
 import contextlib
+import importlib.util
 import io
 import json
 import os
@@ -10,7 +11,15 @@ import unittest
 from unittest.mock import patch
 
 
-import jellyfin_bootstrap as bootstrap
+with patch.dict(os.environ, {
+    "GLASSFIN_SERVER_URL": "http://localhost:8096",
+    "GLASSFIN_USERNAME": "test-user",
+    "GLASSFIN_PASSWORD": "test-password",
+}):
+    spec = importlib.util.spec_from_file_location(
+        "jellyfin_bootstrap", Path(__file__).with_name("jellyfin_bootstrap.py"))
+    bootstrap = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bootstrap)
 
 TOKEN = "test-access-token"
 MOVIES = {"Name": "Movies", "Locations": ["/media/Movies"]}
