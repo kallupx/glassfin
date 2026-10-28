@@ -42,3 +42,17 @@ while scrolling down/up through lazy pages, and collects clock/app CPU/app memor
 and focus-update metrics. The fixture uses the existing Debug-only M07 host.
 M07 grid focus, artwork loading, and thumbnail decoding now share the kit's fixed
 measurement scopes; no paging, cache, decode, or UI behavior changes.
+
+The generated Docker performance library uses two episodes per series so that
+watching episode 1 produces an actual Next Up episode. Counts remain 5,000 movies
+and 500 series, with 1,000 episodes; generation is verified with a small local
+fixture without contacting a server. No test assertion changes are involved.
+The runbook generates a separate ten-minute LAN input for resume/seek/longer
+playback scenarios. The default native benchmark fixture remains twelve seconds;
+`prepare-perf-fixture.sh` accepts an output path and duration for this purpose.
+The runbook uses 4,997 ordinary movies plus three generated playback samples
+for exactly 5,000 movies. The new offline `prepare-perf-playback.sh` generates
+H.264 MP4 with two AAC/two mov_text tracks, H.264 MKV with two AAC/external SRT
+tracks, and MPEG-2 MKV intended for video transcoding. A short local generation
+and ffprobe verify the streams; negotiated playback still needs owner/device
+evidence. None of these files contain personal media or credentials.

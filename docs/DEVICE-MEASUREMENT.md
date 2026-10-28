@@ -95,10 +95,13 @@ server: it is useful for protocol regression, but Apple TV cannot reach its
 `127.0.0.1` binding. For a persistent device-only test fixture:
 
 ```bash
-bash scripts/prepare-perf-fixture.sh
+# Ten-minute LAN media supports resume, ±30-second seeks, and five-minute playback runs.
+bash scripts/prepare-perf-fixture.sh "$HOME/glassfin-perf-input.mp4" 600
 # A new empty directory, outside the checkout. Hard links keep storage small.
 python3 scripts/prepare-perf-library.py "$HOME/glassfin-perf-media" \
-  --video Tests/Media/Generated/PerfFixture.mp4
+  --video "$HOME/glassfin-perf-input.mp4" --movies 4997
+# Three dedicated playback samples bring the movie total to exactly 5,000.
+bash scripts/prepare-perf-playback.sh "$HOME/glassfin-perf-media/movies" 600
 mkdir -p "$HOME/glassfin-perf-config"
 docker run -d --name glassfin-device-perf \
   -p 8096:8096 \
@@ -110,15 +113,35 @@ docker run -d --name glassfin-device-perf \
 Finish the startup wizard in the local Docker server's web UI. Add Movies at
 `/media/movies` and Shows at `/media/shows`, enable local NFO/artwork, and disable
 online metadata/artwork providers. Create a dedicated non-admin measurement
-user. Wait for the scan and verify **5,000 movies and 500 series** (one episode
-per series), poster display, DirectPlay support, and idle server CPU. Set a few
-synthetic items partially played to populate Continue Watching, and watch one
-series episode to populate Next Up. Sign into the same test user on Apple TV
+user. Wait for the scan and verify **5,000 movies and 500 series** (two episodes
+per series, 1,000 episodes total), poster display, DirectPlay support, and idle
+server CPU. The movie total is 4,997 ordinary items plus the three playback
+samples below. In the Docker web player, seek an ordinary movie to 60 seconds,
+then stop to populate Continue Watching. Mark episode 1 of a series watched to
+populate Next Up with episode 2. Before each P14/P15 trial, restore the selected
+synthetic items' watched/progress state in the Docker server's web UI so trials
+begin from the same state. Sign into the same test user on Apple TV
 using the Docker host's private LAN address. Record a server alias, image digest,
 fixture counts, and settings; do not put the address or credentials in results.
 Docker port 8096 is for this private test LAN; stop it with
 `docker stop glassfin-device-perf` after measuring. Preserve the dedicated data
 folders for repeat runs; do not point these commands at personal data.
+
+The three named playback samples are deterministic, ten-minute inputs:
+
+| Sample | Purpose and required verification |
+|---|---|
+| Perf Native Tracks | H.264 MP4, two AAC stereo tones (440/880 Hz), and two embedded mov_text subtitle tracks. P5/P7 and P9 DirectPlay: verify PlayMethod is DirectPlay; switch between the two distinguishable tones/subtitle samples and confirm continuous playback. |
+| Perf Server Remux | Copied H.264/two AAC tracks in MKV, with two external SRT files for server VTT conversion. P9 HLS: verify PlayMethod is DirectStream and segments are HLS; record native selection versus renegotiation/reload. A reload does not pass P9's no-restart target. |
+| Perf Video Transcode | MPEG-2 video in MKV, outside the runtime DirectPlay profile. P6: use full M08a and verify Diagnostics reports Transcode with video encoding. DirectStream/video-copy output is not P6. Record server CPU/encoding startup separately. |
+
+Audio/subtitle language tags are `eng` and `fin`; fixture titles and subtitle
+samples are English. The helpers generate files only and do not contact a
+server. The owner must verify the actual negotiated PlayMethod/codec in the
+player diagnostics and Docker server dashboard: generation/ffprobe output is
+not proof of a server/device playback result. Current product playback wiring
+is still a prerequisite. The samples are low-resolution/low-bitrate inputs;
+record that scope rather than treating them as 4K stress measurements.
 
 The small seed is for UI scale, cache, and startup repeatability. For representative
 playback memory/bitrate runs, generate a separate synthetic long-form fixture,
@@ -219,7 +242,8 @@ Targets below are **A15 / oldest**, from M02. Timings are milliseconds unless no
 - `generate-playback-media.sh`, `jellyfin_bootstrap.py`, and
   `docker-integration.sh` seed/probe a small throwaway library, not the full
   performance library. `prepare-perf-library.py` creates the 5,000/500 offline
-  synthetic library; file generation is not proof that Jellyfin indexed it.
+  synthetic library; `prepare-perf-playback.sh` adds explicit track/remux/transcode
+  inputs. File generation is not proof that Jellyfin indexed or negotiated them.
 - `export_xcresult.py` exports test/coverage/screenshot review files, not the
   complete per-iteration performance data. Keep the local result bundle for
   Xcode's performance report. `redact_artifacts.py` and artifact scanning remain

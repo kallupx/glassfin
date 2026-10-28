@@ -49,11 +49,15 @@ def main() -> None:
         folder = root / 'shows' / title
         season = folder / 'Season 01'
         season.mkdir(parents=True)
-        os.link(source, season / f'{title} S01E01.mp4')
         (folder / 'tvshow.nfo').write_text(f'<tvshow><title>{title}</title><year>2026</year></tvshow>\n')
         (folder / 'poster.png').write_bytes(poster)
-        (season / f'{title} S01E01.nfo').write_text(
-            '<episodedetails><title>Episode 1</title><season>1</season><episode>1</episode></episodedetails>\n')
+        # Episode 2 makes Next Up reproducible after watching episode 1.
+        for episode in (1, 2):
+            name = f'{title} S01E{episode:02d}'
+            os.link(source, season / f'{name}.mp4')
+            (season / f'{name}.nfo').write_text(
+                f'<episodedetails><title>Episode {episode}</title><season>1</season>'
+                f'<episode>{episode}</episode></episodedetails>\n')
     print(f'Created {args.movies} movies and {args.series} series with synthetic posters')
 
 
