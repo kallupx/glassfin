@@ -4,9 +4,22 @@ struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
     @State private var selection: String = "home"
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     private var plan: LibraryTabPlan {
-        LibraryTabModel.plan(libraries: libraries)
+        #if os(iOS)
+            // Home, Search, and Settings leave two slots in the compact tab bar.
+            // Reserve one for Libraries so native More cannot make the search-role tab unreachable.
+            if sizeClass == .compact && libraries.count > 2 {
+                return LibraryTabPlan(
+                    inline: Array(libraries.prefix(1)),
+                    overflow: Array(libraries.dropFirst())
+                )
+            }
+        #endif
+        return LibraryTabModel.plan(libraries: libraries)
     }
 
     var body: some View {
