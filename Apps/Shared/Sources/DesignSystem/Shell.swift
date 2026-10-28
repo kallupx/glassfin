@@ -4,16 +4,29 @@ struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
     @State private var selection: String = "home"
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     private var plan: LibraryTabPlan {
-        LibraryTabModel.plan(libraries: libraries)
+        #if os(iOS)
+            // Home, Search, and Settings leave two slots in the compact tab bar.
+            // Reserve one for Libraries so native More cannot make the search-role tab unreachable.
+            if sizeClass == .compact && libraries.count > 2 {
+                return LibraryTabPlan(
+                    inline: Array(libraries.prefix(1)),
+                    overflow: Array(libraries.dropFirst())
+                )
+            }
+        #endif
+        return LibraryTabModel.plan(libraries: libraries)
     }
 
     var body: some View {
         TabView(selection: $selection) {
             homeTab
             #if os(iOS)
-                // Keep primary destinations ahead of libraries so More cannot hide their identified buttons.
+                // Keep primary destinations ahead of libraries in the compact tab bar.
                 searchTab
                 settingsTab
             #endif
@@ -40,10 +53,6 @@ struct LibraryTabShell: View {
         } label: {
             tabLabel(.tabHome, symbol: "house", identifier: "design.tab.home")
         }
-        #if os(iOS)
-            // iOS needs the identifier on the Tab, not only its SwiftUI label.
-            .accessibilityIdentifier("design.tab.home")
-        #endif
     }
 
     @TabContentBuilder<String>
@@ -52,16 +61,18 @@ struct LibraryTabShell: View {
             Text(verbatim: library.title)
                 .accessibilityIdentifier("design.library.\(library.id)")
         } label: {
-            Label {
-                Text(verbatim: library.title)
-            } icon: {
-                GlassIcon(systemName: "rectangle.stack", label: .tabLibraries)
-            }
-            .accessibilityIdentifier("design.tab.library.\(library.id)")
+            #if os(iOS)
+                // Native tab items derive their accessible title from the label, including in More.
+                Label(library.title, systemImage: "rectangle.stack")
+            #else
+                Label {
+                    Text(verbatim: library.title)
+                } icon: {
+                    GlassIcon(systemName: "rectangle.stack", label: .tabLibraries)
+                }
+                .accessibilityIdentifier("design.tab.library.\(library.id)")
+            #endif
         }
-        #if os(iOS)
-            .accessibilityIdentifier("design.tab.library.\(library.id)")
-        #endif
     }
 
     @TabContentBuilder<String>
@@ -81,9 +92,6 @@ struct LibraryTabShell: View {
         } label: {
             tabLabel(.tabLibraries, symbol: "square.grid.2x2", identifier: "design.tab.libraries")
         }
-        #if os(iOS)
-            .accessibilityIdentifier("design.tab.libraries")
-        #endif
     }
 
     @TabContentBuilder<String>
@@ -94,9 +102,6 @@ struct LibraryTabShell: View {
         } label: {
             tabLabel(.tabSearch, symbol: "magnifyingglass", identifier: "design.tab.search")
         }
-        #if os(iOS)
-            .accessibilityIdentifier("design.tab.search")
-        #endif
     }
 
     @TabContentBuilder<String>
@@ -107,18 +112,21 @@ struct LibraryTabShell: View {
         } label: {
             tabLabel(.tabSettings, symbol: "gearshape", identifier: "design.tab.settings")
         }
-        #if os(iOS)
-            .accessibilityIdentifier("design.tab.settings")
-        #endif
     }
 
+    @ViewBuilder
     private func tabLabel(_ key: CopyKey, symbol: String, identifier: String) -> some View {
-        Label {
-            Copy.text(key)
-        } icon: {
-            GlassIcon(systemName: symbol, label: key)
-        }
-        .accessibilityIdentifier(identifier)
+        #if os(iOS)
+            // Tab accessibility modifiers affect the content, not UIKit's generated tab-bar button.
+            Label(Copy.string(key), systemImage: symbol)
+        #else
+            Label {
+                Copy.text(key)
+            } icon: {
+                GlassIcon(systemName: symbol, label: key)
+            }
+            .accessibilityIdentifier(identifier)
+        #endif
     }
 }
 

@@ -91,11 +91,14 @@ final class DesignSystemFocusTests: XCTestCase {
             require(collapsed)
             XCTAssertFalse(collapsed.hasFocus)
             remote(.up)
+            // Finish the native tab-bar focus transition before sending the return command.
+            waitUntilFocused(element(app, "design.tab.home"))
             XCTAssertFalse(collapsed.hasFocus)
             remote(.down)
             waitUntilFocused(play)
-            for _ in 0..<3 {
+            for identifier in ["design.hero.watched", "design.hero.favorite", "design.hero.more"] {
                 remote(.right)
+                waitUntilFocused(element(app, identifier))
             }
             waitUntilFocused(element(app, "design.hero.more"))
             remote(.select)
@@ -246,22 +249,24 @@ final class DesignSystemFocusTests: XCTestCase {
         func testT05_54_tabShellExposesHomeSearchAndSettings() async {
             let app = launch("-uitest-design-system-tabs-3")
             require(element(app, "design.shell.root"))
-            require(app.tabBars.buttons["design.tab.library.0"])
-            selectTab(app, "design.tab.home")
+            // iOS exposes native tab buttons by their labels; launch() pins the catalog language to English.
+            require(app.tabBars.buttons["1"])
+            selectTab(app, label: "Home")
             require(element(app, "design.home.root"))
-            selectTab(app, "design.tab.search")
+            selectTab(app, label: "Search")
             require(element(app, "design.search.root"))
-            selectTab(app, "design.tab.settings")
+            selectTab(app, label: "Settings")
             require(element(app, "design.settings.root"))
         }
 
+        @MainActor
         private func selectTab(
             _ app: XCUIApplication,
-            _ identifier: String,
+            label: String,
             file: StaticString = #filePath,
             line: UInt = #line
         ) {
-            let button = app.tabBars.buttons[identifier]
+            let button = app.tabBars.buttons[label]
             if button.exists {
                 button.tap()
             } else {
@@ -269,7 +274,7 @@ final class DesignSystemFocusTests: XCTestCase {
                 let more = app.tabBars.buttons["More"]
                 require(more, file: file, line: line)
                 more.tap()
-                let overflowTab = element(app, identifier)
+                let overflowTab = app.tables.cells.containing(.staticText, identifier: label).firstMatch
                 require(overflowTab, file: file, line: line)
                 overflowTab.tap()
             }
