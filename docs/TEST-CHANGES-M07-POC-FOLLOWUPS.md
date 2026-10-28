@@ -75,3 +75,33 @@ Tests use in-memory stores, fake clients, and fixture responses. Live
 integration tests remain skipped unless the Docker test harness enables them.
 Apple builds and simulator tests run only in GitHub Actions; no Apple or
 Docker integration results are claimed by these Linux checks.
+
+## Refresh after the M08a main merge
+
+While this PR was being validated, the M07 base advanced to `942f4f0`
+(`Merge current main #44 into M07 preserving metadata and tests`). Merge
+commit `435af18` incorporates it without conflicts. The original missing-pin
+test remains in its separate commit `85bc651`.
+
+This merge inherits three playback test files verbatim from the base:
+
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/DefaultAudioSelectionTests.swift`
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/FullPlaybackTests.swift`
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift`
+
+These files have no PR-local changes relative to `942f4f0`. No existing
+assertion was manually changed during the merge. The PR-local test-file list
+is still the three original PoC files above plus `PinFailureTests.swift`.
+
+Refreshed Linux validation on Swift 6.4.1:
+
+- `swift test --package-path Packages/GlassfinCore`: 689 total, 679 passed,
+  10 existing live-integration skips, zero failures.
+- `bash scripts/coverage-gate.sh`: the same 689 tests, zero failures;
+  91.96% line coverage (10,851 / 11,800), above the 80% threshold.
+- SwiftLint, strict recursive `swift-format`, CI source/catalog checks,
+  unit-test target checks, and `git diff --check` pass again.
+
+The dispatched CI run for `85bc651` passed its Linux job, then was canceled
+while its Apple jobs were queued. A new branch dispatch verifies the
+refreshed head. Apple validation remains delegated to GitHub Actions.
