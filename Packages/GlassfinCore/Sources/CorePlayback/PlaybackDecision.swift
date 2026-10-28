@@ -53,13 +53,19 @@ public enum PlaybackDecision: Sendable, Equatable {
         videoFailure(streams: streams) == nil
     }
 
+    /// Q8P-22: choose the first default audio stream, then the first audio stream in metadata order.
+    static func defaultAudio(streams: [MediaStreamDTO]?) -> MediaStreamDTO? {
+        let audio = (streams ?? []).filter { $0.Type?.lowercased() == "audio" }
+        return audio.first { $0.IsDefault == true } ?? audio.first
+    }
+
     public static func decide(mediaSource source: MediaSourceDTO, allowDirectPlay: Bool = true) -> PlaybackDecision {
         let streams = source.MediaStreams ?? []
         if let reason = videoFailure(streams: streams) { return .unsupported(reason) }
         if VideoTranscodeReasons.blocksPlayback(transcodingURL: source.TranscodingUrl) {
             return .unsupported(.unsupportedVideo)
         }
-        let audio = streams.first { $0.Type?.lowercased() == "audio" }
+        let audio = defaultAudio(streams: streams)
         let supportedAudio = audio == nil || ["aac", "ac3", "eac3"].contains(audio?.Codec?.lowercased() ?? "")
         let nativeContainer = ["mp4", "mov", "m4v", "hls"].contains(source.Container?.lowercased() ?? "")
         if allowDirectPlay && nativeContainer && supportedAudio && source.SupportsDirectPlay == true {

@@ -32,7 +32,10 @@
 
         var body: some View {
             ZStack {
-                NativePlaybackView(player: engine.player, coordinator: coordinator, companion: companion)
+                NativePlaybackView(
+                    player: engine.player, coordinator: coordinator, companion: companion,
+                    trackMenuItems: PlaybackTrackMenus.items(playback: coordinator))
+                PlaybackSubtitleOverlay(playback: coordinator)
                 PlaybackFeatureOverlay(
                     companion: companion, itemID: coordinator.currentItemID,
                     mediaSourceID: coordinator.currentMediaSourceID)
@@ -102,6 +105,7 @@
         let player: AVPlayer?
         let coordinator: PlaybackCoordinator
         let companion: PlaybackCompanion
+        let trackMenuItems: [UIMenuElement]
 
         func makeCoordinator() -> DismissalHandler { DismissalHandler(playback: coordinator, companion: companion) }
 
@@ -111,6 +115,9 @@
             controller.delegate = context.coordinator
             context.coordinator.gestures.install(on: controller.view)
             #if os(tvOS)
+                controller.transportBarCustomMenuItems = trackMenuItems
+            #endif
+            #if os(tvOS)
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
             #endif
             return controller
@@ -119,6 +126,9 @@
         func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
             controller.player = player
             context.coordinator.update(controller)
+            #if os(tvOS)
+                controller.transportBarCustomMenuItems = trackMenuItems
+            #endif
         }
 
         static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: DismissalHandler) {
@@ -141,10 +151,10 @@
             }
 
             func update(_ controller: AVPlayerViewController) {
-                let customScrub = companion.layout != nil && companion.runtime != nil
                 gestures.update()
                 #if os(tvOS)
-                    controller.playbackControlsIncludeTransportBar = !customScrub
+                    // Keep native track menus reachable outside the custom scrub surface.
+                    controller.playbackControlsIncludeTransportBar = companion.scrubPosition == nil
                     let skip =
                         companion.scrubPosition == nil && companion.countdownSeconds == nil ? companion.segment : nil
                     if skipEnd != skip?.end || skipKind != skip?.kind {

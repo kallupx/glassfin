@@ -10,8 +10,9 @@ provides the final destination before playback resumes; it does not document a
 continuous preview position. No private AVKit views, KVC, polling of undocumented
 state, or server plugins are used.
 
-The adapter sets `playbackControlsIncludeTransportBar = false` for the custom path,
-while native Info and menu panels remain enabled. Horizontal pan enters scrubbing;
+The adapter sets `playbackControlsIncludeTransportBar = false` while the custom
+scrub surface is active. Outside scrubbing, the native transport bar remains
+available for the audio, subtitle, and playback options menus. Horizontal pan enters scrubbing;
 Select confirms, Menu cancels, and directional clicks move ten seconds. Playback
 resumes after leaving scrubbing only if it was playing beforehand. Vertical gestures
 stay with AVKit. The thumbnail and timestamp track the preview position.
@@ -63,9 +64,9 @@ updates the shared UserDataStore, and starts the next item from zero.
 `PlaybackView` requires the app's shared UserDataStore and a return-focus callback.
 The existing M07/Home detail and playback routes on main are placeholders; their
 future host must pass these dependencies. `makeCompanion(playNext:)` / the view's
-`playNext` callback is the integration point for the parallel track-selection
-branch to carry selected audio/subtitle languages. This branch does not implement
-track selection, DeviceProfile, DirectStream, or Transcode changes.
+`playNext` callback is the integration point for carrying selected audio/subtitle
+languages to the next episode. The merged playback adapter retains the native
+track menus and subtitle overlay from the track-selection implementation on main.
 
 ## Defaults and questions for spec review
 

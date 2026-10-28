@@ -37,6 +37,13 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case tabLibraries = "design.tab.libraries"
     case tabSearch = "design.tab.search"
     case tabSettings = "design.tab.settings"
+    case playbackBuffer = "playback.tracks.buffer"
+    case playbackAudio = "playback.tracks.audio"
+    case playbackSubtitle = "playback.tracks.subtitle"
+    case playbackOff = "playback.tracks.off"
+    case playbackConvertASS = "playback.tracks.convertASS"
+    case playbackOptions = "playback.tracks.options"
+    case playbackRemoteBitrate = "playback.tracks.remoteBitrate"
     case settingsVersion = "settings.version"
     case settingsVersionUnavailable = "settings.versionUnavailable"
     case seasonPicker = "design.season.picker"
@@ -116,6 +123,13 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .playbackCancel: LocalizedStringResource("playback.cancel", bundle: .main)
         case .playbackAutoplay: LocalizedStringResource("playback.autoplay", bundle: .main)
 
+        case .playbackBuffer: LocalizedStringResource("playback.tracks.buffer", bundle: .main)
+        case .playbackAudio: LocalizedStringResource("playback.tracks.audio", bundle: .main)
+        case .playbackSubtitle: LocalizedStringResource("playback.tracks.subtitle", bundle: .main)
+        case .playbackOff: LocalizedStringResource("playback.tracks.off", bundle: .main)
+        case .playbackConvertASS: LocalizedStringResource("playback.tracks.convertASS", bundle: .main)
+        case .playbackOptions: LocalizedStringResource("playback.tracks.options", bundle: .main)
+        case .playbackRemoteBitrate: LocalizedStringResource("playback.tracks.remoteBitrate", bundle: .main)
         case .searchPrompt: LocalizedStringResource("search.prompt", bundle: .main)
         case .searchMovies: LocalizedStringResource("search.movies", bundle: .main)
         case .searchSeries: LocalizedStringResource("search.series", bundle: .main)
