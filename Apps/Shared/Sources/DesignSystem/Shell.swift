@@ -12,14 +12,21 @@ struct LibraryTabShell: View {
     var body: some View {
         TabView(selection: $selection) {
             homeTab
+            #if os(iOS)
+                // Keep primary destinations ahead of libraries so More cannot hide their identified buttons.
+                searchTab
+                settingsTab
+            #endif
             ForEach(plan.inline) { library in
                 libraryTab(library)
             }
             if !plan.overflow.isEmpty {
                 overflowTab
             }
-            searchTab
-            settingsTab
+            #if !os(iOS)
+                searchTab
+                settingsTab
+            #endif
         }
         .modifier(PlatformTabChrome())
         .accessibilityElement(children: .contain)
