@@ -23,6 +23,26 @@ final class MediaLoaderSecurityTests: XCTestCase {
         XCTAssertNil(try plan("https://example.invalid/video", allowed: URL(string: "http://example.invalid")!))
     }
 
+    /// T08-2-50. An absolute cross-origin key rejects the playlist and cannot produce a loader request.
+    func testCrossOriginKeyIsRejected() async throws {
+        try await assertPlaylistRejects(
+            #"#EXT-X-KEY:METHOD=AES-128,URI="https://evil.example/key""#,
+            uri: "https://evil.example/key")
+    }
+
+    /// T08-2-50. An absolute cross-origin audio rendition cannot produce a loader request.
+    func testCrossOriginMediaIsRejected() async throws {
+        try await assertPlaylistRejects(
+            #"#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="x",URI="https://evil.example/a.m3u8""#,
+            uri: "https://evil.example/a.m3u8")
+    }
+
+    /// T08-2-50. A same-host absolute URI with a different port is still cross-origin.
+    func testPlaylistPortChangeIsRejected() async throws {
+        try await assertPlaylistRejects(
+            "https://example.invalid:444/variant.m3u8", uri: "https://example.invalid:444/variant.m3u8")
+    }
+
     func testMedia401IsDistinctFromOtherHTTPFailures() {
         XCTAssertEqual(
             ResourceLoaderOutcome.classify(OriginMediaResponse(status: 401), requestURL: url),
@@ -116,6 +136,67 @@ final class MediaLoaderSecurityTests: XCTestCase {
         var sniffed = BoundedMediaBody(contentType: nil, url: url, range: nil)
         for byte in Data("#EXTM3U\n".utf8) { try sniffed.append(byte) }
         XCTAssertEqual(sniffed.data, Data("#EXTM3U\n".utf8))
+    }
+
+    func testBoundedBodyChunkAppendHonorsExactRangeLimit() throws {
+        for limit in [1, 2, 65, 64 * 1_024] {
+            let range = HTTPByteRange(start: 7, end: Int64(6 + limit))
+            let expected = Data(repeating: 1, count: limit)
+            var exact = BoundedMediaBody(contentType: "video/mp4", url: url, range: range)
+            try exact.append(contentsOf: expected)
+            XCTAssertEqual(exact.data, expected)
+            try exact.append(contentsOf: Data())
+            XCTAssertEqual(exact.data, expected)
+            XCTAssertThrowsError(try exact.append(contentsOf: Data([2]))) {
+                XCTAssertEqual($0 as? APIError, .decoding)
+            }
+            XCTAssertEqual(exact.data, expected)
+
+            var oversized = BoundedMediaBody(contentType: "video/mp4", url: url, range: range)
+            XCTAssertThrowsError(try oversized.append(contentsOf: expected + Data([2]))) {
+                XCTAssertEqual($0 as? APIError, .decoding)
+            }
+            XCTAssertEqual(oversized.data, expected)
+        }
+    }
+
+    func testBoundedBodyAccumulatesChunksUpToProgressiveLimit() throws {
+        var body = BoundedMediaBody(contentType: "video/mp4", url: url, range: nil)
+        let chunkBytes = 64 * 1_024
+        var expected = Data()
+        for index in 0..<(MediaLoaderLimits.chunkBytes / chunkBytes) {
+            let chunk = Data(repeating: UInt8(index), count: chunkBytes)
+            try body.append(contentsOf: chunk)
+            expected.append(chunk)
+            XCTAssertEqual(body.data, expected)
+        }
+        XCTAssertEqual(body.data.count, MediaLoaderLimits.chunkBytes)
+        XCTAssertThrowsError(try body.append(contentsOf: Data([0]))) {
+            XCTAssertEqual($0 as? APIError, .decoding)
+        }
+        XCTAssertEqual(body.data, expected)
+    }
+
+    func testBoundedBodyChunkAppendPreservesPlaylistSniffingAndLimit() throws {
+        let prefix = Data("#EXTM3U".utf8)
+        for split in 0...prefix.count {
+            var body = BoundedMediaBody(contentType: nil, url: url, range: HTTPByteRange(start: 0, end: 6))
+            try body.append(contentsOf: prefix.prefix(split))
+            try body.append(contentsOf: prefix.dropFirst(split))
+            let padding = Data(repeating: 32, count: MediaLoaderLimits.playlistBytes - prefix.count)
+            try body.append(contentsOf: padding)
+            XCTAssertEqual(body.data, prefix + padding)
+            XCTAssertThrowsError(try body.append(contentsOf: Data([32]))) {
+                XCTAssertEqual($0 as? APIError, .decoding)
+            }
+            XCTAssertEqual(body.data.count, MediaLoaderLimits.playlistBytes)
+        }
+        // A probe shorter than the identifying prefix must still fail at its first excess byte.
+        var short = BoundedMediaBody(contentType: nil, url: url, range: HTTPByteRange(start: 0, end: 1))
+        XCTAssertThrowsError(try short.append(contentsOf: prefix)) {
+            XCTAssertEqual($0 as? APIError, .decoding)
+        }
+        XCTAssertEqual(short.data, Data("#E".utf8))
     }
 
     func testOversizedPlaylistAndProgressiveResponsesFailSafely() {
@@ -280,7 +361,65 @@ final class MediaLoaderSecurityTests: XCTestCase {
         }
     }
 
+    /// T08P-70/88: both master and variant playlists use the header; server segment credentials stay on-origin.
+    func testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin() async throws {
+        let master = URL(string: "https://example.invalid/master.m3u8")!
+        let variant = URL(string: "https://example.invalid/variant.m3u8")!
+        let responses = [
+            OriginMediaResponse(
+                status: 200, contentType: "application/vnd.apple.mpegurl",
+                body: Data("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=160000\nvariant.m3u8?ApiKey=server-secret\n".utf8)),
+            OriginMediaResponse(
+                status: 200, contentType: "application/vnd.apple.mpegurl",
+                body: Data(
+                    "#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4?ApiKey=server-secret\"\n#EXTINF:6,\nsegment.m4s?ApiKey=server-secret\n"
+                        .utf8)),
+        ]
+        let client = PlaylistAuthOrigin(responses)
+        let masterSink = ChunkSink()
+        let masterRequest = try XCTUnwrap(
+            ResourceLoadPlanner.originRequest(
+                assetURL: try XCTUnwrap(MediaAssetScheme.wrap(master)),
+                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master))
+        try await ChunkedMediaLoader.load(
+            request: masterRequest, range: nil, client: client,
+            isCancelled: { false }, receive: { reply async throws(APIError) in await masterSink.receive(reply) })
+        let rewrittenMaster = await masterSink.text
+        let variantLine = try XCTUnwrap(rewrittenMaster.split(whereSeparator: \.isNewline).first { !$0.hasPrefix("#") })
+        let variantAsset = try XCTUnwrap(URL(string: String(variantLine)))
+        XCTAssertEqual(variantAsset.scheme, MediaAssetScheme.name)
+        XCTAssertEqual(MediaAssetScheme.unwrap(variantAsset), variant)
+        XCTAssertFalse(rewrittenMaster.contains("server-secret"))
+        let variantRequest = try XCTUnwrap(
+            ResourceLoadPlanner.originRequest(
+                assetURL: variantAsset,
+                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master))
+        let variantSink = ChunkSink()
+        try await ChunkedMediaLoader.load(
+            request: variantRequest, range: nil, client: client,
+            isCancelled: { false }, receive: { reply async throws(APIError) in await variantSink.receive(reply) })
+        let requests = await client.requests
+        XCTAssertEqual(requests.map(\.url), [master, variant])
+        XCTAssertTrue(
+            requests.allSatisfy { $0.authorizationHeader == "header-secret" && !MediaCredentialQuery.contains($0.url) })
+        let text = await variantSink.text
+        XCTAssertTrue(text.contains("https://example.invalid/segment.m4s?ApiKey=server-secret"))
+        XCTAssertTrue(text.contains("https://example.invalid/init.mp4?ApiKey=server-secret"))
+        for target in ["https://other.invalid/segment.m4s", "http://example.invalid/segment.m4s"] {
+            let result = HLSPlaylistRewriter.rewrite(playlist: "#EXTM3U\n#EXTINF:6,\n" + target, baseURL: variant)
+            guard case .failure = result else { return XCTFail("Unsafe segment was accepted") }
+            let initResult = HLSPlaylistRewriter.rewrite(
+                playlist: "#EXTM3U\n#EXT-X-MAP:URI=\"" + target + "\"", baseURL: variant)
+            guard case .failure = initResult else { return XCTFail("Unsafe init segment was accepted") }
+        }
+    }
+
     func testHeaderFieldsKeyPolicyDisablesReleaseFallback() {
+        #if DEBUG
+            XCTAssertTrue(HeaderFieldsKeyPolicy.isAllowedInCurrentBuild)
+        #else
+            XCTAssertFalse(HeaderFieldsKeyPolicy.isAllowedInCurrentBuild)
+        #endif
         XCTAssertFalse(HeaderFieldsKeyPolicy.isAllowed(buildIsDebug: false))
         XCTAssertTrue(HeaderFieldsKeyPolicy.isAllowed(buildIsDebug: true))
         XCTAssertFalse(
@@ -292,6 +431,35 @@ final class MediaLoaderSecurityTests: XCTestCase {
 
     private func request() -> OriginMediaRequest {
         OriginMediaRequest(method: "GET", url: url, authorizationHeader: "fake-token", trust: .publiclyTrusted)!
+    }
+
+    private func assertPlaylistRejects(
+        _ line: String, uri: String, file: StaticString = #filePath, lineNumber: UInt = #line
+    ) async throws {
+        let base = URL(string: "https://example.invalid/master.m3u8")!
+        let playlist = "#EXTM3U\n\(line)\n"
+        XCTAssertEqual(
+            HLSPlaylistRewriter.rewrite(playlist: playlist, baseURL: base), .failure(.crossOrigin),
+            file: file, line: lineNumber)
+        XCTAssertNil(try plan(uri, allowed: base), file: file, line: lineNumber)
+        let response = OriginMediaResponse(
+            status: 200, contentType: "application/vnd.apple.mpegurl", body: Data(playlist.utf8))
+        XCTAssertNil(PlayerResponseBuilder.build(origin: response, requestURL: base), file: file, line: lineNumber)
+        var playlistRequest = request()
+        playlistRequest.url = base
+        let client = ChunkOrigin([response])
+        do {
+            try await ChunkedMediaLoader.load(
+                request: playlistRequest, range: nil, client: client, isCancelled: { false },
+                receive: { _ async throws(APIError) in
+                    XCTFail("Delivered a rejected playlist", file: file, line: lineNumber)
+                })
+            XCTFail("Rejected playlist completed", file: file, line: lineNumber)
+        } catch {
+            XCTAssertEqual(error, .decoding, file: file, line: lineNumber)
+        }
+        let requestedURLs = await client.urls
+        XCTAssertEqual(requestedURLs, [base], file: file, line: lineNumber)
     }
 
     private func plan(_ value: String, allowed: URL) throws -> OriginMediaRequest? {
@@ -308,6 +476,7 @@ private actor ChunkOrigin: MediaOriginClient {
     private var responses: [OriginMediaResponse]
     private let onFetch: @Sendable () -> Void
     private(set) var ranges: [HTTPByteRange?] = []
+    private(set) var urls: [URL] = []
 
     init(_ responses: [OriginMediaResponse], onFetch: @escaping @Sendable () -> Void = {}) {
         self.responses = responses
@@ -316,6 +485,7 @@ private actor ChunkOrigin: MediaOriginClient {
 
     func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
         ranges.append(request.range)
+        urls.append(request.url)
         guard !responses.isEmpty else { throw .network }
         onFetch()
         return responses.removeFirst()
@@ -329,5 +499,16 @@ private actor ChunkSink {
     func receive(_ reply: PlayerByteReply) {
         counts.append(reply.data.count)
         if !reply.isByteRangeAccessSupported { text += String(decoding: reply.data, as: UTF8.self) }
+    }
+}
+
+private actor PlaylistAuthOrigin: MediaOriginClient {
+    private var responses: [OriginMediaResponse]
+    private(set) var requests: [OriginMediaRequest] = []
+    init(_ responses: [OriginMediaResponse]) { self.responses = responses }
+    func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
+        requests.append(request)
+        guard !responses.isEmpty else { throw .network }
+        return responses.removeFirst()
     }
 }

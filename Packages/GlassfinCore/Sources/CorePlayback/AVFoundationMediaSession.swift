@@ -43,7 +43,7 @@
             gate: PlaybackFetchGate = PlaybackFetchGate(),
             onFailure: (@Sendable (APIError) -> Void)? = nil
         ) {
-            guard MediaOrigin.matches(carrier.originURL, carrier.originURL) else { return nil }
+            guard MediaOrigin.hasSchemeHostAndPort(carrier.originURL) else { return nil }
             self.origin = origin
             self.authorizationHeader = carrier.authorizationHeader
             self.trust = carrier.trust
@@ -100,7 +100,8 @@
             tasks.cancel(ObjectIdentifier(loadingRequest))
         }
 
-        private func load(_ boxed: LoaderBox, request: OriginMediaRequest, range: HTTPByteRange?) async {
+        // Internal seam for exercising the loader and completion with a request sink in Apple-platform tests.
+        func load(_ boxed: any MediaLoadingRequest, request: OriginMediaRequest, range: HTTPByteRange?) async {
             do {
                 try await ChunkedMediaLoader.load(
                     request: request,
@@ -117,36 +118,29 @@
             }
         }
 
-        private func respond(_ boxed: LoaderBox, reply: PlayerByteReply) async throws(APIError) {
+        private func respond(_ boxed: any MediaLoadingRequest, reply: PlayerByteReply) async throws(APIError) {
             let delivered = await withCheckedContinuation { continuation in
                 queue.async {
-                    guard !self.gate.isCancelled, !boxed.request.isCancelled else {
+                    guard !self.gate.isCancelled, !boxed.isCancelled else {
                         continuation.resume(returning: false)
                         return
                     }
-                    if let info = boxed.request.contentInformationRequest {
-                        info.contentType = reply.contentTypeUTI
-                        info.contentLength = reply.contentLength
-                        info.isByteRangeAccessSupported = reply.isByteRangeAccessSupported
-                    }
-                    boxed.request.dataRequest?.respond(with: reply.data)
+                    boxed.respond(with: reply)
                     continuation.resume(returning: true)
                 }
             }
             if !delivered { throw .cancelled }
         }
 
-        private func complete(_ boxed: LoaderBox, error: APIError?) async {
+        private func complete(_ boxed: any MediaLoadingRequest, error: APIError?) async {
             await withCheckedContinuation { continuation in
                 queue.async {
-                    let failure = self.gate.isCancelled || boxed.request.isCancelled ? .cancelled : error
+                    let failure = self.gate.isCancelled || boxed.isCancelled ? .cancelled : error
                     if let failure {
                         self.failures.record(failure)
-                        boxed.request.finishLoading(with: failure)
-                        self.onFailure?(failure)
-                    } else {
-                        boxed.request.finishLoading()
                     }
+                    boxed.finishLoading(with: failure)
+                    if let failure { self.onFailure?(failure) }
                     continuation.resume()
                 }
             }
@@ -167,7 +161,7 @@
 
     public enum AVPlayerLogForwarder {
         public static func forward(item: AVPlayerItem, log: any GlassfinLog) {
-            let errors = item.errorLog()?.events.map(\.uri) ?? []
+            let errors = item.errorLog()?.events.flatMap { [$0.uri, $0.errorComment] } ?? []
             let access = item.accessLog()?.events.map(\.uri) ?? []
             PlayerLogSink.record(errors + access, log: log)
         }
@@ -206,6 +200,7 @@
         }
 
         public func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
+            guard MediaURLValidation.hasNoUserInfo(request.url) else { throw .invalidURL }
             var urlRequest = URLRequest(url: request.url)
             urlRequest.httpMethod = request.method
             if let header = request.authorizationHeader {
@@ -224,10 +219,24 @@
                 let contentType = http.value(forHTTPHeaderField: "Content-Type")
                 var body = BoundedMediaBody(contentType: contentType, url: request.url, range: request.range)
                 if request.method != "HEAD", (200..<300).contains(http.statusCode) {
+                    let chunkBytes = 64 * 1_024
+                    var chunk = Data()
+                    chunk.reserveCapacity(chunkBytes)
+                    // Read at most one byte beyond the current limit so an oversized
+                    // response fails immediately, including a very short range probe.
+                    var nextChunkBytes = min(chunkBytes, body.remainingByteCount + 1)
+                    try Task.checkCancellation()
                     for try await byte in bytes {
-                        try Task.checkCancellation()
-                        try body.append(byte)
+                        chunk.append(byte)
+                        if chunk.count == nextChunkBytes {
+                            try Task.checkCancellation()
+                            try body.append(contentsOf: chunk)
+                            chunk.removeAll(keepingCapacity: true)
+                            nextChunkBytes = min(chunkBytes, body.remainingByteCount + 1)
+                        }
                     }
+                    try Task.checkCancellation()
+                    try body.append(contentsOf: chunk)
                 }
                 let data = body.data
                 let total =
@@ -322,9 +331,35 @@
         }
     }
 
-    private final class LoaderBox: @unchecked Sendable {
+    /// The AVFoundation adapter is only accessed on the session's resource-loader queue.
+    protocol MediaLoadingRequest: Sendable {
+        var isCancelled: Bool { get }
+        func respond(with reply: PlayerByteReply)
+        func finishLoading(with error: APIError?)
+    }
+
+    private final class LoaderBox: MediaLoadingRequest, @unchecked Sendable {
         let request: AVAssetResourceLoadingRequest
         init(_ request: AVAssetResourceLoadingRequest) { self.request = request }
+
+        var isCancelled: Bool { request.isCancelled }
+
+        func respond(with reply: PlayerByteReply) {
+            if let info = request.contentInformationRequest {
+                info.contentType = reply.contentTypeUTI
+                info.contentLength = reply.contentLength
+                info.isByteRangeAccessSupported = reply.isByteRangeAccessSupported
+            }
+            request.dataRequest?.respond(with: reply.data)
+        }
+
+        func finishLoading(with error: APIError?) {
+            if let error {
+                request.finishLoading(with: error)
+            } else {
+                request.finishLoading()
+            }
+        }
     }
 
     private final class LoaderFailures: @unchecked Sendable {
@@ -339,7 +374,7 @@
 
         func record(_ error: APIError) {
             lock.lock()
-            failure = error
+            failure = MediaFailurePrecedence.recording(error, after: failure)
             lock.unlock()
         }
     }

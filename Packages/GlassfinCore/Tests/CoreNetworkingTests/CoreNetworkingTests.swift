@@ -321,16 +321,26 @@ final class MediaAndSocketTests: XCTestCase {
         XCTAssertFalse(header.usesAPIKeyQuery)
         XCTAssertFalse(header.url.absoluteString.contains("ApiKey"))
 
-        let query = try MediaRequestBuilder.prepare(
-            server: server,
-            path: "/Videos/movie/stream",
-            identity: identity,
-            mode: .apiKeyQuery
-        )
-        XCTAssertNil(query.authorizationHeader)
-        XCTAssertTrue(query.usesAPIKeyQuery)
-        XCTAssertTrue(query.url.absoluteString.contains("ApiKey=token-secret"))
-        XCTAssertFalse(String(describing: query).contains("token-secret"))
+        #if DEBUG
+            let query = try MediaRequestBuilder.prepare(
+                server: server,
+                path: "/Videos/movie/stream",
+                identity: identity,
+                mode: .apiKeyQuery
+            )
+            XCTAssertNil(query.authorizationHeader)
+            XCTAssertTrue(query.usesAPIKeyQuery)
+            XCTAssertTrue(query.url.absoluteString.contains("ApiKey=token-secret"))
+            XCTAssertFalse(String(describing: query).contains("token-secret"))
+        #else
+            XCTAssertThrowsError(
+                try MediaRequestBuilder.prepare(
+                    server: server,
+                    path: "/Videos/movie/stream", identity: identity, mode: .apiKeyQuery)
+            ) {
+                XCTAssertEqual($0 as? APIError, .invalidURL)
+            }
+        #endif
     }
 
     /// T01-25. The socket URL has no ApiKey query. The token stays in Authorization.
@@ -500,7 +510,7 @@ final class ServerEventStreamTests: XCTestCase {
         await waitUntil { events.snapshot().count >= 2 && socket.sentMessages().count >= 1 }
         stream.stop()
         await collect.value
-        XCTAssertEqual(events.snapshot(), [.userDataChanged, .libraryChanged])
+        XCTAssertEqual(events.snapshot(), [.userDataChanged(items: []), .libraryChanged])
         XCTAssertEqual(socket.sentMessages(), [ServerEventParser.keepAliveReply])
     }
 
@@ -554,10 +564,15 @@ final class ServerEventStreamTests: XCTestCase {
         }
         await waitUntil { !clock.sleeps().isEmpty }
         stream.applicationDidBecomeActive()
-        await waitUntil { events.snapshot().contains(.userDataChanged) }
+        await waitUntil {
+            events.snapshot().contains { event in
+                if case .userDataChanged = event { return true }
+                return false
+            }
+        }
         stream.stop()
         await collect.value
-        XCTAssertEqual(events.snapshot(), [.userDataChanged])
+        XCTAssertEqual(events.snapshot(), [.userDataChanged(items: [])])
         XCTAssertEqual(clock.sleeps().count, 1)
     }
 

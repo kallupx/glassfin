@@ -78,19 +78,7 @@ public enum DiscoveryPolicy {
     }
 
     static func displayName(_ raw: String) -> String {
-        let plain = MetadataSanitizer.plainText(raw)
-        let cleaned = plain.unicodeScalars.filter { !isControl($0) }
-        return String(String(String.UnicodeScalarView(cleaned)).prefix(maximumNameLength))
-    }
-
-    private static func isControl(_ scalar: Unicode.Scalar) -> Bool {
-        if scalar.value <= 0x1F || scalar.value == 0x7F { return true }
-        switch scalar.value {
-        case 0x202A...0x202E, 0x2066...0x2069:
-            return true
-        default:
-            return false
-        }
+        MetadataSanitizer.displayText(MetadataSanitizer.plainText(raw), limit: maximumNameLength)
     }
 
     private static func defaultPort(_ scheme: String?) -> Int? {

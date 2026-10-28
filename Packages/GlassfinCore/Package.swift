@@ -16,6 +16,8 @@ let externalDependencies: [Package.Dependency] = [
     let coreAPIExternal: [Target.Dependency] = []
     // The Linux toolchain has no xcstringstool. Exclude the catalog and copy a marker
     // so SwiftPM still generates Bundle.module for String(localized:bundle: .module).
+    let coreModelsExclude = ["Localizable.xcstrings"]
+    let coreModelsResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
     let coreNetworkingExclude = ["Localizable.xcstrings"]
     let coreNetworkingResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
 #else
@@ -26,6 +28,8 @@ let externalDependencies: [Package.Dependency] = [
         .product(name: "JellyfinAPI", package: "jellyfin-sdk-swift"),
         .product(name: "Get", package: "Get"),
     ]
+    let coreModelsExclude = ["LinuxStringCatalogMarker.txt"]
+    let coreModelsResources: [Resource] = [.process("Localizable.xcstrings")]
     let coreNetworkingExclude = ["LinuxStringCatalogMarker.txt"]
     let coreNetworkingResources: [Resource] = [.process("Localizable.xcstrings")]
 #endif
@@ -47,7 +51,12 @@ let package = Package(
     ],
     dependencies: packageDependencies,
     targets: [
-        .target(name: "CoreModels", swiftSettings: debugSettings),
+        .target(
+            name: "CoreModels",
+            exclude: coreModelsExclude,
+            resources: coreModelsResources,
+            swiftSettings: debugSettings
+        ),
         .target(
             name: "CoreNetworking",
             dependencies: ["CoreModels"],
@@ -69,11 +78,15 @@ let package = Package(
             dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"] + coreAPIExternal,
             swiftSettings: debugSettings
         ),
-        .target(name: "CoreState", dependencies: ["CoreModels"], swiftSettings: debugSettings),
+        .target(
+            name: "CoreState",
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"],
+            swiftSettings: debugSettings
+        ),
         .target(name: "CorePlayback", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),
         .target(
             name: "CoreTestSupport",
-            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices"],
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices", "CorePlayback"],
             swiftSettings: debugSettings
         ),
         .target(
@@ -90,6 +103,12 @@ let package = Package(
             swiftSettings: debugSettings
         ),
         .testTarget(name: "CoreModelsTests", dependencies: ["CoreModels"]),
+        .testTarget(
+            name: "CoreStateTests",
+            dependencies: [
+                "CoreState", "CoreModels", "CoreNetworking", "GlassfinServices", "CoreTestSupport",
+            ]
+        ),
         .testTarget(name: "CoreNetworkingTests", dependencies: ["CoreNetworking", "CoreModels"]),
         .testTarget(
             name: "CoreServicesTests",
@@ -97,7 +116,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CorePlaybackTests",
-            dependencies: ["CorePlayback", "CoreModels", "CoreNetworking"]
+            dependencies: ["CorePlayback", "CoreModels", "CoreNetworking", "CoreTestSupport"]
         ),
         .testTarget(
             name: "IntegrationTests",
