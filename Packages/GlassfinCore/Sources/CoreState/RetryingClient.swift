@@ -62,6 +62,10 @@ public final class RequestScope: @unchecked Sendable {
         lock.lock()
         tasks[id] = { task.cancel() }
         lock.unlock()
+        Task { [weak self] in
+            _ = try? await task.value
+            self?.untrack(id)
+        }
         return id
     }
 
