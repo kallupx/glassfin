@@ -90,6 +90,7 @@ private final class ImageStreamScenario: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
     private var cancelled = false
+    private var finished = false
     var sent: Int { lock.withLock { count } }
     var stopped: Bool { lock.withLock { cancelled } }
 
@@ -99,7 +100,13 @@ private final class ImageStreamScenario: @unchecked Sendable {
         self.status = status
     }
 
-    func stop() { lock.withLock { cancelled = true } }
+    func finish() { lock.withLock { finished = true } }
+    func stop() {
+        lock.withLock {
+            // Darwin also stops a protocol after successful EOF; that is not a cancelled transfer.
+            if !finished { cancelled = true }
+        }
+    }
     func nextChunk() -> Data? {
         lock.withLock {
             guard !cancelled, count < length else { return nil }
@@ -152,6 +159,7 @@ private final class ImageStreamProtocol: URLProtocol {
                 source.client?.urlProtocol(source, didLoad: data)
                 source.emit(scenario)
             } else {
+                scenario.finish()
                 source.client?.urlProtocolDidFinishLoading(source)
             }
         }

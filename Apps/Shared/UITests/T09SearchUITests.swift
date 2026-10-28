@@ -8,7 +8,7 @@ final class T09SearchUITests: XCTestCase {
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         let term = "abcdefghijklmnopqrst"
-        typeText(term, into: field, in: app)
+        typeSearchText(term, into: field, in: app)
         XCTAssertEqual(field.value as? String, term)
         XCTAssertTrue(app.buttons["search.item.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"].waitForExistence(timeout: 10))
     }
@@ -20,7 +20,7 @@ final class T09SearchUITests: XCTestCase {
         let app = launch(extra: ["-uitest-search-empty"])
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        typeText("absent", into: field, in: app)
+        typeSearchText("absent", into: field, in: app)
         let empty = app.descendants(matching: .any)["search.empty"]
         XCTAssertTrue(empty.waitForExistence(timeout: 10))
         XCTAssertEqual(empty.value as? String, "search.empty")
@@ -33,7 +33,7 @@ final class T09SearchUITests: XCTestCase {
         let app = launch(extra: ["-uitest-search-error"])
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        typeText("failure", into: field, in: app)
+        typeSearchText("failure", into: field, in: app)
         let error = app.descendants(matching: .any)["search.error"]
         XCTAssertTrue(error.waitForExistence(timeout: 10))
         activate(app.buttons["search.retry"], in: app)
@@ -47,7 +47,7 @@ final class T09SearchUITests: XCTestCase {
         let app = launch()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        typeText("star", into: field, in: app)
+        typeSearchText("star", into: field, in: app)
         let second = app.buttons["search.item.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
         XCTAssertTrue(second.waitForExistence(timeout: 10))
         activate(second, in: app)
@@ -69,7 +69,7 @@ final class T09SearchUITests: XCTestCase {
             let app = launch()
             let field = app.searchFields.firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 10))
-            typeText("star", into: field, in: app)
+            typeSearchText("star", into: field, in: app)
             let movie = app.buttons["search.item.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
             XCTAssertTrue(movie.waitForExistence(timeout: 10))
             for _ in 0..<24 {
@@ -93,17 +93,34 @@ final class T09SearchUITests: XCTestCase {
         let app = launch()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        typeText("star", into: field, in: app)
+        typeSearchText("star", into: field, in: app)
         XCTAssertTrue(app.buttons["search.item.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"].waitForExistence(timeout: 10))
         activate(app.buttons["search.item.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], in: app)
         XCTAssertTrue(app.buttons["search.detail.back"].waitForExistence(timeout: 10))
         activate(app.buttons["search.detail.back"], in: app)
-        typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4), into: field, in: app)
+        typeSearchText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4), into: field, in: app)
         let clear = app.buttons["search.clearRecent"]
         XCTAssertTrue(clear.waitForExistence(timeout: 10))
         activate(clear, in: app)
         XCTAssertTrue(app.buttons["search.recent.0"].waitForNonExistence(timeout: 5))
         XCTAssertFalse(clear.exists)
+    }
+
+    @MainActor
+    private func typeSearchText(
+        _ text: String, into field: XCUIElement, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        #if os(tvOS)
+            // Search keeps its inline keyboard beside the results. Menu does not dismiss it.
+            guard app.keyboards.firstMatch.waitForExistence(timeout: 5) else {
+                XCTFail("Search keyboard did not appear", file: file, line: line)
+                return
+            }
+            field.typeText(text)
+        #else
+            typeText(text, into: field, in: app, file: file, line: line)
+        #endif
     }
 
     @MainActor
