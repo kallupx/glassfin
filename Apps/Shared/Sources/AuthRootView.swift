@@ -18,7 +18,7 @@ struct AuthRootView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             panel
-                .padding(48)
+                .padding(flow.screen == .home ? 0 : 48)
         }
         .onAppear { focused = flow.focus }
         .onChange(of: flow.focus) { _, focus in
@@ -292,31 +292,7 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        TabView(selection: $selectedTab) {
-            Tab(AuthCopy.localized(.home), systemImage: "house", value: "home") {
-                VStack(spacing: 16) {
-                    Text(verbatim: AuthCopy.localized(.home)).accessibilityIdentifier("home.root")
-                    if let key = flow.bannerKey {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.banner")
-                    }
-                    if let key = flow.homeErrorKey {
-                        Text(verbatim: AuthCopy.localized(key)).accessibilityIdentifier("home.error")
-                        Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryHome() } }
-                            .accessibilityIdentifier("home.retry")
-                            .focused($focused, equals: .tryAgain)
-                    } else if let snapshot = flow.cachedHome {
-                        ForEach(snapshot.resume + snapshot.nextUp + snapshot.latest, id: \.id) { item in
-                            Text(verbatim: item.name)
-                        }
-                    }
-                }
-                .defaultFocus($focused, flow.focus)
-                .onAppear { flow.settingsApp.currentView = nil }
-            }
-            Tab(AuthCopy.localized(.settings), systemImage: "gear", value: "settings") {
-                SettingsView(flow: flow, restoreSignOutFocus: $restoreSettingsFocus)
-            }
-        }
+        HomeRootView(flow: flow, selectedTab: $selectedTab, restoreSettingsFocus: $restoreSettingsFocus)
     }
 
     private var logoutConfirm: some View {
@@ -356,9 +332,14 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             if configuration.useMockServer || configuration.resetState {
-                return assemble(
+                let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
-                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock())
+                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock(),
+                    path: StaticConnectivityPath(online: true))
+                if configuration.startOnHome {
+                    HomeMockLaunch.seed(flow.homeApp)
+                }
+                return flow
             }
         #else
             _ = arguments
@@ -373,14 +354,15 @@ enum AuthAssembly {
     @MainActor
     private static func assemble(
         backend: any AuthBackend, secure: any SecureStore, settings: any SettingsStore,
-        clock: any GlassfinClock = SystemGlassfinClock()
+        clock: any GlassfinClock = SystemGlassfinClock(),
+        path: any ConnectivityPath = SystemPathMonitor()
     ) -> AuthFlow {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Glassfin", isDirectory: true)
         let app = AppState(
             secureStore: secure,
             settings: settings,
-            path: SystemPathMonitor(),
+            path: path,
             pinger: AuthAssemblyPinger(backend: backend, settings: settings, secure: secure),
             cacheRoot: root
         )
@@ -509,6 +491,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         }
 
         func currentUser(on server: ServerInfo, token: String) async throws(APIError) -> UserSession {
+            if HomeMockLaunch.mode == "down" { throw .network }
             _ = token
             return UserSession(server: server, userID: Self.user, userName: "Ada", isAdministrator: false)
         }

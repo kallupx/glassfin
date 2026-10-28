@@ -280,6 +280,9 @@ enum ReconnectLoop {
                         try await socket.send(ServerEventParser.keepAliveReply)
                     }
                 }
+            } catch APIError.unauthorized {
+                await socket.close()
+                break
             } catch is CancellationError {
                 await socket.close()
                 break

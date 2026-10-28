@@ -10,12 +10,17 @@ public struct APIRequest: Sendable, Equatable {
     public var path: String
     public var query: [URLQueryItem]
     public var body: Data?
+    public var maximumResponseBytes: Int?
 
-    public init(method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil) {
+    public init(
+        method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil,
+        maximumResponseBytes: Int? = nil
+    ) {
         self.method = method
         self.path = path
         self.query = query
         self.body = body
+        self.maximumResponseBytes = maximumResponseBytes
     }
 }
 
@@ -63,7 +68,7 @@ public struct ClientIdentity: Sendable, Equatable {
 }
 
 protocol RequestTransport: Sendable {
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?)
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?)
 }
 
 struct URLSessionRequestTransport: RequestTransport {
@@ -71,7 +76,12 @@ struct URLSessionRequestTransport: RequestTransport {
     var redirects: RedirectSessionDelegate
     var certificatePin: OriginCertificatePin? = nil
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
+        if let maximumBytes {
+            return try await BoundedImageDownload(
+                maximumBytes: maximumBytes, certificatePin: certificatePin
+            ).data(for: request, configuration: session.configuration)
+        }
         let proxy = RedirectTaskProxy(owner: redirects, certificatePin: certificatePin)
         let (data, response) = try await session.data(for: request, delegate: proxy)
         return (data, response, proxy.capturedTaskIdentifier())
@@ -97,6 +107,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         self.init(
             server: server,
@@ -118,6 +129,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 15
         configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
         self.init(
             server: server,
             identity: identity,
@@ -159,7 +171,8 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.invalidURL
         }
         do {
-            let (data, response, taskIdentifier) = try await transport.data(for: urlRequest)
+            let (data, response, taskIdentifier) = try await transport.data(
+                for: urlRequest, maximumBytes: request.maximumResponseBytes)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
             if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
                 if case .redirectRejected = failure {
@@ -181,14 +194,16 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             throw APIError.cancelled
         } catch {
             if Task.isCancelled { throw APIError.cancelled }
-            log.error("Request failed for \(SensitiveRedactor.redact(urlRequest.url?.absoluteString ?? request.path))")
+            log.error("Request failed.")
             throw APIError.network
         }
     }
 
     func makeURLRequest(_ request: APIRequest) throws -> URLRequest {
         let url = try Self.url(server: server, path: request.path, query: request.query)
-        if RedirectPolicy.containsCredentialQuery(url) {
+        let hasTokenQuery = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .contains { $0.name.lowercased() == "token" }
+        if RedirectPolicy.containsCredentialQuery(url) || hasTokenQuery {
             throw APIError.invalidURL
         }
         var urlRequest = URLRequest(url: url)

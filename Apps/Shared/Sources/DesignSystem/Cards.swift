@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct PosterFace: View {
+    var image: Image? = nil
+    var placeholderImage: Image? = nil
     var content: PosterContent
     var style: CardStyle
     var isFocused: Bool
@@ -14,7 +16,8 @@ struct PosterFace: View {
             ZStack(alignment: .bottom) {
                 AsyncPoster(
                     blurHash: content.blurHash,
-                    image: nil,
+                    image: image,
+                    placeholderImage: placeholderImage,
                     failed: false,
                     size: size
                 )
@@ -87,6 +90,7 @@ struct ProgressTrack: View {
 struct AsyncPoster: View {
     var blurHash: String?
     var image: Image?
+    var placeholderImage: Image? = nil
     var failed: Bool
     var size: CGSize
 
@@ -118,7 +122,9 @@ struct AsyncPoster: View {
 
     @ViewBuilder
     private var placeholder: some View {
-        if let blurHash, let cgImage = BlurHash.image(from: blurHash, width: 32, height: 32) {
+        if let placeholderImage {
+            placeholderImage.resizable().scaledToFill()
+        } else if let blurHash, let cgImage = BlurHash.image(from: blurHash, width: 32, height: 32) {
             Image(decorative: cgImage, scale: 1)
                 .resizable()
                 .scaledToFill()

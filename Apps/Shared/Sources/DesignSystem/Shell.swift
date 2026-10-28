@@ -3,7 +3,9 @@ import SwiftUI
 struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
-    @State private var selection: String = "home"
+    var settings: AnyView? = nil
+    var selection: Binding<String>? = nil
+    @State private var localSelection: String = "home"
     #if os(iOS)
         @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -31,7 +33,7 @@ struct LibraryTabShell: View {
     }
 
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: selection ?? $localSelection) {
             homeTab
             if usesCompactTabs {
                 // Keep essential destinations ahead of library tabs in the phone's native overflow.
@@ -115,8 +117,14 @@ struct LibraryTabShell: View {
     @TabContentBuilder<String>
     private var settingsTab: some TabContent<String> {
         Tab(value: "settings") {
-            Copy.text(.tabSettings)
-                .accessibilityIdentifier("design.settings.root")
+            Group {
+                if let settings {
+                    settings
+                } else {
+                    Copy.text(.tabSettings)
+                        .accessibilityIdentifier("design.settings.root")
+                }
+            }
         } label: {
             tabLabel(.tabSettings, symbol: "gearshape", identifier: "design.tab.settings")
         }

@@ -20,6 +20,33 @@ public final class AuthFlow {
     public private(set) var quickConnectExpired = false
     public private(set) var quickConnectRenewals = 0
     public private(set) var cachedHome: HomeSnapshot?
+    /// Minimal M06 composition hook; authentication remains owned by this flow.
+    public var homeApp: AppState { app }
+
+    public func makeHomeClient() throws(APIError) -> any JellyfinAPIClient {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID),
+            let live = backend as? LiveAuthBackend
+        else { throw .network }
+        return HomeSessionClient(
+            inner: try live.makeClient(for: session.server, token: token), app: app, scope: app.scope)
+    }
+
+    public func makeHomeEvents() throws -> any ServerEventStream {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID),
+            let live = backend as? LiveAuthBackend,
+            let http = try live.makeClient(for: session.server, token: token) as? HTTPJellyfinClient
+        else { throw APIError.network }
+        let app = app
+        let sockets = try URLSessionEventSocketFactory(
+            server: http.server, identity: http.identity, pin: http.certificatePin,
+            onUnauthorized: { await app.handle(.unauthorized) })
+        return ReconnectingServerEventStream(
+            request: try SocketRequestBuilder.make(server: http.server, identity: http.identity),
+            sockets: sockets, clock: SystemGlassfinClock(), jitter: SystemJitter())
+    }
+
     public var appPhase: AppState.Phase { app.phase }
     public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
@@ -388,6 +415,11 @@ public final class AuthFlow {
     }
 
     public func synchronizeSession() async {
+        if case .needsServer = app.phase, screen == .home {
+            screen = .welcome
+            focus = .connect
+            return
+        }
         if case .needsLogin(let saved) = app.phase, screen == .home || screen == .logoutConfirm {
             screen = .signedOut
             noticeKey = .sessionExpired

@@ -23,10 +23,12 @@ import Foundation
 
     public struct SDKJellyfinAPIClient: JellyfinAPIClient {
         private let jellyfin: JellyfinClient
+        private let server: URL
         private let headerDelegate: GlassfinHeaderDelegate
         public var identity: ClientIdentity
 
         public init(server: URL, identity: ClientIdentity) {
+            self.server = server
             self.identity = identity
             let headerDelegate = GlassfinHeaderDelegate()
             self.headerDelegate = headerDelegate
@@ -47,6 +49,10 @@ import Foundation
         }
 
         public func send(_ request: APIRequest) async throws(CoreModels.APIError) -> Data {
+            // SDK data(for:) buffers whole bodies. Bounded image requests must use CoreNetworking's delegate.
+            if request.maximumResponseBytes != nil {
+                return try await HTTPJellyfinClient(server: server, identity: identity).send(request)
+            }
             do {
                 headerDelegate.header = try identity.authorizationHeader()
             } catch let error as CoreModels.APIError {

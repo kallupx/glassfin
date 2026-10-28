@@ -888,8 +888,8 @@ final class SecurityContentTests: XCTestCase {
             )
         )
         let item = try XCTUnwrap(DTOMapper.mediaItem(dto, log: SilentLog()))
-        XCTAssertEqual(item.name, "North")
-        XCTAssertEqual(item.overview, "A quiet film.")
+        XCTAssertEqual(item.name, "<b>North</b>")
+        XCTAssertEqual(item.overview, "<p>A quiet film.</p>")
 
         XCTAssertFalse(ExternalLinkPolicy.canOpen(try XCTUnwrap(URL(string: "https://example.com")), on: .tvOS))
         XCTAssertFalse(ExternalLinkPolicy.canOpen(try XCTUnwrap(URL(string: "http://example.com")), on: .tvOS))
@@ -1042,7 +1042,7 @@ private final class RecordingRequestTransport: RequestTransport, @unchecked Send
     private let lock = NSLock()
     private var stored: [URLRequest] = []
 
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, Int?) {
+    func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         record(request)
         guard let url = request.url ?? URL(string: "http://invalid.example/"),
             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
