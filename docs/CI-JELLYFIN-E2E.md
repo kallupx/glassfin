@@ -19,7 +19,8 @@ credentials. Pushes to main do not start it.
    `--ffmpeg`. Only `127.0.0.1:8096` is allowed. IPv6, UPnP, remote access and
    auto-discovery are disabled. Inspect the process's sockets with `lsof` and
    reject unexpected TCP or UDP listeners. Refuse an occupied port or a server
-   whose startup wizard was already completed.
+   whose startup wizard was already completed. Wait for the wizard API itself
+   to become ready; public info can answer before startup migrations finish.
 3. POST `/Startup/Configuration`, initialize and POST `/Startup/User`, disable
    remote access, and POST `/Startup/Complete`. Generate separate runtime admin
    and non-admin viewer credentials, mask passwords and the bootstrap access

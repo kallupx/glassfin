@@ -136,6 +136,9 @@ def start(root: Path) -> None:
     udp = subprocess.run(["lsof", "-nP", "-a", "-p", str(process.pid), "-iUDP", "-Fn"], capture_output=True)
     if addresses != ["127.0.0.1:8096"] or udp.stdout:
         raise RuntimeError("server is not restricted to the loopback TCP listener")
+    # Public info is available during migrations, while startup routes still return 503.
+    # Wait on the actual wizard API before the next step sends any mutations.
+    wait_for(lambda: request("GET", "/Startup/Configuration"), 60, "startup wizard API readiness")
     print("Fresh Jellyfin listening only on 127.0.0.1:8096; no UDP discovery listener.")
 
 

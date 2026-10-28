@@ -18,6 +18,29 @@ SPEC.loader.exec_module(e2e)
 
 
 class NativeJellyfinTests(unittest.TestCase):
+    def test_start_waits_for_wizard_after_public_info_becomes_available(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            listeners = unittest.mock.Mock(stdout="p123\nn127.0.0.1:8096\n")
+            udp = unittest.mock.Mock(stdout=b"")
+            with patch.object(e2e.socket, "socket"), \
+                 patch.object(e2e.subprocess, "Popen") as process, \
+                 patch.object(e2e.subprocess, "run", side_effect=[listeners, udp]), \
+                 patch.object(e2e.time, "sleep") as sleep, \
+                 patch.object(e2e, "request", side_effect=[
+                     {"StartupWizardCompleted": False},
+                     RuntimeError("local API GET /Startup/Configuration HTTP 503"),
+                     {"ServerName": ""},
+                 ]) as request:
+                process.return_value.pid = 123
+                e2e.start(root)
+            self.assertEqual(request.call_args_list, [
+                unittest.mock.call("GET", "/System/Info/Public"),
+                unittest.mock.call("GET", "/Startup/Configuration"),
+                unittest.mock.call("GET", "/Startup/Configuration"),
+            ])
+            sleep.assert_called_once_with(1)
+
     def test_checksum_mismatch_never_extracts_or_starts_anything(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
