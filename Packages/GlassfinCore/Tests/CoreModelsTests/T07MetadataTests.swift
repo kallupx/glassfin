@@ -128,7 +128,7 @@ final class T07MetadataTests: XCTestCase {
             taglines: Array(repeating: literal, count: 15), genres: Array(repeating: literal, count: 40))
         XCTAssertEqual(metadata.taglines, Array(repeating: literal, count: MetadataPolicy.taglinesMax))
         XCTAssertEqual(metadata.genres, Array(repeating: literal, count: MetadataPolicy.genresMax))
-        XCTAssertEqual(MetadataSanitizer.plainText(literal), literal)
+        XCTAssertEqual(MetadataSanitizer.displayText(literal, limit: .max), literal)
         XCTAssertEqual(MetadataPolicy.recentSearchesMax, 20)
         XCTAssertEqual(MetadataPolicy.imageMaxBytes, 20 * 1024 * 1024)
     }

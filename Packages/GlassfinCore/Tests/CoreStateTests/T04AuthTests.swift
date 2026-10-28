@@ -809,7 +809,7 @@ final class T04AuthFlowTests: XCTestCase {
         let rig = Rig()
         defer { rig.cleanup() }
         try seed(rig.harness, version: "10.11.0", token: Sample.token)
-        let snapshot = HomeSnapshot(resume: [], nextUp: [], latest: [])
+        let snapshot = HomeSnapshot(resume: [Sample.movie()], nextUp: [], latest: [])
         XCTAssertTrue(rig.harness.app.snapshots.save(snapshot))
         rig.backend.currentUserError = .network
         await rig.flow.restoreSession()
@@ -880,6 +880,56 @@ final class T04AuthFlowTests: XCTestCase {
         rig.flow.requestLogout()
         XCTAssertEqual(rig.flow.screen, .logoutConfirm)
         XCTAssertEqual(rig.flow.confirmFocus, .cancel)
+    }
+
+    /// T02-35a: the current Home tab is rendered by AuthFlow before the M06 screen is installed.
+    @MainActor
+    func testT02_35a_returningToAuthHomeKeepsBannerWithCachedContent() async throws {
+        let rig = Rig()
+        defer { rig.cleanup() }
+        try seed(rig.harness, version: "10.11.0", token: Sample.token)
+        let snapshot = HomeSnapshot(resume: [], nextUp: [], latest: [Sample.movie()])
+        XCTAssertTrue(rig.harness.app.snapshots.save(snapshot))
+        await rig.flow.restoreSession()
+        rig.flow.onAppear()
+        XCTAssertTrue(rig.harness.app.currentView === rig.flow)
+        let other = ItemDetailViewModel(library: rig.harness.library, app: rig.harness.app)
+        other.onAppear()
+        XCTAssertTrue(rig.harness.app.currentView === other)
+        rig.flow.onAppear()
+        rig.harness.app.handle(.serverUnreachable)
+        XCTAssertTrue(rig.harness.app.currentView === rig.flow)
+        XCTAssertTrue(rig.flow.hasContent)
+        XCTAssertFalse(rig.harness.app.showsServerDown)
+        XCTAssertNil(rig.flow.homeErrorKey)
+        XCTAssertEqual(rig.flow.cachedHome, snapshot)
+        XCTAssertEqual(rig.harness.app.connectivity, .serverUnreachable)
+        XCTAssertEqual(rig.harness.app.bannerKey, AppErrorMessage.serverDownKey)
+    }
+
+    /// T02-35b: an absent or empty Home snapshot cannot suppress the blocking state.
+    @MainActor
+    func testT02_35b_returningToAuthHomeWithoutContentShowsFullScreen() async throws {
+        for cached in [false, true] {
+            let rig = Rig()
+            defer { rig.cleanup() }
+            try seed(rig.harness, version: "10.11.0", token: Sample.token)
+            if cached {
+                XCTAssertTrue(rig.harness.app.snapshots.save(HomeSnapshot(resume: [], nextUp: [], latest: [])))
+            }
+            await rig.flow.restoreSession()
+            let other = ItemDetailViewModel(library: rig.harness.library, app: rig.harness.app)
+            await other.load(id: Sample.movie)
+            rig.harness.app.handle(.serverUnreachable)
+            XCTAssertFalse(rig.harness.app.showsServerDown)
+            rig.flow.onAppear()
+            XCTAssertTrue(rig.harness.app.currentView === rig.flow)
+            XCTAssertFalse(rig.flow.hasContent)
+            XCTAssertTrue(rig.harness.app.showsServerDown)
+            XCTAssertEqual(rig.flow.homeErrorKey, .serverUnreachable)
+            XCTAssertEqual(rig.harness.app.connectivity, .serverUnreachable)
+            XCTAssertEqual(rig.harness.app.serverDownTitleKey, AppErrorMessage.serverDownKey)
+        }
     }
 
     func testT04_68_logoutChoosesSavedUsersOnTheSameServerAndKeepsServer() async throws {
