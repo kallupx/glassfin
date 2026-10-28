@@ -16,7 +16,8 @@ struct HomeRootView: View {
             if let context {
                 LibraryTabShell(
                     libraries: (context.model.libraries.value ?? []).map { LibraryTabItem(id: $0.id, title: $0.name) },
-                    home: AnyView(home(context)), settings: AnyView(settings), selection: $selectedTab)
+                    home: AnyView(home(context)), settings: AnyView(settings),
+                    search: AnyView(SearchFeatureHost(flow: flow)), selection: $selectedTab)
             } else {
                 ProgressView().accessibilityIdentifier("home.loading")
             }

@@ -20,6 +20,22 @@ public final class AuthFlow {
     public private(set) var quickConnectExpired = false
     public private(set) var quickConnectRenewals = 0
     public private(set) var cachedHome: HomeSnapshot?
+    /// Minimal M09 hook: credentials remain inside the core assembly.
+    public func makeSearchFeature(client override: (any JellyfinAPIClient)? = nil) throws(APIError) -> SearchFeature? {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID),
+            let deviceID = try? DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false)
+        else { return nil }
+        let certificatePin = try pins.certificatePin(for: session.server.id, url: session.server.url)
+        let identity = ClientIdentity(deviceName: "Apple TV", deviceID: deviceID, version: "0.1.0", token: token)
+        let client =
+            override
+            ?? HTTPJellyfinClient(
+                server: session.server.url, identity: identity,
+                certificatePin: certificatePin)
+        return SearchFeature(app: app, session: session, client: client)
+    }
+
     /// Minimal M06 composition hook; authentication remains owned by this flow.
     public var homeApp: AppState { app }
 
