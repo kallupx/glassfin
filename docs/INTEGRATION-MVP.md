@@ -37,6 +37,22 @@ M07 and merged #44 DTOs, catalog keys and track UI.
 No textual conflicts. Retain all current missing-pin, metadata, transport and
 security test coverage unchanged.
 
+### 3. M09 MVP tests (#46)
+
+| File | Conflict | Resolution |
+| --- | --- | --- |
+| `Apps/Shared/Resources/Localizable.xcstrings` | M09's older catalog omits merged #44 track entries. | Keep current main/M07 entries and all auto-merged M09 entries; no translation changes. |
+| `Apps/Shared/Sources/DesignSystem/Copy.swift` | M09 omits #44 track cases and M07 resource mappings. | Keep the current union of catalog-backed cases and mappings. |
+| `Apps/Shared/Sources/DesignSystem/Panels.swift` | M09 restores the fixed hero action bar. | Keep M07's custom action content and fallback bar. |
+| `Apps/Shared/Sources/DesignSystem/Shell.swift` | Older overflow accessibility modifiers overlap the real library destination. | Keep M07's closures and one set of fallback accessibility modifiers. |
+| `Apps/Shared/Sources/GlassfinRootView.swift` | M09 root lacks the M07 library debug route. | Keep both library and Search debug routes through M07's wrapper. |
+| `Packages/GlassfinCore/Sources/CoreState/ViewModels.swift` | M09 restores obsolete inline library/series types. | Keep the separate M07 implementations without duplicate types. |
+
+The refreshed M09 head already contains the explicit `self.verticalScroll(in:)`
+compile fix found in the initial canary. Its tests import without edits. Unlike
+the first pass, no obsolete transport file or duplicate cancellation method is
+restored.
+
 ## Current validation and findings
 
 Pending the refreshed combined Linux suite and GitHub Actions. Apple builds and

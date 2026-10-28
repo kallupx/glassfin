@@ -1,0 +1,66 @@
+# M09 MVP test additions
+
+Originally based on `feat/m09-search` at `3f4586fd13e186098179314d1df7fb1bcd78ec5f` (PR #24). After M09 merged to main as `87540f9`, merge main at `4f81fed` into `test/m09-mvp` and open a replacement PR to main. Supersedes #41, which closed when its base branch was deleted. The plan in this checkout is [spec/TESTPLAN-M09.md](../spec/TESTPLAN-M09.md). This change supplements 24 automated scenarios/gaps identified in the [canonical mapping](M09-TEST-MAPPING.md). It does not redefine the plan or claim full M09 acceptance. [TEST-CHANGES-M09-MVP-MAIN.md](TEST-CHANGES-M09-MVP-MAIN.md) records the merge and test-file provenance.
+
+All 32 test methods are new relative to main. No existing assertion is modified. New source files are [core card tests](../Packages/GlassfinCore/Tests/CoreModelsTests/T09MVPCardTests.swift), [core state tests](../Packages/GlassfinCore/Tests/CoreStateTests/T09MVPTests.swift), [UI tests](../Apps/Shared/UITests/T09SearchMVPTests.swift), and [snapshot tests](../Apps/Shared/Tests/Snapshots/T09SearchSnapshotTests.swift). The replacement-PR CI found a missing explicit `self` in the snapshot traversal helper; the compiler-only fix is documented in [TEST-CHANGES-M09-MVP-MAIN.md](TEST-CHANGES-M09-MVP-MAIN.md) and preserves every assertion.
+
+`L` runs on Linux and Apple package runners. `U` requires iOS/tvOS XCUITest; focus/remote cases are tvOS-only. `S` requires an Apple app-hosted unit-test runner. The seven new Linux methods passed locally. The 17 UI methods and eight snapshot methods cannot be built or executed on this Linux host.
+
+| Plan row | New test method(s) | Added evidence / limits |
+|---|---|---|
+| T09-01 | `testT09_01_openTabShowsFocusedSystemInputAndRecentSearches` | Apple UI: native Search tab, input/keyboard focus, populated recents below the field and immediate typing. Unrun on Linux. |
+| T09-03 | `testT09_03_singleLatinCharacterKeepsRecentSearchesVisible` | Linux minimum-length regression retained. New Apple UI test also selects a visible recent query after one Latin character; unrun locally. |
+| T09-09 | `testT09_09_clearFieldRemovesRowsAndRestoresRecentSearches` | Linux late-response/cancellation regression retained. New Apple UI test clears the native field and checks row/header removal and restored recents; unrun locally. |
+| T09-11 | `testT09_11_downReachesResultsAndUpReturnsToKeyboard` | Apple UI: Down reaches results, Up returns to the native keyboard, and typing still works. Unrun locally; physical remote confirmation remains. |
+| T09-12 | `testT09_12_tabRoundTripKeepsQueryAndResults` | Linux state retention retained. New Apple UI test switches Home/Search in the native LibraryTabShell with an isolated session fixture; unrun locally. |
+| T09-19 | `testT09_19_debouncedABAReturnsIdenticalResultsWithOneFinalRequest` | Linux ABA/stale-response coverage retained. New deterministic debounce test sends one final star request after sta/star and checks identical results. |
+| T09-20 | `testT09_20_refreshKeepsFocusOnSurvivingReorderedItem`<br>`testT09_20_removedFocusedItemFallsBackToSurvivingResult` | Apple UI: an explicit fixture refresh reorders surviving IDs/updates labels without stealing focus; a separate removal case checks fallback. Unrun locally. |
+| T09-29 | `testT09_29_failedSeriesRequestKeepsMoviesAndEpisodesVisible` | Linux sibling failure/retry coverage and existing retry UI retained. New Apple UI test verifies successful movie/episode rows and no failed Series header; unrun locally. |
+| T09-30 | `testT09_30_onlyMovieSeriesAndEpisodeRowsInCanonicalOrder` | Existing backend P1 exclusion retained. New Linux view-model test explicitly excludes Person/BoxSet/Audio and checks P0 group order. |
+| T09-31 | `testT09_31_groupedResultsHaveMoviesSeriesAndEpisodesHeaders`<br>`testT09_31_groupedRowsAt1080And4K` | Apple UI headers and 1080p/4K grouped-screen recordings added; unrun locally. Linux group-order regression also passes. Snapshot references need macOS recording/review. |
+| T09-32 | `testT09_32_emptySeriesGroupHasNoHeader`<br>`testT09_32_emptyGroupAt1080And4K` | Apple UI checks a successful empty group has no row/header; 1080p/4K recording tests added. Both unrun locally; reference comparison is skipped until baselines exist. |
+| T09-33 | `testT09_33_literalEmptyQueryAt1080And4K` | Existing Apple UI catalog-key assertion retained. New empty-state recordings include a literal Markdown query at both sizes; unrun locally; references pending. |
+| T09-34 | `testT09_34_loadingAt1080And4K` | Existing Linux loading/reset regression retained. New Apple recordings start with loaded content then a pending query, checking skeleton state and empty groups at both sizes; unrun locally; references pending. |
+| T09-35 | `testT09_35_posterTitleIncludesYearAndHandlesMissingYear`<br>`testT09_35_movieAndSeriesPostersAt1080And4K` | New Linux tests verify movie/series title and optional year. Production poster-face recordings at both sizes are Apple-only and await reviewed references. Missing year presentation is fixed. |
+| T09-36 | `testT09_36_episodeTitleIncludesSeriesSeasonEpisodeAndName`<br>`testT09_36_missingEpisodeMetadataKeepsTheEpisodeName`<br>`testT09_36_episodeLandscapeAt1080And4K` | New Linux DTO/model/cache tests verify SeriesName, SxEy, episode name and missing metadata. Production landscape recordings at both sizes are Apple-only and await reviewed references. Missing labels are fixed. |
+| T09-40 | `testT09_40_verticalNavigationRestoresEachRowsRememberedItem` | Apple UI moves repeatedly between rows with different remembered horizontal positions. Unrun locally; physical remote confirmation remains. |
+| T09-41 | `testT09_41_all24ResultsRemainInServerOrderWithoutAnotherPage`<br>`testT09_41_all24CardsAreReachableWithoutSeeMore` | Linux real-backend/view-model regression preserves all 24 final-page IDs in server order, no cursor or extra page. Apple UI traverses all 24 and checks no See more control; unrun locally. Automatic paging for larger totals remains Q9-16. |
+| T09-42 | `testT09_42_searchGlassAndOpaqueBannerAt1080And4K` | Existing design-system source surface checks pass. New Apple screen recordings show native chrome/banner and Reduce Transparency at 1080p/4K; unrun locally; reference comparison awaits reviewed baselines. |
+| T09-43 | `testT09_43_onlyOpeningAResultAddsTheQueryToRecents` | Existing Linux deliberate-selection history regression retained. New Apple UI test checks typing/clearing does not save, then opening a result saves exactly one recent query; unrun locally. |
+| T09-56 | `testT09_56_offlineBannerKeepsRecentQueryUsable` | Linux no-request/offline preflight regression retained. New Apple UI test checks shared banner, recent-query selection and editable input; unrun locally. |
+| T09-57 | `testT09_57_serverDownRefreshKeepsResultsAndShowsBanner` | Linux retained-content/recovery scheduling coverage retained. New Apple UI refresh failure test checks retained cards/focus, shared banner and no blocking error; unrun locally. |
+| T09-58 | `testT09_58_serverDownWithoutContentKeepsSearchInputEditable` | Existing Linux no-content shared-key coverage retained. New Apple UI test checks inline error/retry and continued editing of the native input; unrun locally. |
+| T09-64 | `testT09_64_seriesNameIsLiteralCleanedAndBoundedByGraphemes`<br>`testT09_64_literalMetadataLayoutAt1080And4K` | Existing metadata/grapheme regressions retained. New Linux tests bound/clean SeriesName at DTO and cached-item boundaries without parsing literal markup. New production-card layout recordings at both sizes are Apple-only, references pending. |
+| T09-69 | `testT09_69_imageFailureLeavesRowAndFocusUsable` | Existing Linux real-stream/loader/cache oversize regressions retained. New tvOS UI fixture injects responseTooLarge, waits for the failure marker, then checks sibling navigation/focus. Unrun locally. Real decompression-bomb/device P11 memory acceptance remains unverified. |
+
+## Bugs found and app changes
+
+T09-35/36 exposed missing presentation: the search button used only `item.name`, and the DTO/model discarded `SeriesName`. Search now includes the optional release year for movie/series cards, and series name, `SxEy` and episode name for landscape cards. The search face reserves two full title lines for these labels; other PosterFace callers keep their existing height. The same literal label is available to accessibility. Missing metadata is handled without invented values. `SeriesName` is sanitized at mapping and search-display boundaries using `MetadataPolicy.nameMax`; tests cover below/at/above grapheme limits, controls/bidi, literal HTML/Markdown and Codable persistence.
+
+The other app changes are test access/fixtures: a header identifier, internal access to the production card for snapshots, and DEBUG-only extensions to the existing mock client/root. Fixtures exercise the real SearchView and native LibraryTabShell with isolated sessions. Refreshes are explicitly triggered by the remote Play/Pause command only under the refresh fixture flag; this does not implement production direct playback. Image failure uses the existing `responseTooLarge` error path; a DEBUG-only observed marker confirms that fault injection occurred before focus assertions. No project, workflow, catalog, dependency, endpoint or paging-policy change is made.
+
+## Snapshot recording and review
+
+The repository's existing snapshot approach uses rendered PNGs, `XCTAttachment` with `keepAlways`, and optional `GLASSFIN_SCREENSHOT_DIR` output, without a snapshot library. These tests retain that approach. Card faces use SwiftUI ImageRenderer; full screens use a UIHostingController and UIKit renderer so native `.searchable` chrome is actually included. Full-screen captures include top/bottom positions when vertically scrollable. Every render checks nonempty data and 1920×1080 or 3840×2160 pixels. Locale is English and appearance is dark; design-system Reduce Motion is enabled.
+
+No reference PNG can be generated on Linux. Each snapshot method renders and attaches both sizes before throwing `XCTSkip` when a reference is missing. Semantic/render assertions run before that skip. A skip is not visual acceptance. Reviewed reference files belong in `Apps/Shared/Tests/Snapshots/__Snapshots__/T09SearchSnapshotTests/{tvos,ios}/` with the exact attachment filenames. Existing references, when present, are compared byte-for-byte; tests never create or overwrite them. The recording workflow extends the existing attachment approach with an explicit missing-reference skip.
+
+On an Xcode 27 runner:
+
+```sh
+GLASSFIN_SCREENSHOT_DIR="$PWD/artifacts/screenshots" bash scripts/macos-ci.sh tvOS
+GLASSFIN_SCREENSHOT_DIR="$PWD/artifacts/screenshots" bash scripts/macos-ci.sh iOS
+```
+
+Images are attached to xcresult and also written under `artifacts/screenshots/m09-{tvos,ios}` when the variable reaches the test process. Use the existing exported readable artifacts/attachments for review. Review both scales and platforms before copying reference PNGs into the paths above and rerunning. Pin the simulator, SDK and appearance for reference comparisons. The replacement PR targets main, so the existing CI path filter schedules the tvOS and iOS jobs. Run Apple commands only in GitHub Actions. Workflows are unchanged relative to main.
+
+## Validation and remaining limits
+
+On Linux with Swift 6.4.1 and `LD_LIBRARY_PATH=/home/box/.local/lib/swiftcompat`:
+
+- After merging main at `4f81fed`, `swift test --package-path Packages/GlassfinCore`: 590 total tests, 580 passed, 10 existing opt-in server skips, no failures.
+- `bash scripts/coverage-gate.sh`: 590 total tests, 10 skips, no failures; 92.27% line coverage (9034/9791), above 80%.
+- SwiftLint 0.65.1 and recursive strict swift-format lint passed. SwiftLint reports the environment's SourceKit restriction for its custom rule; `ci-grep.sh` separately enforces the no-print rule.
+- Design-system, catalog, image-pipeline, M09 source, debug-only-string (including self-test), unit-test-target (including self-test), entitlement, license (including self-test), artifact-redactor self-test and whitespace checks passed. Bootstrap and HLS probe suites passed (16 and 17 tests); the Docker integration script self-test passed all 22 cases without starting a server.
+
+Apple compilation, UI behavior/focus, PNG rendering and visual comparisons are not verified locally. Snapshot comparison remains skipped even on Apple until reference images are recorded/reviewed. The fixtures do not establish real-server latency, live endpoint/encoding acceptance, direct playback, M07 destination integration, dictation, physical-remote behavior, 60 fps, device memory/P11, or decompression-bomb resilience. The new T09-69 UI fault is an oversized-image rejection, not an actual streamed payload or bomb; existing Linux tests retain their real streamed-byte assertions. T09-41 uses a final 24-item page; larger-total automatic paging and Q9-16 are unchanged. Existing Linux cancellation/security regressions remain intact.
