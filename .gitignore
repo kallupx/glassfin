@@ -1,4 +1,5 @@
 .build/
+SourcePackages/
 DerivedData/
 DerivedData-*/
 *.xcresult
