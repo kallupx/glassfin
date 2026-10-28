@@ -34,14 +34,20 @@ public struct PlaybackCapabilities: Sendable, Equatable {
     @MainActor
     public static func current() -> Self {
         #if canImport(AVFoundation) && canImport(VideoToolbox)
-            let modes = AVPlayer.availableHDRModes
-            let hdr = AVPlayer.eligibleForHDRPlayback
-            return Self(
-                hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
-                av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
-                hdr10: hdr && modes.contains(.hdr10), hlg: hdr && modes.contains(.hlg),
-                dolbyVision: hdr && modes.contains(.dolbyVision)
-            )
+            let hevc = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
+            let av1 = VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)
+            #if os(iOS) || os(tvOS)
+                let modes = AVPlayer.availableHDRModes
+                let hdr = AVPlayer.eligibleForHDRPlayback
+                return Self(
+                    hevc: hevc, av1: av1,
+                    hdr10: hdr && modes.contains(.hdr10), hlg: hdr && modes.contains(.hlg),
+                    dolbyVision: hdr && modes.contains(.dolbyVision)
+                )
+            #else
+                // availableHDRModes is unavailable on macOS; keep the conservative SDR defaults.
+                return Self(hevc: hevc, av1: av1)
+            #endif
         #else
             return Self(hevc: false)
         #endif
