@@ -126,7 +126,7 @@ Each row identifies the missing part of the canonical scenario and why it remain
 
 ## PoC tvOS follow-ups (2026-10-28)
 
-After merging `origin/main` at `b70aea1`, this branch retains the tests below unchanged and takes all app sources from main. The removed branch-only fixtures and app fixes are recorded in [TEST-CHANGES-M06-POC-MAIN.md](TEST-CHANGES-M06-POC-MAIN.md). T06-30, T06-42 and T06-43 have known unmet prerequisites in main; their assertions remain enabled and will fail until those prerequisites are supplied. Linux package results do not validate these tvOS scenarios.
+After merging `origin/main` through `eaf26b5` (M06 squash `b70aea1`, followed by M10 #28), this branch retains the tests below unchanged and takes all app sources from main. The removed branch-only fixtures and app fixes are recorded in [TEST-CHANGES-M06-POC-MAIN.md](TEST-CHANGES-M06-POC-MAIN.md). T06-30, T06-42 and T06-43 have known unmet prerequisites in main; their assertions remain enabled and will fail until those prerequisites are supplied. Linux package results do not validate these tvOS scenarios.
 
 The five U scenarios above are supplied in the existing [T06HomeUITests.swift](../Apps/Shared/UITests/T06HomeUITests.swift), which is already included by the `Glassfin-tvOSUITests` source directory in `project.yml`. All five methods and remote helpers are inside `#if os(tvOS)`; methods use `@MainActor async`, with no class-level actor isolation. The iOS target continues to include the same shared file. These are automated sources awaiting macOS execution, not a claim of a successful Apple build or UI run.
 
