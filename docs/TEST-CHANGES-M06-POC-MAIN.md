@@ -13,7 +13,7 @@ The full-ui job exposed three missing prerequisites in main. This follow-up supp
 
 All mock path/control types, launch argument handling, remote interception and request diagnostics are inside `#if DEBUG`. Controls require the existing mock/reset launch configuration plus the explicit network-controls argument. Release has the real focus-memory and playback-feedback fixes but no network test controls. No credentials, tokens, environment secrets or external service configuration were added.
 
-## Exact test-file change inventory
+## Exact test-file change inventory for the Home app follow-up
 
 **This app follow-up changes no test files relative to `9071de5`. Exact list: none.** No assertion, timing bound, fixture expectation, test name, skip condition or test target was changed. `Apps/Shared/UITests/T06HomeUITests.swift` remains byte-identical to `9071de5` and the pre-merge `280bdfe` version. No package tests were added or modified.
 
@@ -39,3 +39,31 @@ Those merges initially preserved all main app code, removing the earlier branch-
 - `git diff --check` passed. The test-file inventory is empty relative to `9071de5`.
 
 Linux cannot execute tvOS Focus Engine, SwiftUI UI tests or an Apple Release binary scan. These results do not claim an Apple UI pass; the pushed app changes require macOS CI verification of T06-30, T06-42 and T06-43.
+
+## CI run 40705232914 investigation and playback fix
+
+This follow-up starts at `6b36f66df70793000ce4b34b02f8487f826d27af`. The refreshed `origin/main` remains `3a07600ef158548965cdd4bc30cd3488d239112f`, already included by that merge commit.
+
+- `test-tvos` failed because SwiftPM timed out downloading the `openapi-generator.artifactbundle.zip` binary artifact from the LePips/openapi-generator v0.8.0 release. Package resolution failed before the Release app could be produced. The later package, app unit and 44 UI tests passed. This is an infrastructure failure, with no evidence of an app build error or Release marker leak.
+- `test-ios` has a real unit-test failure in the uploaded `ios-results/package-test.log`, although the console log stops during the Release build. `testT08P_92_bothAttemptsFailWithExactlyTwoStreams` failed its two unchanged assertions at lines 849 and 850: only the direct-play session's failed Stopped report was visible when both direct-play and remux reports were expected. Its Release build and binary marker scan passed, as did all 40 app unit tests and 23 UI tests.
+- `lint`, `full-ui` and `dependabot-macos` passed. The mixed infrastructure and code failures require a code fix and a new CI run, rather than treating both failed jobs as infrastructure-only.
+
+`PlaybackCoordinator.fail` previously published `failure` before awaiting the final Stopped report. It now awaits that report before publishing the reason and checks the generation so completion of an older failure cannot overwrite a newly started playback. Engine shutdown, timer cancellation, immediate failed UI state, serialized reporting and the existing authorization handling remain intact. This production fix adds no UI-test hooks or Release markers; the Home controls retain their existing DEBUG guards.
+
+### Exact test-file changes in this CI follow-up
+
+Relative to `6b36f66`, the complete list is:
+
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift`: add `testT08P_92_failureWaitsForStoppedAndCannotOverwriteNewPlayback`. A continuation gates the remux Stopped response. The test checks that the final reason stays unpublished while reporting is suspended and that completing the report cannot overwrite a replacement playback. It covers both ordinary failure completion and replacement playback without wall-clock sleeps. No existing test, assertion, timeout, fixture, skip or target is changed.
+
+The new regression test fails against the original coordinator with two `XCTAssertNil` failures while Stopped is suspended. All existing tests, including `testT08P_92_bothAttemptsFailWithExactlyTwoStreams`, retain their original assertions. `Apps/Shared/UITests/T06HomeUITests.swift` is unchanged in this follow-up; the original PR-local UI-test inventory above still applies.
+
+### Local validation of the CI follow-up
+
+- All 50 `PlaybackCoordinatorTests` pass with the production fix, including the original failing case and the new regression test.
+- Linux Swift 6.4.1, `bash scripts/coverage-gate.sh`: 504 tests, 496 passed, eight existing live-integration skips, zero failures; 91.68% line coverage (8,094 / 8,829; threshold 80%).
+- SwiftLint 0.65.1 and strict recursive `swift-format` pass. SwiftLint uses the dynamic executable with the installed Swift toolchain library; its archive checksum matches the CI pin.
+- License checks and self-test; `ci-grep` including design-system, image-pipeline and string-catalog checks; entitlements; DEBUG-only string and unit-test-target checks with self-tests; image-pipeline and artifact-redaction self-tests; all 33 Python bootstrap/HLS tests; shell syntax; and the 22-case Docker script self-test pass.
+- `git diff --check` passes. The exact test-file inventory relative to `6b36f66` contains only the additive regression in `PlaybackCoordinatorTests.swift` listed above.
+
+Apple Release builds, binary marker scans and simulator suites require the new macOS CI run. The earlier iOS Release scan passed, and no DEBUG/UI-test hook code is changed in this follow-up.
