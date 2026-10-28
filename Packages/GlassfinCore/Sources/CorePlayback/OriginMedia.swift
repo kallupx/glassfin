@@ -67,6 +67,7 @@ public struct OriginMediaRequest: Sendable, Equatable, CustomStringConvertible, 
         range: HTTPByteRange? = nil,
         trust: ServerTrustClass
     ) {
+        guard MediaURLValidation.hasNoUserInfo(url) else { return nil }
         let credential = MediaCredentialQuery.contains(url)
         if credential && authorizationHeader != nil { return nil }
         if let authorizationHeader, authorizationHeader.isEmpty { return nil }
@@ -100,6 +101,9 @@ public enum ResourceLoadPlanner {
         range: HTTPByteRange?,
         allowedOrigin: URL
     ) -> OriginMediaRequest? {
+        guard MediaURLValidation.hasNoUserInfo(assetURL), MediaURLValidation.hasNoUserInfo(allowedOrigin) else {
+            return nil
+        }
         guard let origin = MediaAssetScheme.unwrap(assetURL) else { return nil }
         guard MediaOrigin.matches(origin, allowedOrigin) else { return nil }
         let scheme = origin.scheme?.lowercased()

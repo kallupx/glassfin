@@ -97,6 +97,8 @@ public enum ChunkedMediaLoader {
         isCancelled: @Sendable () -> Bool,
         receive: @Sendable (PlayerByteReply) async throws(APIError) -> Void
     ) async throws(APIError) {
+        // Revalidate because OriginMediaRequest.url can change after initialization.
+        guard MediaURLValidation.hasNoUserInfo(request.url) else { throw .invalidURL }
         var received: Int64 = 0
         var totalLength: Int64?
         while let next = ChunkedRangePlanner.next(range: range, received: received, totalLength: totalLength) {

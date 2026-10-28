@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# T01-20, T01-30, T09-21 and T09-22 against throwaway jellyfin/jellyfin containers.
+# T01-20 and T01-30 against throwaway jellyfin/jellyfin containers.
 # Pins are the OCI index digests of tags 10.10.7, 10.11.11, and 12.2.
 # Usage: scripts/docker-integration.sh [version ...]
 set -euo pipefail
@@ -40,7 +40,7 @@ run_tests() {
   if command -v swift >/dev/null 2>&1; then
     (
       cd "$root/Packages/GlassfinCore"
-      swift test --filter LiveServerTests
+      swift test "$@"
     )
     return
   fi
@@ -51,10 +51,12 @@ run_tests() {
     -e GLASSFIN_SERVER_URL \
     -e GLASSFIN_USERNAME \
     -e GLASSFIN_PASSWORD \
+    -e GLASSFIN_TEST_USERNAME \
+    -e GLASSFIN_TEST_PASSWORD \
     -e GLASSFIN_SERVER_VERSION \
     -e GLASSFIN_SEARCH_BENCHMARK_DIR=/src/artifacts/integration/search \
     "$swift_image" \
-    swift test --filter LiveServerTests
+    swift test "$@"
 }
 
 container=""
@@ -76,13 +78,7 @@ for version in "${versions[@]}"; do
   chmod 755 "$work"
   mkdir -p "$work/media" "$work/config"
   chmod 777 "$work/media" "$work/config"
-  ffmpeg -y -loglevel error \
-    -f lavfi -i "testsrc=size=320x240:rate=24" \
-    -f lavfi -i "sine=frequency=440:sample_rate=48000" \
-    -t 2 -shortest \
-    -c:v libx264 -pix_fmt yuv420p -c:a aac \
-    "$work/sample.mp4"
-  python3 "$root/scripts/jellyfin_search_seed.py" --media "$work/media" --sample "$work/sample.mp4"
+  bash "$root/scripts/generate-playback-media.sh" "$work/media"
   port="$(python3 - <<'PY'
 import socket
 s = socket.socket()
@@ -100,6 +96,10 @@ PY
     "$image" >/dev/null
   username_file="$work/username"
   export GLASSFIN_INTEGRATION=1
+  export GLASSFIN_SEED_ITEM_COUNT=6
+  export GLASSFIN_SEED_EPISODE_COUNT=4
+  export GLASSFIN_TEST_USERNAME="glassfin-viewer"
+  export GLASSFIN_TEST_PASSWORD="$(openssl rand -hex 24)"
   export GLASSFIN_SERVER_URL="http://127.0.0.1:${port}"
   export GLASSFIN_SERVER_VERSION="$version"
   export GLASSFIN_SEARCH_BENCHMARK_DIR="$root/artifacts/integration/search"
@@ -113,7 +113,7 @@ PY
   set -e
   if [[ "$boot" -ne 0 ]]; then
     echo "docker-integration: bootstrap failed for $version"
-    "${docker_cmd[@]}" logs "$container" 2>&1 | sed "s|${GLASSFIN_PASSWORD}|[redacted]|g" | tail -n 40 || true
+    echo "docker-integration: raw server logs omitted to protect generated credentials" >&2
     results+=("$version bootstrap $boot")
     "${docker_cmd[@]}" rm -f "$container" >/dev/null
     container=""
@@ -126,9 +126,22 @@ PY
   fi
   echo "docker-integration: testing $version"
   set +e
-  run_tests
+  run_tests --filter LiveServerTests --skip 'LiveServerTests.testT09_'
   status=$?
   set -e
+  if [[ "$status" -eq 0 ]]; then
+    # Keep M08's exact fixture counts intact until its checks have finished.
+    python3 "$root/scripts/jellyfin_search_seed.py" \
+      --media "$work/media" --sample "$work/media/Movies/Test Movie (2024).mp4"
+    set +e
+    python3 -u "$root/scripts/jellyfin_bootstrap.py" --search-seed
+    status=$?
+    if [[ "$status" -eq 0 ]]; then
+      run_tests --filter 'LiveServerTests.testT09_'
+      status=$?
+    fi
+    set -e
+  fi
   results+=("$version $status")
   "${docker_cmd[@]}" rm -f "$container" >/dev/null
   container=""
