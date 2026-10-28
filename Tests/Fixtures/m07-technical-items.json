@@ -1,0 +1,150 @@
+[
+  {
+    "Id": "000000000000000000000000000003e8",
+    "Name": "video-hdr10",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": false, "Width": 1280, "Height": 720, "VideoRangeType": "DOVI"},
+      {"Index": 1, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Video", "IsDefault": true, "Width": 3840, "Height": 2160, "VideoRangeType": "HDR10"},
+      {"Index": 3, "Type": "Video", "IsDefault": true, "Width": 1280, "Height": 720, "VideoRangeType": "HLG"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003e9",
+    "Name": "video-hdr10plus",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": false, "Width": 1280, "Height": 720, "VideoRangeType": "DOVI"},
+      {"Index": 1, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "HDR10Plus"},
+      {"Index": 3, "Type": "Video", "IsDefault": true, "Width": 1280, "Height": 720, "VideoRangeType": "HLG"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003ea",
+    "Name": "video-dolby-vision",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": false, "Width": 1280, "Height": 720, "VideoRangeType": "DOVI"},
+      {"Index": 1, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Video", "IsDefault": true, "Width": 3840, "Height": 2160, "VideoRangeType": "DOVIWithHDR10"},
+      {"Index": 3, "Type": "Video", "IsDefault": true, "Width": 1280, "Height": 720, "VideoRangeType": "HLG"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003eb",
+    "Name": "video-hlg",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": false, "Width": 1280, "Height": 720, "VideoRangeType": "DOVI"},
+      {"Index": 1, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "HLG"},
+      {"Index": 3, "Type": "Video", "IsDefault": true, "Width": 1280, "Height": 720, "VideoRangeType": "HLG"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003ec",
+    "Name": "video-sdr",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": false, "Width": 1280, "Height": 720, "VideoRangeType": "DOVI"},
+      {"Index": 1, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+      {"Index": 3, "Type": "Video", "IsDefault": true, "Width": 1280, "Height": 720, "VideoRangeType": "HLG"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003ed",
+    "Name": "video-unknown",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": false, "Width": 1280, "Height": 720, "VideoRangeType": "DOVI"},
+      {"Index": 1, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Video", "IsDefault": true, "Width": 3840, "Height": 2160, "VideoRangeType": "FutureVideoRange"},
+      {"Index": 3, "Type": "Video", "IsDefault": true, "Width": 1280, "Height": 720, "VideoRangeType": "HLG"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003ee",
+    "Name": "video-fallback",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 1, "Type": "Video", "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+      {"Index": 2, "Type": "Video", "Width": 3840, "Height": 2160, "VideoRangeType": "HDR10"}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003ef",
+    "Name": "audio-dts",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Audio", "IsDefault": false, "Codec": "ac3", "Channels": 6},
+      {"Index": 1, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+      {"Index": 2, "Type": "Audio", "IsDefault": true, "Codec": "dts", "Profile": "DTS-HD MA", "Channels": 8},
+      {"Index": 3, "Type": "Audio", "IsDefault": true, "Codec": "mp3", "Channels": 1}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003f0",
+    "Name": "audio-atmos",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Audio", "IsDefault": false, "Codec": "ac3", "Channels": 6},
+      {"Index": 1, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+      {"Index": 2, "Type": "Audio", "IsDefault": true, "Codec": "truehd", "Profile": "Dolby Atmos", "DisplayTitle": "English - TrueHD - 7.1", "Channels": 8},
+      {"Index": 3, "Type": "Audio", "IsDefault": true, "Codec": "mp3", "Channels": 1}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003f1",
+    "Name": "audio-aac",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Audio", "IsDefault": false, "Codec": "ac3", "Channels": 6},
+      {"Index": 1, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+      {"Index": 2, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+      {"Index": 3, "Type": "Audio", "IsDefault": true, "Codec": "mp3", "Channels": 1}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003f2",
+    "Name": "audio-fallback",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 0, "Type": "Video", "IsDefault": true, "Width": 3840, "Height": 2160, "VideoRangeType": "HDR10"},
+      {"Index": 1, "Type": "Audio", "Codec": "aac", "Channels": 2},
+      {"Index": 2, "Type": "Audio", "Codec": "dts", "Profile": "DTS-HD MA", "Channels": 8}
+    ]
+  },
+  {
+    "Id": "000000000000000000000000000003f3",
+    "Name": "multiple-sources",
+    "Type": "Movie",
+    "MediaStreams": [
+      {"Index": 90, "Type": "Video", "IsDefault": true, "Width": 3840, "Height": 2160, "VideoRangeType": "DOVI"},
+      {"Index": 91, "Type": "Audio", "IsDefault": true, "Codec": "truehd", "Profile": "Dolby Atmos", "Channels": 8}
+    ],
+    "MediaSources": [
+      {
+        "Id": "first-source",
+        "Name": "First version",
+        "MediaStreams": [
+          {"Index": 10, "Type": "Video", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+          {"Index": 11, "Type": "Audio", "IsDefault": true, "Codec": "aac", "Channels": 2},
+          {"Index": 12, "Type": "Subtitle", "Language": "fin"}
+        ]
+      },
+      {
+        "Id": "second-source",
+        "Name": "Second version",
+        "MediaStreams": [
+          {"Index": 20, "Type": "Video", "IsDefault": true, "Width": 3840, "Height": 2160, "VideoRangeType": "HDR10"},
+          {"Index": 21, "Type": "Audio", "IsDefault": true, "Codec": "dts", "Profile": "DTS-HD MA", "Channels": 8},
+          {"Index": 22, "Type": "Subtitle", "Language": "eng"}
+        ]
+      }
+    ]
+  }
+]

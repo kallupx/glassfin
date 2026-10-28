@@ -32,6 +32,11 @@ unrelated dependency/CI-security PRs are outside this MVP feature combination.
 No textual conflicts against current main. Retain the source branch's union of
 M07 and merged #44 DTOs, catalog keys and track UI.
 
+### 2. M07 follow-ups (#32)
+
+No textual conflicts. Retain all current missing-pin, metadata, transport and
+security test coverage unchanged.
+
 ## Current validation and findings
 
 Pending the refreshed combined Linux suite and GitHub Actions. Apple builds and
