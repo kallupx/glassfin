@@ -44,7 +44,7 @@ import SwiftUI
     enum HomeMockLaunch {
         static var enabled: Bool {
             let configuration = LaunchConfiguration(arguments: ProcessInfo.processInfo.arguments)
-            return configuration.useMockServer || configuration.resetState
+            return configuration.useMockServer
         }
         @MainActor
         static func seed(_ app: AppState) {
@@ -117,6 +117,9 @@ import SwiftUI
         func nextUp(limit: Int) async throws(APIError) -> [MediaItem] {
             if mode == "down" { throw .network }
             return mode == "empty" ? [] : (20..<20 + min(limit, HomePolicy.rowLimit)).map { Self.item($0) }
+        }
+        func nextUp(series: MediaItem.ID) async throws(APIError) -> MediaItem? {
+            try await nextUp(limit: 1).first { $0.seriesID == series }
         }
         func latest(in library: String, limit: Int) async throws(APIError) -> [MediaItem] {
             if mode == "down" { throw .network }

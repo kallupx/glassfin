@@ -37,7 +37,7 @@ public struct UserSession: Sendable, Hashable, Codable, CustomStringConvertible 
     public init(server: ServerInfo, userID: String, userName: String, isAdministrator: Bool) {
         self.server = server
         self.userID = userID
-        self.userName = userName
+        self.userName = MetadataSanitizer.displayText(userName, limit: MetadataPolicy.nameMax)
         self.isAdministrator = isAdministrator
     }
 
@@ -125,7 +125,7 @@ public struct ChapterMark: Sendable, Hashable, Codable {
     public var start: Duration
 
     public init(name: String?, start: Duration) {
-        self.name = name
+        self.name = name.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         self.start = start
     }
 }
@@ -166,6 +166,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
     public var userData: UserItemState
     public var trickplay: [Int: TrickplayInfo]?
     public var chapters: [ChapterMark]
+    public var detail: ItemMetadata?
 
     public init(
         id: String,
@@ -184,11 +185,12 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
         images: ImageSet = ImageSet(),
         userData: UserItemState = UserItemState(),
         trickplay: [Int: TrickplayInfo]? = nil,
-        chapters: [ChapterMark] = []
+        chapters: [ChapterMark] = [],
+        detail: ItemMetadata? = nil
     ) {
         self.id = id
         self.kind = kind
-        self.name = name
+        self.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
         self.overview = overview
         self.seriesID = seriesID
         self.seriesName = seriesName
@@ -203,6 +205,7 @@ public struct MediaItem: Sendable, Identifiable, Hashable, Codable {
         self.userData = userData
         self.trickplay = trickplay
         self.chapters = chapters
+        self.detail = detail
     }
 }
 
@@ -213,7 +216,7 @@ public struct Library: Sendable, Identifiable, Hashable, Codable {
 
     public init(id: String, name: String, collectionType: String? = nil) {
         self.id = id
-        self.name = name
+        self.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
         self.collectionType = collectionType
     }
 }
@@ -231,10 +234,12 @@ public struct PageRequest: Sendable, Hashable, Codable {
 public struct Page<Item: Sendable>: Sendable {
     public var items: [Item]
     public var totalCount: Int?
+    public var consumedCount: Int?
 
-    public init(items: [Item], totalCount: Int?) {
+    public init(items: [Item], totalCount: Int?, consumedCount: Int? = nil) {
         self.items = items
         self.totalCount = totalCount
+        self.consumedCount = consumedCount
     }
 }
 
@@ -316,9 +321,9 @@ public struct Track: Sendable, Identifiable, Hashable, Codable {
 
     public init(id: Int, displayTitle: String? = nil, language: String? = nil, codec: String? = nil) {
         self.id = id
-        self.displayTitle = displayTitle
-        self.language = language
-        self.codec = codec
+        self.displayTitle = displayTitle.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.language = language.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
+        self.codec = codec.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
     }
 }
 

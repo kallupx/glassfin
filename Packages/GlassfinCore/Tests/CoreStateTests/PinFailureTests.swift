@@ -81,6 +81,21 @@ final class PinFailureTests: XCTestCase {
     }
 
     @MainActor
+    func testFeatureClientPropagatesPinReadFailure() throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let flow = AuthFlow(
+            app: harness.app, backend: LiveAuthBackend(secureStore: harness.secure), pins: UnreadablePins(),
+            vault: CredentialVault(secureStore: harness.secure, settings: harness.settings, accessGroup: ""),
+            clock: harness.clock)
+        XCTAssertThrowsError(try flow.makeFeatureClient()) { error in
+            XCTAssertEqual(error as? APIError, .tls)
+        }
+        guard case .signedIn = harness.app.phase else { return XCTFail("A pin read failure must keep the session") }
+    }
+
+    @MainActor
     func testHomeFactoriesPropagatePinReadFailure() throws {
         let harness = Harness.make()
         defer { harness.cleanup() }

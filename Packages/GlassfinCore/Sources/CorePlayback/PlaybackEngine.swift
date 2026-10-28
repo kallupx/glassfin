@@ -36,6 +36,7 @@ public enum PlaybackEngineEvent: Sendable, Equatable {
     case paused
     case buffering
     case seeked
+    case trackChanged(kind: PlaybackTrack.Kind, id: Int?)
     case ended
     case failed(APIError)
 }

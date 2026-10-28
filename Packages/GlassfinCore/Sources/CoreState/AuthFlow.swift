@@ -7,7 +7,7 @@ import Observation
 /// Tokens and Quick Connect secrets are not published and are not logged.
 @MainActor
 @Observable
-public final class AuthFlow {
+public final class AuthFlow: ViewContentProviding {
     public private(set) var screen: AuthScreen = .welcome
     public private(set) var focus: AuthFocus = .connect
     public private(set) var inlineError: AuthCopy.Key?
@@ -64,10 +64,42 @@ public final class AuthFlow {
     }
 
     public var appPhase: AppState.Phase { app.phase }
+    /// Shared signed-in state for feature composition; authentication still owns the session.
+    public var featureApp: AppState { app }
+
+    /// Loads credentials only inside the core; the UI never receives the token.
+    public func makeFeatureClient() throws(APIError) -> any JellyfinAPIClient {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID)
+        else { throw .unauthorized }
+        let pin = try pins.certificatePin(for: session.server.id, url: session.server.url)
+        let deviceID: String
+        do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
+            throw .headerRejected
+        }
+        let identity = ClientIdentity(
+            deviceName: "Apple TV", deviceID: deviceID,
+            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0",
+            token: token)
+        return SessionFeatureClient(
+            inner: RetryingAPIClient(
+                inner: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
+                clock: clock), app: app)
+    }
     public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
+    /// The M04 Home tab renders cached sections until the Home feature screen is installed.
+    public var hasContent: Bool {
+        guard let cachedHome else { return false }
+        return [cachedHome.resume, cachedHome.nextUp, cachedHome.latest].contains { !$0.isEmpty }
+    }
+
+    public func onAppear() {
+        app.currentView = self
+    }
+
     public var homeErrorKey: AuthCopy.Key? {
-        guard cachedHome == nil else { return nil }
+        guard !hasContent else { return nil }
         switch app.connectivity {
         case .offline, .serverUnreachable: return .serverUnreachable
         case .online, .degraded: return nil
