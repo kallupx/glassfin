@@ -443,6 +443,24 @@
         }
       }
     },
+    "Public addresses require HTTPS": {
+      "comment": "Shown when an unencrypted HTTP connection to a public server address is rejected.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public addresses require HTTPS"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Julkiset osoitteet vaativat HTTPS:n"
+          }
+        }
+      }
+    },
     "Public addresses require HTTPS. Use an IP address, a .local name, or an HTTPS reverse proxy.": {
       "extractionState": "manual",
       "localizations": {
@@ -866,6 +884,24 @@
         }
       }
     },
+    "This connection is not encrypted": {
+      "comment": "Warning shown for an allowed HTTP connection to a local server address.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This connection is not encrypted"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yhteys ei ole salattu"
+          }
+        }
+      }
+    },
     "This file could not be played": {
       "localizations": {
         "en": {
@@ -998,6 +1034,91 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ei oikeuksia tähän toimintoon"
+          }
+        }
+      }
+    },
+    "playback.error.couldNotPlay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file could not be played"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä tiedostoa ei voitu toistaa"
+          }
+        }
+      }
+    },
+    "playback.error.insecureRedirect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server redirected playback to an unsafe address"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelin ohjasi toiston turvattomaan osoitteeseen"
+          }
+        }
+      }
+    },
+    "playback.ok": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "playback.selfSignedRemuxBlocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video can't be played yet from a server with a self-signed certificate."
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä videota ei voi vielä toistaa palvelimelta, jolla on itse allekirjoitettu varmenne."
+          }
+        }
+      }
+    },
+    "playback.unsupportedVideoFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video format isn't supported yet"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tätä videomuotoa ei vielä tueta"
           }
         }
       }

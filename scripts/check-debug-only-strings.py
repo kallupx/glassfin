@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when `uitest-` or `MockAPIClient` is compiled into a Release source file.
+"""Fail when mock markers or an ApiKey query builder survive in Release sources.
 
 The strings may appear inside `#if DEBUG` and inside test or UI-test sources.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-NEEDLES = ("uitest-", "MockAPIClient")
+NEEDLES = ("uitest-", "MockAPIClient", 'URLQueryItem(name: "ApiKey"')
 SKIP_PARTS = {"Tests", "UITests", ".build", "checkouts"}
 
 
@@ -60,7 +60,7 @@ def scan(root: Path) -> int:
             continue
         hits = release_includes(path.read_text(encoding="utf-8").splitlines())
         for number, text in hits:
-            print(f"{path}:{number}: Release source contains a mock-server string: {text}", file=sys.stderr)
+            print(f"{path}:{number}: Release source contains Debug-only code: {text}", file=sys.stderr)
             failures += 1
     return failures
 
@@ -74,6 +74,12 @@ def self_test() -> int:
         return 1
     if not any("uitest-" in text for _, text in good):
         print("debug-string self-test did not flag a Release literal", file=sys.stderr)
+        return 1
+    if not release_includes(['items.append(URLQueryItem(name: "ApiKey", value: token))']):
+        print("debug-string self-test missed a Release credential URL builder", file=sys.stderr)
+        return 1
+    if release_includes(["#if DEBUG", 'items.append(URLQueryItem(name: "ApiKey", value: token))', "#endif"]):
+        print("debug-string self-test rejected a Debug-only credential URL builder", file=sys.stderr)
         return 1
     print("debug-string self-test passed")
     return 0

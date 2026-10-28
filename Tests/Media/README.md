@@ -1,9 +1,14 @@
 # Test media
 
-Media files are not stored in this repository. Playback integration that needs real files is a follow-up and will download them outside the repo.
+Generated media stays outside the repository. Run
+`scripts/generate-playback-media.sh MEDIA_DIRECTORY [FFMPEG_PATH]` on Linux or
+macOS; both integration runners use the same seed.
 
-`scripts/docker-integration.sh` generates two-second synthetic media outside the repo:
-one movie and `Fixture Series` with S1E1, S1E2 and S2E1. The bootstrap registers
-separate movie and TV libraries and waits for both seasons and their episodes.
-The DEBUG `LibraryFixtureClient` scenarios `series-single-season` and
-`series-two-seasons` mirror the series shape for unit/UI tests (T07-43/T07-44).
+- Six movies F1–F6: F1/F3 are about 60 seconds, F2/F4/F5/F6 are six seconds.
+- `Shows/Glassfin Test Show (2026)/Season 01`: three 60-second H.264/AAC episodes.
+- `Season 02/Glassfin Test Show S02E01.mp4`: one six-second episode.
+- Local NFO metadata fixes series/episode titles and 2026 air dates without online providers.
+
+The two-season seed supports TPOC-24/38/39; TPOC-82 is a mock-only single-season
+picker journey. The bootstrap waits for two seasons and four probed episodes.
+All patterns and sine waves are synthetic and dedicated to CC0.

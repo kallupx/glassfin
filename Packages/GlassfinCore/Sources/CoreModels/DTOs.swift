@@ -107,10 +107,12 @@ public struct MediaStreamDTO: Decodable, Sendable {
     public var Height: Int?
     public var VideoRangeType: String?
     public var DvProfile: Int?
+    public var IsDefault: Bool?
 }
 
 public struct MediaSourceDTO: Decodable, Sendable {
     public var Id: String?
+    public var Container: String?
     public var SupportsDirectPlay: Bool?
     public var SupportsDirectStream: Bool?
     public var SupportsTranscoding: Bool?
@@ -118,7 +120,7 @@ public struct MediaSourceDTO: Decodable, Sendable {
     public var DirectStreamUrl: String?
     public var TranscodingSubProtocol: String?
     public var MediaStreams: [MediaStreamDTO]?
-    public var TranscodeReasons: [String]?
+    public var DefaultVideoStreamIndex: Int?
 }
 
 public struct PlaybackInfoResponseDTO: Decodable, Sendable {
