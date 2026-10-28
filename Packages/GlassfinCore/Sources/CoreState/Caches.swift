@@ -10,13 +10,8 @@ public enum CacheBudget {
 
 enum CacheKey {
     static func filename(for key: String) -> String {
-        let redacted = SensitiveRedactor.redact(key)
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in redacted.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 1_099_511_628_211
-        }
-        return String(hash, radix: 16)
+        if key.count == 64, key.allSatisfy(\.isHexDigit) { return key.lowercased() }
+        return CertificateFingerprint.sha256Hex(Data(SensitiveRedactor.redact(key).utf8))
     }
 }
 
@@ -24,6 +19,10 @@ public struct HomeSnapshot: Codable, Sendable, Equatable {
     public var resume: [MediaItem]
     public var nextUp: [MediaItem]
     public var latest: [MediaItem]
+    public var libraries: [Library]?
+    public var latestByLibrary: [String: [MediaItem]]?
+    public var serverID: String?
+    public var userID: String?
 
     public init(resume: [MediaItem], nextUp: [MediaItem], latest: [MediaItem]) {
         self.resume = resume
@@ -122,7 +121,7 @@ public actor DiskImageCache {
 
     private func store(filename name: String, data: Data) -> Bool {
         loadIfNeeded()
-        guard data.count <= byteLimit, byteLimit > 0 else { return false }
+        guard data.count <= byteLimit, data.count <= MetadataPolicy.imageMaxBytes, byteLimit > 0 else { return false }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try data.write(to: directory.appendingPathComponent(name), options: .atomic)
@@ -242,7 +241,7 @@ public final class MemoryImageCache: @unchecked Sendable {
     public func store(key: String, data: Data) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard data.count <= byteLimit, byteLimit > 0 else { return false }
+        guard data.count <= byteLimit, data.count <= MetadataPolicy.imageMaxBytes, byteLimit > 0 else { return false }
         if let previous = costs[key] {
             total -= previous
             order.removeAll { $0 == key }

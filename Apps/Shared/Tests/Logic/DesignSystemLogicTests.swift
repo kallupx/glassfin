@@ -84,8 +84,10 @@ final class DesignSystemLogicTests: XCTestCase {
     @MainActor
     func testT05_15_overviewIsPlainText() async {
         let plain = PlainText.overview(DemoFixtures.htmlOverview)
-        // S6.1: tags and entities are literal text, with no HTML/entity parsing.
         XCTAssertEqual(plain, DemoFixtures.htmlOverview)
+        XCTAssertTrue(plain.contains("<"))
+        XCTAssertTrue(plain.contains("alert"))
+        XCTAssertTrue(plain.contains("example.com"))
         XCTAssertEqual(DemoFixtures.plainOverview, plain)
     }
 

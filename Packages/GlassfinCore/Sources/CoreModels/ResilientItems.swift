@@ -16,9 +16,7 @@ public struct ItemListDecode: Sendable, Equatable {
 public enum ResilientItemDecoder {
     /// Query results (`Items`) and bare arrays (`/Items/Latest`).
     /// The log line is a fixed sentence plus an index. The payload is not interpolated.
-    public static func mediaItems(from data: Data, log: any GlassfinLog) throws(APIError)
-        -> ItemListDecode
-    {
+    public static func mediaItems(from data: Data, log: any GlassfinLog) throws(APIError) -> ItemListDecode {
         let json = try jsonObject(data)
         let rawItems: [Any]
         let total: Int?
@@ -44,9 +42,7 @@ public enum ResilientItemDecoder {
         return ItemListDecode(items: items, totalCount: total, skipped: skipped)
     }
 
-    public static func searchHints(from data: Data, log: any GlassfinLog)
-        throws(APIError) -> [MediaItem]
-    {
+    public static func searchHints(from data: Data, log: any GlassfinLog) throws(APIError) -> [MediaItem] {
         let json = try jsonObject(data)
         guard let dict = dictionary(json) else { throw APIError.decoding }
         let rawItems = try itemArray(dict["SearchHints"])

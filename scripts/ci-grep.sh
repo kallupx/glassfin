@@ -35,6 +35,7 @@ if [[ -n "$ui_hits" ]]; then
   fail=1
 fi
 
+python3 "$root/scripts/check-image-pipeline.py" || fail=1
 python3 "$root/scripts/check-design-system.py" || fail=1
 python3 "$root/scripts/check-m09.py" || fail=1
 python3 "$root/scripts/check-string-catalogs.py" || fail=1

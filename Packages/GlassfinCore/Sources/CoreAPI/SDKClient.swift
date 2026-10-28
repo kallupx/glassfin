@@ -49,8 +49,8 @@ import Foundation
         }
 
         public func send(_ request: APIRequest) async throws(CoreModels.APIError) -> Data {
+            // SDK data(for:) buffers whole bodies. Bounded image requests must use CoreNetworking's delegate.
             if request.maximumResponseBytes != nil {
-                // Bounded downloads use CoreNetworking's counted data delegate.
                 return try await HTTPJellyfinClient(server: server, identity: identity).send(request)
             }
             do {

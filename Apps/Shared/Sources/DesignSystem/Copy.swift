@@ -49,6 +49,17 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
     case navLibrary = "design.nav.library"
     case navDetail = "design.nav.detail"
 
+    case homeContinue = "home.continueWatching"
+    case homeNextUp = "home.nextUp"
+    case homeLatest = "home.latest"
+    case homeEmpty = "home.empty"
+    case homeEmptyGuidance = "home.emptyGuidance"
+    case homeRemoveResume = "home.removeResume"
+    case homeGoToSeries = "home.goToSeries"
+    case homeDetailPending = "home.detailPending"
+    case homePlaybackPending = "home.playbackPending"
+    case homeLibrariesRetry = "home.librariesRetry"
+
     case searchPrompt = "search.prompt"
     case searchMovies = "search.movies"
     case searchSeries = "search.series"
@@ -72,6 +83,17 @@ enum CopyKey: String, CaseIterable, Equatable, Sendable {
         case .searchMinimum: LocalizedStringResource("search.minimum", bundle: .main)
         case .searchHistoryFailure: LocalizedStringResource("search.historyFailure", bundle: .main)
         case .searchBack: LocalizedStringResource("search.back", bundle: .main)
+        case .homeContinue: LocalizedStringResource("home.continueWatching", bundle: .main)
+        case .homeNextUp: LocalizedStringResource("home.nextUp", bundle: .main)
+        case .homeLatest: LocalizedStringResource("home.latest", bundle: .main)
+        case .homeEmpty: LocalizedStringResource("home.empty", bundle: .main)
+        case .homeEmptyGuidance: LocalizedStringResource("home.emptyGuidance", bundle: .main)
+        case .homeRemoveResume: LocalizedStringResource("home.removeResume", bundle: .main)
+        case .homeGoToSeries: LocalizedStringResource("home.goToSeries", bundle: .main)
+        case .homeDetailPending: LocalizedStringResource("home.detailPending", bundle: .main)
+        case .homePlaybackPending: LocalizedStringResource("home.playbackPending", bundle: .main)
+        case .homeLibrariesRetry: LocalizedStringResource("home.librariesRetry", bundle: .main)
+
         case .welcomeTitle: LocalizedStringResource("welcome.title", bundle: .main)
         case .welcomeConnect: LocalizedStringResource("welcome.connect", bundle: .main)
         case .welcomeDesignSystem: LocalizedStringResource("welcome.designSystem", bundle: .main)

@@ -58,8 +58,11 @@ public final class RequestScope: @unchecked Sendable {
     public init() {}
 
     @discardableResult
-    public func track(_ task: Task<Void, Never>) -> UUID {
-        trackCancellation { task.cancel() }
+    public func track<T: Sendable, E: Error>(_ task: Task<T, E>, id: UUID = UUID()) -> UUID {
+        lock.lock()
+        tasks[id] = { task.cancel() }
+        lock.unlock()
+        return id
     }
 
     @discardableResult
@@ -72,7 +75,9 @@ public final class RequestScope: @unchecked Sendable {
     }
 
     public func untrack(_ id: UUID) {
-        lock.withLock { tasks[id] = nil }
+        lock.lock()
+        tasks[id] = nil
+        lock.unlock()
     }
 
     public func cancelAll() {

@@ -1,12 +1,6 @@
 import CoreModels
 import Foundation
 
-public enum ItemImageType: String, Sendable, Hashable {
-    case primary = "Primary"
-    case thumb = "Thumb"
-    case backdrop = "Backdrop"
-}
-
 /// Only this tuple contributes to an image filename. No URL or credential is accepted.
 public struct ImageCacheKey: Sendable, Hashable {
     public let sha256: String

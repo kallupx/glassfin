@@ -241,12 +241,13 @@ private struct SearchResultCard: View {
     var body: some View {
         Button(action: onSelect) {
             PosterFace(
+                image: image,
                 content: PosterContent(
                     id: item.id, title: item.name,
                     progress: PlaybackProgress.measure(position: item.userData.playbackPosition, runtime: item.runtime),
                     isWatched: item.userData.played, unplayedCount: item.userData.unplayedCount,
                     blurHash: item.images.primaryBlurHash),
-                style: style, isFocused: focused, image: image)
+                style: style, isFocused: focused)
         }
         .posterButtonStyle()
         .accessibilityIdentifier("search.item.\(item.id)")

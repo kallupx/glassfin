@@ -149,9 +149,9 @@ def main() -> int:
 
     for path in apps:
         text = path.read_text(encoding="utf-8")
-        # M08 owns the native player adapter; design-system views still exclude it (T05-48).
+        # M08 owns the native player adapter; design-system prototypes still cannot present a player.
         if "AVPlayerViewController" in text and path != ROOT / "Apps/Shared/Sources/PlaybackView.swift":
-            errors.append(f"{path.relative_to(ROOT)}: AVPlayerViewController belongs in PlaybackView.swift (T05-48)")
+            errors.append(f"{path.relative_to(ROOT)}: AVPlayerViewController is out of scope (T05-48)")
         if FINNISH.search(text):
             errors.append(f"{path.relative_to(ROOT)}: Finnish letters belong in the String Catalog")
         if path.suffix == ".swift" and "Tests" not in path.parts and "UITests" not in path.parts:

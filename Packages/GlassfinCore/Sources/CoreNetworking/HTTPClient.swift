@@ -10,11 +10,11 @@ public struct APIRequest: Sendable, Equatable {
     public var path: String
     public var query: [URLQueryItem]
     public var body: Data?
-    /// Count response bytes during transfer; never rely on Content-Length.
     public var maximumResponseBytes: Int?
 
     public init(
-        method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil, maximumResponseBytes: Int? = nil
+        method: String, path: String, query: [URLQueryItem] = [], body: Data? = nil,
+        maximumResponseBytes: Int? = nil
     ) {
         self.method = method
         self.path = path
@@ -207,7 +207,9 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
 
     func makeURLRequest(_ request: APIRequest) throws -> URLRequest {
         let url = try Self.url(server: server, path: request.path, query: request.query)
-        if RedirectPolicy.containsCredentialQuery(url) {
+        let hasTokenQuery = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .contains { $0.name.lowercased() == "token" }
+        if RedirectPolicy.containsCredentialQuery(url) || hasTokenQuery {
             throw APIError.invalidURL
         }
         var urlRequest = URLRequest(url: url)
