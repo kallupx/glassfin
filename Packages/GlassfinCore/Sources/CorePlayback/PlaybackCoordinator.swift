@@ -120,7 +120,11 @@ public final class PlaybackCoordinator {
             {
                 throw reason
             }
-            if !configuration.isPoC {
+            if configuration.isPoC {
+                selection.audio =
+                    PlaybackDecision.defaultAudio(
+                        streams: item.MediaStreams ?? item.MediaSources?.first?.MediaStreams)?.Index
+            } else {
                 let user = try await api.userConfiguration()
                 guard await continueStartup(run) else { return }
                 sourceStreams = item.MediaStreams ?? item.MediaSources?.first?.MediaStreams ?? []
@@ -157,7 +161,7 @@ public final class PlaybackCoordinator {
             if configuration.isPoC {
                 info = try await api.playbackInfo(
                     itemID: itemID, userID: session.userID, start: start, maxBitrate: maxBitrate,
-                    enableDirectPlay: !directStreamOnly)
+                    enableDirectPlay: !directStreamOnly, audioStreamIndex: selection.audio)
             } else {
                 info = try await api.negotiate(
                     itemID: itemID, userID: session.userID, start: start,
