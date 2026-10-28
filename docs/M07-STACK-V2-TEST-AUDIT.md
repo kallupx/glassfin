@@ -785,3 +785,56 @@ Neither temporary change is retained. This branch has no
 `scripts/check-unit-test-targets.py`; the existing checker from the adjacent
 `wt-ut-guard` worktree passed its self-test against this branch's `project.yml`.
 Apple simulator tests were not run on Linux.
+
+## Main #28 (M10 Settings) merge — 2026-10-28
+
+Pre-merge M07 head: `3ac7b1a`. Incoming `origin/main`: `eaf26b5`
+(`M10 Settings (PoC) — stacked on #14 + #13 (#28)`). This update uses
+`git fetch origin` and a merge commit; no rebase or force-push.
+
+The five conflicts combine M07's library session, library/overflow destinations,
+feature client, and optional hero content with M10's Settings app state, shared
+tab selection, sign-out confirmation and `isSigningOut` guard, and focus
+restoration. `SettingsView.swift` and `SettingsViewModel.swift` remain identical
+to main. Both catalogs contain the exact union of the parents' keys, with every
+parent's English and Finnish localization preserved (89 app keys, 57 model keys).
+
+### Exact test-file changes relative to the pre-merge M07 head
+
+No test edits, assertion changes, or signature fixes were authored during this
+merge. The complete test-file delta consists of these four files inherited
+byte-for-byte from `origin/main`:
+
+| File | Change and rationale |
+| --- | --- |
+| `Apps/Shared/Tests/Logic/T10SettingsLogicTests.swift` | Added unchanged from #28; preserves bundle-version and English/Finnish Settings catalog coverage. |
+| `Apps/Shared/UITests/T04AuthUITests.swift` | Updated unchanged from #28; inherits its `notify` import and cancellation flow. Main removes the old Home assertion and Settings re-entry because cancelling sign-out now returns directly to Settings; the subsequent sign-out-row assertion is preserved. No assertion was edited to make this merge pass. |
+| `Apps/Shared/UITests/T10SettingsUITests.swift` | Added unchanged from #28; preserves Settings contents, cancel/Menu focus restoration, and sign-out/sign-in coverage. |
+| `Packages/GlassfinCore/Tests/CoreStateTests/T10SettingsTests.swift` | Added unchanged from #28; preserves offline content, credential handling, sign-out re-entry guard, failure, and fresh-launch coverage. |
+
+Every other existing test file remains identical to the pre-merge M07 head.
+
+### Download security
+
+`HTTPClient` and `BoundedResponseDownload` retain their cache disabling and
+certificate-pin forwarding. `BoundedImageDownload` now also sets
+`configuration.urlCache = nil` itself before creating its session, so it does
+not depend on the caller's configuration. Both bounded downloaders retain
+their per-chunk checks before appending bytes and their pinned trust delegates.
+
+### Validation
+
+On Linux with Swift 6.4.1, `bash scripts/coverage-gate.sh` runs
+`swift test --enable-code-coverage --build-system native`: 567 tests,
+559 passed, eight existing live-server integration skips, zero failures.
+Line coverage is 91.15% (9,130 / 10,016), above the 80% gate.
+
+SwiftLint 0.65.1, strict recursive swift-format lint, CI source greps,
+design-system, image-pipeline, string-catalog, entitlements, DEBUG-string,
+unit-test-target, license, and artifact-redaction checks pass, including their
+available self-tests. SwiftLint reports the expected Linux SourceKit custom-rule
+skip; the repository's source-check scripts pass. All 33 bootstrap/HLS Python
+unit tests and 22 Docker harness self-test cases pass; both integration shell
+scripts pass syntax checks. `git diff --check` passes.
+
+Apple simulator UI, logic, and snapshot tests were not executed on Linux.

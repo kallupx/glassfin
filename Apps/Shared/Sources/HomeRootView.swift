@@ -5,6 +5,8 @@ import SwiftUI
 struct HomeRootView: View {
     let flow: AuthFlow
     var librarySession: LibrarySession? = nil
+    @Binding var selectedTab: String
+    @Binding var restoreSettingsFocus: Bool
     @State private var context: HomeContext?
     @State private var detailPath: [MediaItem] = []
     @State private var playback: HomePlaybackRequest?
@@ -18,7 +20,7 @@ struct HomeRootView: View {
                         LibraryTabItem(id: $0.id, title: $0.name)
                     },
                     home: AnyView(home(context)), settings: AnyView(settings),
-                    libraryContent: libraryContent, overflowContent: overflowContent)
+                    libraryContent: libraryContent, overflowContent: overflowContent, selection: $selectedTab)
             } else {
                 ProgressView().accessibilityIdentifier("home.loading")
             }
@@ -116,20 +118,7 @@ struct HomeRootView: View {
 
     private var settings: some View {
         NavigationStack {
-            VStack(spacing: SpacingToken.m) {
-                Text(verbatim: flow.displayedName).accessibilityIdentifier("settings.serverName")
-                Button {
-                    flow.requestLogout()
-                } label: {
-                    Text(verbatim: AuthCopy.localized(.signOut))
-                }
-                .buttonStyle(.glass)
-                .accessibilityIdentifier("settings.signOut")
-                Text(verbatim: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-                    .accessibilityIdentifier("settings.version")
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("settings.root")
+            SettingsView(flow: flow, restoreSignOutFocus: $restoreSettingsFocus)
         }
     }
 }

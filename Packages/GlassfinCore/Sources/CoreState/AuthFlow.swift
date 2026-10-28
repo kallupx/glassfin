@@ -15,6 +15,7 @@ public final class AuthFlow: ViewContentProviding {
     public private(set) var noticeKey: AuthCopy.Key?
     public private(set) var isProbing = false
     public private(set) var isPolling = false
+    public private(set) var isSigningOut = false
     public private(set) var quickConnectCode: String?
     public private(set) var quickConnectExpired = false
     public private(set) var quickConnectRenewals = 0
@@ -70,6 +71,7 @@ public final class AuthFlow: ViewContentProviding {
                 inner: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
                 clock: clock), app: app)
     }
+    public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
     /// The M04 Home tab renders cached sections until the Home feature screen is installed.
     public var hasContent: Bool {
@@ -365,7 +367,9 @@ public final class AuthFlow: ViewContentProviding {
     }
 
     public func confirmLogout() async {
-        guard case .signedIn(let session) = app.phase else { return }
+        guard !isSigningOut, case .signedIn(let session) = app.phase else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
         var serverFailed = true
         if let token = loadToken(serverID: session.server.id, userID: session.userID) {
             do {
@@ -397,6 +401,7 @@ public final class AuthFlow: ViewContentProviding {
     }
 
     public func cancelLogout() {
+        guard !isSigningOut else { return }
         screen = .home
         confirmFocus = nil
         focus = homeErrorKey == nil ? .connect : .tryAgain
