@@ -41,7 +41,7 @@ New XCTestCase classes use @MainActor on individual async test methods.
 The existing T04-68 UI test now expects Cancel to return to Settings. TPOC-45
 requires a real server and Release app; it is not simulated by a unit assertion.
 TPOC-46's server-side Continue watching/Next Up contents need the integrated M06
-build, which is absent from this branch's base. TPOC-47's process relaunch with
+build and real-server acceptance checks. Stack base v8 includes M06. TPOC-47's process relaunch with
 actual Keychain/UserDefaults storage remains a simulator acceptance check.
 
 ## Linux verification
@@ -302,3 +302,29 @@ For acceptance, use the integrated PoC build with native macOS Jellyfin servers
 - QPOC-08 / Q4-12 leaves the post-sign-out target partly open. Existing M04
   behavior is retained: another saved user leads to the user picker; otherwise
   the login-method screen, or credentials when Quick Connect is disabled.
+
+## Stack base v8: PR #22 squash merge
+
+Merge `b70aea11eb3272086bcb27a7062116993ee49125` from `origin/main` with
+`Merge main (#22 squash) - stack base v8`. Resolve the shared catalog conflict
+by retaining main's M06 keys and M10's existing English/Finnish version entries.
+Use main's M06 Home root and host the existing M10 SettingsView in its settings
+destination. Bind the native shell's selection to AuthRootView so Cancel and Menu
+return to Settings and restore Sign out focus. Preserve the existing sign-out
+guards, local version display, offline settings behavior, and M10 focus changes.
+
+No new tests, assertions, fixtures, or skips were authored for this restack.
+All 23 test files imported from main match main byte for byte. Existing M10 tests
+and the earlier T04-68 Cancel-to-Settings adaptation remain unchanged. Info.plist
+files, project.yml, and workflows match origin/main; the merge only imports the
+already merged upstream workflow change.
+
+Validation with the documented Linux commands passed: coverage-gate ran 503 tests
+with zero failures and eight existing live-server integration skips. Line coverage
+is 91.68% (8093/8827), above the 80% threshold. Recursive strict swift-format lint,
+check-design-system.py, check-string-catalogs.py, check-debug-only-strings.py,
+ci-grep.sh (including check-image-pipeline.py), and git diff --check all passed.
+
+Apple SDK builds, hosted logic tests, simulator UI/focus validation, and live-server
+acceptance remain unavailable on this Linux host. The merge does not claim those
+checks passed.
