@@ -101,7 +101,7 @@ public final class AuthFlow: ViewContentProviding {
     public var homeErrorKey: AuthCopy.Key? {
         guard !hasContent else { return nil }
         switch app.connectivity {
-        case .offline, .serverUnreachable: return .serverUnreachable
+        case .offline, .serverUnreachable: return app.isServerStarting ? .serverStarting : .serverUnreachable
         case .online, .degraded: return nil
         }
     }
@@ -109,6 +109,7 @@ public final class AuthFlow: ViewContentProviding {
         switch app.bannerKey {
         case AppErrorMessage.offlineKey: .noNetworkConnection
         case AppErrorMessage.serverDownKey: .serverUnreachable
+        case AppErrorMessage.serverStartingKey: .serverStarting
         default: nil
         }
     }
@@ -378,7 +379,7 @@ public final class AuthFlow: ViewContentProviding {
             }
             if mapped == .cancelled { return }
             app.handle(mapped)
-            app.handle(.serverUnreachable)
+            if mapped != .serverStarting { app.handle(.serverUnreachable) }
             inlineError = nil
             screen = .home
             focus = .tryAgain
@@ -474,6 +475,19 @@ public final class AuthFlow: ViewContentProviding {
         await restoreSession()
     }
 
+    public func retryServerStarting() async {
+        inlineError = nil
+        switch screen {
+        case .address:
+            submitAddress()
+        case .quickConnect:
+            // Keep the current code and secret when polling was interrupted by startup.
+            await chooseQuickConnect()
+        default:
+            if let server { await showLogin(for: server) }
+        }
+    }
+
     public func synchronizeSession() async {
         if case .needsServer = app.phase, screen == .home {
             screen = .welcome
@@ -518,6 +532,11 @@ public final class AuthFlow: ViewContentProviding {
     private func apply(_ outcome: ServerProbeOutcome) async {
         if case .cancelled = outcome { return }
         switch outcome {
+        case .serverStarting:
+            // Accepted trust remains provisional until a normal, identified server response arrives.
+            inlineError = .serverStarting
+            screen = .address
+            focus = .tryAgain
         case .ready(let info):
             if let pin = acceptedPinToStore, acceptedCertificatePin?.fingerprint(for: info.url) == pin {
                 do {
@@ -610,7 +629,17 @@ public final class AuthFlow: ViewContentProviding {
         server = info
         displayedName = AuthServerName.display(info.name, host: info.url.host ?? "")
         displayedVersion = ServerVersionGate.dotted(info.version)
-        quickConnectEnabled = (try? await backend.quickConnectEnabled(on: info)) ?? false
+        do {
+            quickConnectEnabled = try await backend.quickConnectEnabled(on: info)
+        } catch {
+            quickConnectEnabled = false
+            if error == .server(status: 503) {
+                screen = .address
+                inlineError = .serverStarting
+                focus = .tryAgain
+                return
+            }
+        }
         let savedUsers = app.preferencesSnapshot().users.filter { $0.serverID == info.id }
         publicUsers =
             includePublicUsers
@@ -675,6 +704,9 @@ public final class AuthFlow: ViewContentProviding {
                     let accepted = try await backend.pollQuickConnect(on: server, secret: QuickConnectSecret(revealed))
                     return accepted ? .authenticated : .pending
                 } catch {
+                    if (error as? APIError) == .server(status: 503) {
+                        return .serverStarting
+                    }
                     return .pending
                 }
             }
@@ -688,6 +720,10 @@ public final class AuthFlow: ViewContentProviding {
     ) async {
         isPolling = false
         switch outcome {
+        case .serverStarting:
+            pollTask = nil
+            inlineError = .serverStarting
+            focus = .tryAgain
         case .authenticated:
             do {
                 let session = try await backend.finishQuickConnect(on: server, secret: secret)
@@ -753,6 +789,7 @@ public final class AuthFlow: ViewContentProviding {
             app.setCapabilitiesRetryPending(false, serverID: session.session.server.id, userID: session.session.userID)
         } catch {
             log.warning("Capabilities registration failed; one retry is pending.")
+            if error == .server(status: 503) { app.handle(.serverStarting) }
         }
     }
 
@@ -769,6 +806,7 @@ public final class AuthFlow: ViewContentProviding {
             try await backend.postCapabilities(on: session.server, token: token)
         } catch {
             log.warning("Capabilities registration retry failed.")
+            if error == .server(status: 503) { app.handle(.serverStarting) }
         }
     }
 
@@ -776,6 +814,7 @@ public final class AuthFlow: ViewContentProviding {
         switch error {
         case .cancelled: nil
         case .unauthorized: quickConnect ? .quickConnectUnauthorized : .invalidCredentials
+        case .server(status: 503): .serverStarting
         case .server: .loginServerFailure
         default: .loginTransportFailure
         }

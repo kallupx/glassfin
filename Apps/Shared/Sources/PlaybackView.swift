@@ -19,12 +19,23 @@
                 if coordinator.state == .loading || coordinator.state == .buffering {
                     ProgressView()
                 }
+                if failureKey == AppErrorMessage.serverStartingKey {
+                    VStack(spacing: SpacingToken.m) {
+                        ErrorStateView(
+                            messageOverride: AppErrorMessage.userFacing(.serverStarting),
+                            failure: .server(status: 503), attempts: 0,
+                            onRetry: { Task { await coordinator.retryServerStarting() } }, onSwitchServer: {})
+                        Button(AuthCopy.localized(.back)) { dismiss() }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.black)
+                }
             }
             .ignoresSafeArea()
             .alert(
                 PlaybackCopy.message(for: failureKey ?? PlaybackCopy.couldNotPlayKey),
                 isPresented: Binding(
-                    get: { failureKey != nil },
+                    get: { failureKey != nil && failureKey != AppErrorMessage.serverStartingKey },
                     set: { if !$0 { dismiss() } }
                 )
             ) {

@@ -116,6 +116,11 @@ struct AuthRootView: View {
                 Text(verbatim: AuthCopy.localized(error))
                     .accessibilityIdentifier("address.error")
                     .accessibilityValue(error.rawValue)
+                if error == .serverStarting {
+                    Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryServerStarting() } }
+                        .accessibilityIdentifier("auth.serverStarting.retry")
+                        .focused($focused, equals: .tryAgain)
+                }
             }
             if flow.httpSkippedByPolicy {
                 Text(verbatim: AuthCopy.localized(.httpOnlyOnLocalNetwork))
@@ -425,6 +430,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
             _ = try await backend.currentUser(on: server, token: token)
             return .ok
         } catch {
+            if error == .server(status: 503) { return .failed(.serverStarting) }
             return .failed(error == .unauthorized ? .unauthorized : .serverUnreachable)
         }
     }

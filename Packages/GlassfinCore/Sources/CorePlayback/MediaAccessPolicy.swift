@@ -65,6 +65,8 @@ public protocol CurrentUserProbing: Sendable {
 public enum MediaAuthenticationFailure: Sendable, Equatable {
     /// `/Users/Me` did not return 401. Show a playback error and keep the session.
     case playbackError
+    /// `/Users/Me` returned 503. Keep the session and offer a manual retry.
+    case serverStarting
     /// `/Users/Me` also returned 401. The caller applies S2.2.
     case logOut
 }
@@ -79,6 +81,7 @@ public enum MediaUnauthorizedPolicy {
             if case .unauthorized = error {
                 return .logOut
             }
+            if error == .server(status: 503) { return .serverStarting }
             return .playbackError
         }
     }

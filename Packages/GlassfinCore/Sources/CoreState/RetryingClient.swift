@@ -8,7 +8,7 @@ public enum IdempotentRetry {
         case .timeout, .network:
             return true
         case .server(let status):
-            return status == 502 || status == 503 || status == 504
+            return status == 502 || status == 504
         default:
             return false
         }
