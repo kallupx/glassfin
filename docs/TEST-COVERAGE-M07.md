@@ -283,3 +283,66 @@ To verify on Apple runners, run `bash scripts/macos-ci.sh iOS` and
 `bash scripts/macos-ci.sh tvOS`. Xcode/simulator execution and live Jellyfin
 integration were not performed in this Linux workspace. The M05 failures above
 and main's app test-target configuration limit the Apple coverage claim.
+
+## Stack v6 CI diagnosis and fix
+
+Main `d720120` is included by merge commit `99d98df`
+(`M07 CI: merge main d720120 (stack base v6)`). After `git fetch origin`,
+M05 `origin/cursor/m05-design-system-c0c2` remained at `d2d780b`, already an
+ancestor of this branch, so no additional M05 merge was necessary. No rebase
+or force-push was used. Workflows, `project.yml`, and app plists match main
+exactly; the workflow update was inherited unchanged from main.
+
+### CI run 40627954138 at 41b4d43
+
+The only failing job was `test-ios` (job `122617923282`). Lint, `test-tvos`,
+and `full-ui` succeeded. Diagnosis used `gh run view --log-failed`, the complete
+job log from `gh api repos/kallupx/glassfin/actions/jobs/122617923282/logs`, and
+the uploaded `ios-results` artifact. The abbreviated failed log stops during
+Release compilation and omits the actual failure. The full log and uploaded
+`app-test.log` report two compiler errors in
+`Apps/Shared/UITests/DesignSystemFocusTests.swift` at lines 274 and 277:
+`selectTab` synchronously calls main-actor-isolated `require` without its own
+actor isolation. Testing was cancelled because the build failed; xcodebuild
+returned exit code 65. This was not a CI timeout or a runtime focus failure.
+
+The Release build and binary scan passed, as did the iOS package suite
+(489 passed, seven skipped). The app xcresult export has an empty `testNodes`
+array and screenshot manifest. Its `failed-tests.txt` says `no failed tests`
+because the app tests never ran. This run therefore cannot demonstrate the
+M04 Quick Connect device-code display race reported by M06/M10.
+
+The defect is in the integration of an M05 UI-test helper with M07's retained
+method-level actor isolation. M05's current file isolates the entire class;
+M07 isolates individual methods and had missed the imported `selectTab`
+helper. The minimal required fix adds `@MainActor` to that helper. No M07
+library/detail production defect was found, and no M04 behavior was changed.
+
+### Explicit test and assertion changes
+
+- Authored change: `DesignSystemFocusTests.selectTab` receives `@MainActor`
+  so the iOS test target can compile. Its body, callers, queries, assertions,
+  timeouts, and scenarios are unchanged. No assertions were added, removed,
+  or weakened for this fix.
+- Main's `d720120` playback test changes were imported unchanged by the merge:
+  `ADRM08PrototypeTests.swift` adds a credential-URL wrap rejection assertion;
+  `PlaybackCoordinatorTests.swift` adds the two T08P-103 missing-server-query
+  tests and updates the existing credential-query assertions for server-issued
+  HLS URLs. These are upstream changes, with no local edits.
+
+### Linux verification and Apple limits
+
+With `LD_LIBRARY_PATH=~/.local/lib/swiftcompat` and
+`source ~/.local/share/swiftly/env.sh`, `bash scripts/coverage-gate.sh` passed:
+493 tests, zero failures, seven live Jellyfin integration skips; line coverage
+91.72% (8,402/9,160), above the 80% threshold. Strict recursive `swift-format`
+lint, `check-design-system.py`, `check-string-catalogs.py`,
+`check-debug-only-strings.py`, and `ci-grep.sh` all passed. No UI strings changed.
+
+Run `bash scripts/macos-ci.sh iOS` on an Apple runner to verify the app test
+target now compiles and execute the existing UI assertions, including
+`T04AuthUITests.testT04_03_quickConnectReachesHome` and
+`T07LibraryUITests.testT07_43_singleSeasonPickerStaysVisible`. Run
+`bash scripts/macos-ci.sh tvOS` for the tvOS suite. Xcode/simulator execution
+and live Jellyfin integration were not performed in this Linux workspace;
+no claim is made that the separate M04 race is fixed or that Apple CI is green.
