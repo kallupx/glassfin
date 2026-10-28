@@ -171,6 +171,9 @@ struct HomeView: View {
                     receivesDefaultFocus: id == defaultFocusRowID, needsDefaultFocus: $needsDefaultFocus,
                     session: session, imageLoader: imageLoader,
                     onFocus: {
+                        #if os(tvOS)
+                            guard !needsDefaultFocus else { return }
+                        #endif
                         focusedItem = $0
                         focusedRowID = id
                     }, onDetail: onDetail,
@@ -193,8 +196,15 @@ struct HomeView: View {
             }
         }
         if !(model.resume.value ?? []).isEmpty { return "resume" }
+        // A later row must not consume initial focus while an earlier row is still loading.
+        if isIdle(model.resume) || model.resume.showsSkeleton { return nil }
         if !(model.nextUp.value ?? []).isEmpty { return "nextUp" }
-        return model.latestRows.first { !($0.state.value ?? []).isEmpty }?.id
+        if isIdle(model.nextUp) || model.nextUp.showsSkeleton { return nil }
+        for row in model.latestRows {
+            if !(row.state.value ?? []).isEmpty { return row.id }
+            if isIdle(row.state) || row.state.showsSkeleton { return nil }
+        }
+        return nil
     }
 
     private func isIdle(_ state: LoadState<[MediaItem]>) -> Bool {
@@ -256,7 +266,8 @@ private struct HomeMediaRow: View {
                     .accessibilityIdentifier("home.\(rowID).item.\(item.id)")
                     #if os(tvOS)
                         .onPlayPauseCommand { onPlay(item) }
-                        .prefersDefaultFocus(item.id == (rememberedID ?? items.first?.id), in: rowNamespace)
+                        .prefersDefaultFocus(
+                            receivesDefaultFocus && item.id == (rememberedID ?? items.first?.id), in: rowNamespace)
                     #endif
                     .contextMenu {
                         Button {
@@ -302,19 +313,30 @@ private struct HomeMediaRow: View {
         #if os(tvOS)
             .focusScope(rowNamespace)
         #endif
-        .defaultFocus($focus, rememberedID ?? items.first?.id)
+        .defaultFocus(
+            $focus, receivesDefaultFocus ? rememberedID ?? items.first?.id : nil, priority: .userInitiated
+        )
         #if os(tvOS)
-            .onAppear {
-                guard receivesDefaultFocus, needsDefaultFocus else { return }
-                needsDefaultFocus = false
-                // Request focus after the asynchronously loaded row joins the tab's focus hierarchy.
-                DispatchQueue.main.async {
-                    focus = rememberedID ?? items.first?.id
+            .task(id: receivesDefaultFocus && needsDefaultFocus) {
+                guard receivesDefaultFocus, needsDefaultFocus, let target = rememberedID ?? items.first?.id else {
+                    return
+                }
+                // Reevaluate when higher-priority rows finish, even if this row already appeared.
+                await Task.yield()
+                guard !Task.isCancelled, needsDefaultFocus else { return }
+                if focus == target, let item = items.first(where: { $0.id == target }) {
+                    needsDefaultFocus = false
+                    onFocus(item)
+                } else {
+                    focus = target
                 }
             }
         #endif
         .onChange(of: focus) { _, value in
             guard let item = items.first(where: { $0.id == value }) else { return }
+            #if os(tvOS)
+                if receivesDefaultFocus { needsDefaultFocus = false }
+            #endif
             rememberedID = value
             onFocus(item)
         }

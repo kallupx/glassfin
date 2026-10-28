@@ -1,4 +1,5 @@
 import CoreModels
+import CoreNetworking
 import CoreState
 import Foundation
 import XCTest

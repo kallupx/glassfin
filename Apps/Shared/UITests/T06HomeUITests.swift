@@ -7,7 +7,12 @@ final class T06HomeUITests: XCTestCase {
         let app = launch()
         require(element(app, "home.resume"))
         require(element(app, "home.nextUp"))
-        require(element(app, "design.tab.library.cccccccccccccccccccccccccccccccc"))
+        #if os(iOS)
+            // The mock library's native tab button uses its title, as in the M05 shell tests.
+            require(app.tabBars.buttons["1"])
+        #else
+            require(element(app, "design.tab.library.cccccccccccccccccccccccccccccccc"))
+        #endif
         save(app, name: "home-top")
         #if os(tvOS)
             for _ in 0..<3 { XCUIRemote.shared.press(.down) }
@@ -54,7 +59,11 @@ final class T06HomeUITests: XCTestCase {
     func testT06_46_serverDownStillAllowsSettingsAndSignOut() async {
         let app = launch("-uitest-home-down")
         require(element(app, "home.error"))
-        activate(element(app, "design.tab.settings"), in: app)
+        #if os(iOS)
+            activate(app.tabBars.buttons["Settings"], in: app)
+        #else
+            activate(element(app, "design.tab.settings"), in: app)
+        #endif
         require(element(app, "settings.signOut"))
         activate(element(app, "settings.signOut"), in: app)
         require(element(app, "logout.cancel"))
