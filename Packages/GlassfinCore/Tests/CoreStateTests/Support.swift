@@ -391,6 +391,7 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
     var seasonError: APIError?
     var episodeError: APIError?
     var gate: ResumeGate?
+    var latestGate: ResumeGate?
     private var resumeCalls = 0
     private var nextCalls = 0
     private var latestIDs: [String] = []
@@ -431,11 +432,16 @@ final class StubLibrary: LibraryService, @unchecked Sendable {
         return items
     }
 
+    func nextUp(series: MediaItem.ID) async throws(APIError) -> MediaItem? {
+        try await nextUp(limit: 1).first { $0.seriesID == series }
+    }
+
     func latest(in library: Library.ID, limit: Int) async throws(APIError) -> [MediaItem] {
-        let result = value { () -> Result<[MediaItem], APIError> in
+        let (result, gate) = value { () -> (Result<[MediaItem], APIError>, ResumeGate?) in
             latestIDs.append(library)
-            return latestByID[library] ?? .success([])
+            return (latestByID[library] ?? .success([]), latestGate)
         }
+        if let gate { await gate.wait() }
         switch result {
         case .success(let items):
             return items

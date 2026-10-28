@@ -7,7 +7,7 @@ import Foundation
 
 /// A data delegate receives chunks without URLSession's completion-handler body buffer.
 /// Only bytes within the budget are retained. A missing or understated length is harmless.
-final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+final class BoundedRequestDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     typealias Result = (Data, URLResponse, Int?)
     private let maximumBytes: Int
     private let redirects: RedirectTaskProxy

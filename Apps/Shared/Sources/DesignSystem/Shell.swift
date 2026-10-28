@@ -4,6 +4,8 @@ struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
     var settings: AnyView? = nil
+    var libraryContent: ((LibraryTabItem) -> AnyView)? = nil
+    var overflowContent: (([LibraryTabItem]) -> AnyView)? = nil
     var search: AnyView? = nil
     var selection: Binding<String>? = nil
     @State private var localSelection: String = "home"
@@ -44,7 +46,7 @@ struct LibraryTabShell: View {
             ForEach(plan.inline) { library in
                 libraryTab(library)
             }
-            if !plan.overflow.isEmpty {
+            if !plan.overflow.isEmpty || (libraries.isEmpty && overflowContent != nil) {
                 overflowTab
             }
             if !usesCompactTabs {
@@ -69,8 +71,12 @@ struct LibraryTabShell: View {
     @TabContentBuilder<String>
     private func libraryTab(_ library: LibraryTabItem) -> some TabContent<String> {
         Tab(value: library.id) {
-            Text(verbatim: library.title)
-                .accessibilityIdentifier("design.library.\(library.id)")
+            if let libraryContent {
+                libraryContent(library)
+            } else {
+                Text(verbatim: library.title)
+                    .accessibilityIdentifier("design.library.\(library.id)")
+            }
         } label: {
             #if os(iOS)
                 // Native tab items derive their accessible title from the label, including in More.
@@ -89,17 +95,21 @@ struct LibraryTabShell: View {
     @TabContentBuilder<String>
     private var overflowTab: some TabContent<String> {
         Tab(value: "libraries") {
-            VStack(alignment: .leading, spacing: SpacingToken.m) {
-                Copy.text(.tabLibraries)
-                    .font(.title2)
-                    .foregroundStyle(.primary)
-                ForEach(plan.overflow) { library in
-                    Text(verbatim: library.title)
-                        .accessibilityIdentifier("design.libraryOverflow.\(library.id)")
+            if let overflowContent {
+                overflowContent(plan.overflow)
+            } else {
+                VStack(alignment: .leading, spacing: SpacingToken.m) {
+                    Copy.text(.tabLibraries)
+                        .font(.title2)
+                        .foregroundStyle(.primary)
+                    ForEach(plan.overflow) { library in
+                        Text(verbatim: library.title)
+                            .accessibilityIdentifier("design.libraryOverflow.\(library.id)")
+                    }
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("design.libraries.root")
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("design.libraries.root")
         } label: {
             tabLabel(.tabLibraries, symbol: "square.grid.2x2", identifier: "design.tab.libraries")
         }
