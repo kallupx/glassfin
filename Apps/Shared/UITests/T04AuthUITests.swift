@@ -2,6 +2,10 @@ import CoreModels
 import XCTest
 import notify
 
+#if DEBUG
+    import notify
+#endif
+
 @MainActor
 final class T04AuthUITests: XCTestCase {
     func testT04_01_welcomeIsTheConnectButton() {
