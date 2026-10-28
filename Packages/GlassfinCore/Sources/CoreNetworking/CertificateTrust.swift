@@ -1,3 +1,4 @@
+import CoreModels
 import Foundation
 
 public struct CertificatePresentation: Sendable, Equatable {
@@ -55,9 +56,23 @@ public enum CertificateFingerprint {
 }
 
 public protocol CertificatePinStore: Sendable {
+    /// Nil means no pin is configured. Unreadable or invalid stored pins must throw.
     func fingerprint(for serverID: String) throws -> String?
     func save(fingerprint: String, serverID: String) throws
     func remove(serverID: String) throws
+}
+
+extension CertificatePinStore {
+    /// Resolve trust before constructing a client; a failed lookup must never become an unpinned session.
+    public func certificatePin(for serverID: String, url: URL) throws(APIError) -> OriginCertificatePin? {
+        do {
+            guard let fingerprint = try fingerprint(for: serverID) else { return nil }
+            guard CertificateFingerprint.isValid(fingerprint) else { throw APIError.tls }
+            return OriginCertificatePin(url: url, sha256: fingerprint)
+        } catch {
+            throw .tls
+        }
+    }
 }
 
 /// Fingerprint only. M02's server list can read `certificate-pin.<serverID>`.
@@ -69,7 +84,13 @@ public struct SettingsCertificatePinStore: CertificatePinStore {
     }
 
     public func fingerprint(for serverID: String) throws -> String? {
-        settings.string(forKey: Self.key(serverID))
+        let key = Self.key(serverID)
+        guard let fingerprint = settings.string(forKey: key) else {
+            guard !settings.containsValue(forKey: key) else { throw SecurityInvariantError.internalInvariant }
+            return nil
+        }
+        guard CertificateFingerprint.isValid(fingerprint) else { throw SecurityInvariantError.internalInvariant }
+        return fingerprint
     }
 
     public func save(fingerprint: String, serverID: String) throws {

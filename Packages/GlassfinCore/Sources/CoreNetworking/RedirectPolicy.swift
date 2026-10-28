@@ -147,8 +147,21 @@ public final class RedirectSessionDelegate: NSObject, URLSessionTaskDelegate, @u
     }
 
     private let lock = NSLock()
+    private let trust: TrustCapture?
     private var rejections: [Int: RedirectRejection] = [:]
     private var hops: [Int: HopState] = [:]
+
+    public init(certificatePin: OriginCertificatePin? = nil) {
+        trust = certificatePin.map { TrustCapture(certificatePin: $0) }
+        super.init()
+    }
+
+    public func urlSession(
+        _ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge
+    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        guard let trust else { return (.performDefaultHandling, nil) }
+        return await trust.urlSession(session, task: task, didReceive: challenge)
+    }
 
     public func consumeRejection(for taskIdentifier: Int) -> RedirectRejection? {
         lock.lock()
