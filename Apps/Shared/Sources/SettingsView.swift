@@ -2,6 +2,8 @@ import GlassfinCore
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage(PlaybackPreferenceKeys.convertASS) private var convertASS = true
+    @AppStorage(PlaybackPreferenceKeys.remoteBitrate) private var remoteBitrate = 20_000_000
     @State private var model: SettingsViewModel
     @Binding private var restoreSignOutFocus: Bool
     @FocusState private var signOutFocused: Bool
@@ -25,6 +27,20 @@ struct SettingsView: View {
                 .prefersDefaultFocus(in: focusScope)
             #endif
             .accessibilityIdentifier("settings.signOut")
+
+            Toggle(isOn: $convertASS) {
+                Text(verbatim: Copy.string(.playbackConvertASS))
+            }
+            .accessibilityIdentifier("settings.playback.convertASS")
+
+            Picker(selection: $remoteBitrate) {
+                ForEach([5, 10, 20, 40, 80, 120], id: \.self) { value in
+                    Text(verbatim: "\(value) Mbps").tag(value * 1_000_000)
+                }
+            } label: {
+                Text(verbatim: Copy.string(.playbackRemoteBitrate))
+            }
+            .accessibilityIdentifier("settings.playback.remoteBitrate")
 
             Text(verbatim: versionText)
                 .font(.subheadline)

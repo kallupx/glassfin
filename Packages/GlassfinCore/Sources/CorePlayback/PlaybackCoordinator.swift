@@ -21,6 +21,32 @@ public final class PlaybackCoordinator {
         failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
     }
     public let engine: any PlaybackEngine
+    public private(set) var tracks: [PlaybackTrack] = []
+    public private(set) var selection = PlaybackTrackSelection()
+    public private(set) var subtitleCues: [SubtitleCue] = []
+    public private(set) var diagnostics: PlaybackDiagnostics?
+    public var bufferedDuration: Duration { (engine as? any PlaybackBufferReporting)?.bufferedDuration ?? .zero }
+    public private(set) var playMethod: PlayMethod?
+    public private(set) var transcodeReasons: [String] = []
+    public var convertsASS: Bool { configuration.convertASS }
+    private var requiresBurnIn: Bool {
+        guard let track = tracks.first(where: { $0.kind == .subtitle && $0.id == selection.subtitle }) else {
+            return false
+        }
+        if ["ass", "ssa"].contains(track.codec) { return !configuration.convertASS }
+        return track.delivery == .burnIn
+    }
+
+    private var configuration: PlaybackConfiguration
+    private var capabilities = PlaybackCapabilities()
+    private var attempt: PlaybackAttempt = .automatic
+    private var sourceSnapshot: MediaSourceDTO?
+    private var sourceStreams: [MediaStreamDTO] = []
+    private var selectedSourceID: String?
+    private var selectingTrack = false
+    private var trackChangePending = false
+    private var firstFrameTask: Task<Void, Never>?
+    private let clock: any GlassfinClock
 
     private let session: any PlaybackSessionProviding
     private let origin: any MediaOriginClient
@@ -41,13 +67,22 @@ public final class PlaybackCoordinator {
     public init(
         session: any PlaybackSessionProviding, engine: any PlaybackEngine, origin: any MediaOriginClient,
         timer: any PlaybackProgressScheduling = PlaybackProgressTimer(),
-        maxBitrate: Int = 120_000_000, log: any GlassfinLog = SilentLog()
+        maxBitrate: Int? = nil, log: any GlassfinLog = SilentLog(),
+        configuration: PlaybackConfiguration? = nil,
+        clock: any GlassfinClock = SystemGlassfinClock()
     ) {
         self.session = session
         self.engine = engine
         self.origin = origin
         self.timer = timer
-        self.maxBitrate = maxBitrate
+        let configuration = configuration ?? PlaybackPreferences.configuration()
+        self.configuration = configuration
+        self.clock = clock
+        // Reuse the audited LAN host classifier without DNS or a second address policy.
+        var transportURL = URLComponents(url: session.serverURL, resolvingAgainstBaseURL: false)
+        transportURL?.scheme = "http"
+        let lan = transportURL?.url.map { ServerTransportPolicy.evaluate($0) == .unencryptedLocal } ?? false
+        self.maxBitrate = maxBitrate ?? (lan || configuration.isPoC ? 120_000_000 : configuration.remoteBitrate)
         self.log = PlaybackLog(sink: log)
         self.api = PlaybackAPI(client: session.apiClient)
         self.reporter = PlaybackReporter(client: session.apiClient, log: log)
@@ -60,6 +95,18 @@ public final class PlaybackCoordinator {
         failure = nil
         paused = false
         state = .loading
+        attempt = .automatic
+        selectedSourceID = nil
+        selection = PlaybackTrackSelection()
+        tracks = []
+        sourceStreams = []
+        sourceSnapshot = nil
+        diagnostics = nil
+        playMethod = nil
+        transcodeReasons = []
+        trackChangePending = false
+        subtitleCues = []
+        capabilities = configuration.capabilities ?? PlaybackCapabilities.current()
         do {
             var item = try await api.item(itemID: itemID, userID: session.userID)
             guard await continueStartup(run) else { return }
@@ -67,10 +114,20 @@ public final class PlaybackCoordinator {
                 item = try await api.item(itemID: itemID, userID: session.userID)
                 guard await continueStartup(run) else { return }
             }
-            if let reason = PlaybackDecision.videoFailure(
-                streams: item.MediaStreams ?? item.MediaSources?.first?.MediaStreams)
+            if configuration.isPoC,
+                let reason = PlaybackDecision.videoFailure(
+                    streams: item.MediaStreams ?? item.MediaSources?.first?.MediaStreams)
             {
                 throw reason
+            }
+            if !configuration.isPoC {
+                let user = try await api.userConfiguration()
+                guard await continueStartup(run) else { return }
+                sourceStreams = item.MediaStreams ?? item.MediaSources?.first?.MediaStreams ?? []
+                tracks = PlaybackTrack.map(
+                    sourceStreams,
+                    convertASS: configuration.convertASS)
+                selection = PlaybackTrackSelection.defaults(tracks: tracks, user: user)
             }
             let ticks: Int64
             switch choice {
@@ -96,36 +153,81 @@ public final class PlaybackCoordinator {
     ) async {
         startPosition = start
         do {
-            let info = try await api.playbackInfo(
-                itemID: itemID, userID: session.userID, start: start, maxBitrate: maxBitrate,
-                enableDirectPlay: !directStreamOnly
-            )
+            let info: PlaybackInfoResponseDTO
+            if configuration.isPoC {
+                info = try await api.playbackInfo(
+                    itemID: itemID, userID: session.userID, start: start, maxBitrate: maxBitrate,
+                    enableDirectPlay: !directStreamOnly)
+            } else {
+                info = try await api.negotiate(
+                    itemID: itemID, userID: session.userID, start: start,
+                    profile: RuntimeDeviceProfile(
+                        capabilities: capabilities, maxBitrate: maxBitrate,
+                        convertASS: configuration.convertASS),
+                    maxBitrate: maxBitrate, attempt: requiresBurnIn ? .transcode : attempt,
+                    selection: selection, mediaSourceID: selectedSourceID)
+            }
             guard await continueStartup(run) else { return }
-            guard info.ErrorCode == nil, let source = info.MediaSources?.first,
+            guard info.ErrorCode == nil,
+                let source = selectedSourceID == nil
+                    ? info.MediaSources?.first
+                    : info.MediaSources?.first(where: { $0.Id == selectedSourceID }),
                 let sourceID = source.Id, let playSessionID = info.PlaySessionId, !playSessionID.isEmpty,
                 playSessionID != previousSessionID
             else { throw PlaybackFailure.couldNotPlay }
-            let decision = PlaybackDecision.decide(mediaSource: source, allowDirectPlay: !directStreamOnly)
             let delivery: MediaDelivery
             let url: URL
-            switch decision {
-            case .unsupported(let reason): throw reason
-            case .directPlay:
-                delivery = source.Container?.lowercased() == "hls" ? .serverHLS : .directFile
-                url = try MediaURLBuilder.directPlay(
-                    server: session.serverURL, identity: session.identity,
-                    itemID: itemID, mediaSourceID: sourceID, playSessionID: playSessionID
-                ).url
-            case .directStream(let conversion):
-                delivery = .serverHLS
-                url = try MediaURLBuilder.videoCopyHLS(
-                    server: session.serverURL, transcodingURL: source.TranscodingUrl ?? "", conversion: conversion
-                )
+            let method: PlayMethod
+            if configuration.isPoC {
+                let decision = PlaybackDecision.decide(mediaSource: source, allowDirectPlay: !directStreamOnly)
+                switch decision {
+                case .unsupported(let reason): throw reason
+                case .directPlay:
+                    method = .directPlay
+                    delivery = source.Container?.lowercased() == "hls" ? .serverHLS : .directFile
+                    url = try MediaURLBuilder.directPlay(
+                        server: session.serverURL, identity: session.identity,
+                        itemID: itemID, mediaSourceID: sourceID, playSessionID: playSessionID
+                    ).url
+                case .directStream(let conversion):
+                    method = .directStream
+                    delivery = .serverHLS
+                    url = try MediaURLBuilder.videoCopyHLS(
+                        server: session.serverURL, transcodingURL: source.TranscodingUrl ?? "", conversion: conversion)
+                }
+            } else {
+                sourceStreams = source.MediaStreams ?? sourceStreams
+                tracks = PlaybackTrack.map(sourceStreams, convertASS: configuration.convertASS)
+                selectedSourceID = sourceID
+                if selection.audio == nil { selection.audio = source.DefaultAudioStreamIndex }
+                if selection.subtitle == nil { selection.subtitle = source.DefaultSubtitleStreamIndex ?? -1 }
+                let chosenSubtitle = tracks.first { $0.kind == .subtitle && $0.id == selection.subtitle }
+                let decision = try PlaybackStreamSelection.decide(
+                    source: source, attempt: attempt, subtitle: chosenSubtitle)
+                method = decision.method
+                delivery = decision.usesHLS ? .serverHLS : .directFile
+                if method == .directPlay {
+                    url = try MediaURLBuilder.directPlay(
+                        server: session.serverURL, identity: session.identity,
+                        itemID: itemID, mediaSourceID: sourceID, playSessionID: playSessionID
+                    ).url
+                } else {
+                    url = try MediaURLBuilder.negotiatedHLS(
+                        server: session.serverURL,
+                        transcodingURL: source.TranscodingUrl ?? "")
+                }
+                sourceSnapshot = source
+                diagnostics = PlaybackDiagnostics(source: source, method: method, selection: selection)
+                playMethod = method
+                transcodeReasons = VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl).map {
+                    MetadataSanitizer.displayText(MediaLogRedactor.redact($0), limit: 200)
+                }
             }
             context = PlaybackReportContext(
                 itemID: try ItemID.require(itemID).value, mediaSourceID: try ItemID.require(sourceID).value,
-                playSessionID: playSessionID, method: decision == .directPlay ? .directPlay : .directStream
-            )
+                playSessionID: playSessionID, method: method,
+                audioStreamIndex: configuration.isPoC ? nil : selection.audio,
+                subtitleStreamIndex: configuration.isPoC ? nil : selection.subtitle)
             // Q8P-13: a pinned self-signed server never attempts remux; keep its own message first.
             if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
                 throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
@@ -144,7 +246,7 @@ public final class PlaybackCoordinator {
             }
             // Q8P-24: header-only playlists cannot authenticate AVPlayer's segment requests.
             // Reject remux before preparation sends its first playlist GET.
-            if case .directStream = decision, playlistCredentials == nil {
+            if method != .directPlay, playlistCredentials == nil {
                 log.warning("Remux rejected: server playlist credential query is missing")
                 throw AppError.playback(.couldNotPlay)
             }
@@ -168,6 +270,15 @@ public final class PlaybackCoordinator {
             case .rejected(.insecureRedirect): throw PlaybackFailure.insecureRedirect
             case .rejected: throw PlaybackFailure.couldNotPlay
             }
+            if !configuration.isPoC {
+                subtitleCues = []
+                if let track = tracks.first(where: { $0.kind == .subtitle && $0.id == selection.subtitle }),
+                    track.delivery == .externalVTT
+                {
+                    subtitleCues = try await api.subtitles(itemID: itemID, mediaSourceID: sourceID, index: track.id)
+                    guard await continueStartup(run) else { return }
+                }
+            }
             let events = engine.events
             eventsTask = Task { [weak self] in
                 for await event in events {
@@ -178,7 +289,14 @@ public final class PlaybackCoordinator {
             try await engine.load(carrier, startAt: start)
             guard await continueStartup(run) else { return }
             engineLoaded = true
-            engine.play()
+            if !configuration.isPoC && !paused && method == .directPlay {
+                firstFrameTask = Task { [weak self, clock] in
+                    do { try await clock.sleep(for: .seconds(10)) } catch { return }
+                    guard let self, self.isCurrent(run) else { return }
+                    await self.attemptFailed(run: run, fromEngineEvent: true)
+                }
+            }
+            if paused { engine.pause() } else { engine.play() }
         } catch {
             await startupFailed(error, run: run)
         }
@@ -206,7 +324,10 @@ public final class PlaybackCoordinator {
 
     private func attemptFailed(run: Int, fromEngineEvent: Bool = false) async {
         guard isCurrent(run) else { return }
-        guard let failedAttempt = context, failedAttempt.method == .directPlay else {
+        guard let failedAttempt = context,
+            configuration.isPoC
+                ? failedAttempt.method == .directPlay : (attempt.next != nil && failedAttempt.method != .transcode)
+        else {
             await fail(.couldNotPlay)
             return
         }
@@ -214,6 +335,10 @@ public final class PlaybackCoordinator {
             await fail(.hlsSegmentsBypassPinnedTrust)
             return
         }
+        if !configuration.isPoC { attempt = failedAttempt.method == .directPlay ? .directStream : .transcode }
+        // A startup failure can arrive inside the retry task itself. Do not cancel its
+        // own execution while closing the previous session and scheduling the next stage.
+        retryTask = nil
         let position = engineLoaded ? max(.zero, engine.position) : startPosition
         let retryRun = generation + 1
         let error = await finish(state: .loading, failed: true)
@@ -247,6 +372,114 @@ public final class PlaybackCoordinator {
         if generation == retryRun { retryTask = nil }
     }
 
+    public func selectTrack(id: Int?, kind: PlaybackTrack.Kind) async {
+        guard !configuration.isPoC, !selectingTrack, let oldContext = context, engineLoaded, state != .loading else {
+            return
+        }
+        selectingTrack = true
+        defer { selectingTrack = false }
+        let track = tracks.first { $0.kind == kind && $0.id == id }
+        guard id == nil || track != nil else { return }
+        if kind == .audio && track == nil { return }
+        if (kind == .audio ? selection.audio : selection.subtitle ?? -1) == (id ?? -1) { return }
+        let run = generation
+        let oldSubtitle = tracks.first { $0.kind == .subtitle && $0.id == selection.subtitle }
+        let mustReload =
+            oldSubtitle?.delivery == .burnIn || track?.delivery == .burnIn
+        var native = false
+        if !mustReload, track == nil || track?.delivery == .embedded {
+            native =
+                await (engine as? any PlaybackTrackSelecting)?.selectNativeTrack(track, kind: kind, peers: tracks)
+                == true
+            guard isCurrent(run) else { return }
+        }
+        if !mustReload, kind == .subtitle, track?.delivery == .externalVTT {
+            do {
+                let cues = try await api.subtitles(
+                    itemID: oldContext.itemID, mediaSourceID: oldContext.mediaSourceID,
+                    index: track?.id ?? -1)
+                guard isCurrent(run) else { return }
+                _ = await (engine as? any PlaybackTrackSelecting)?.selectNativeTrack(
+                    nil, kind: .subtitle, peers: tracks)
+                subtitleCues = cues
+                native = true
+            } catch {
+                guard isCurrent(run) else { return }
+                await startupFailed(error, run: run)
+                return
+            }
+        }
+        if kind == .audio { selection.audio = id } else { selection.subtitle = id ?? -1 }
+        if native {
+            refreshDiagnostics()
+            context?.audioStreamIndex = selection.audio
+            context?.subtitleStreamIndex = selection.subtitle
+            if kind == .subtitle && track?.delivery != .externalVTT { subtitleCues = [] }
+            await progress()
+            return
+        }
+        let position = engine.position
+        let wasPaused = paused
+        let nextRun = generation + 1
+        let stopError = await finish(state: .loading, failed: false)
+        guard generation == nextRun else { return }
+        if stopError == .unauthorized {
+            await checkCurrentUser(run: nextRun)
+            return
+        }
+        trackChangePending = true
+        paused = wasPaused
+        // Renegotiation may return DirectPlay, remux, audio conversion or subtitle burn-in.
+        attempt = .automatic
+        await startAttempt(
+            itemID: oldContext.itemID, start: position, run: nextRun,
+            previousSessionID: oldContext.playSessionID)
+    }
+
+    public func setASSConversion(_ enabled: Bool) async {
+        guard !selectingTrack, configuration.convertASS != enabled else { return }
+        selectingTrack = true
+        defer { selectingTrack = false }
+        configuration.convertASS = enabled
+        tracks = PlaybackTrack.map(sourceStreams, convertASS: enabled)
+        PlaybackPreferences.setASSConversion(enabled)
+        // Re-map from the next PlaybackInfo response; the selected ASS track must be renegotiated.
+        guard let current = context, let track = tracks.first(where: { $0.id == selection.subtitle }),
+            ["ass", "ssa"].contains(track.codec)
+        else { return }
+        let position = engine.position
+        let wasPaused = paused
+        let nextRun = generation + 1
+        let stopError = await finish(state: .loading, failed: false)
+        guard generation == nextRun else { return }
+        if stopError == .unauthorized {
+            await checkCurrentUser(run: nextRun)
+            return
+        }
+        trackChangePending = true
+        paused = wasPaused
+        attempt = .automatic
+        await startAttempt(
+            itemID: current.itemID, start: position, run: nextRun,
+            previousSessionID: current.playSessionID)
+    }
+
+    private func applyInitialNativeTracks(run: Int) async -> Bool {
+        guard let selector = engine as? any PlaybackTrackSelecting else { return true }
+        var matched = true
+        if let track = tracks.first(where: { $0.kind == .audio && $0.id == selection.audio }),
+            playMethod == .directPlay
+        {
+            matched = await selector.selectNativeTrack(track, kind: .audio, peers: tracks)
+        }
+        guard isCurrent(run) else { return false }
+        let subtitle = tracks.first { $0.kind == .subtitle && $0.id == selection.subtitle }
+        let subtitleMatched = await selector.selectNativeTrack(
+            subtitle?.delivery == .embedded ? subtitle : nil,
+            kind: .subtitle, peers: tracks)
+        return matched && (subtitle?.delivery != .embedded || subtitleMatched)
+    }
+
     public func stop() async {
         // SwiftUI disappearance and AVKit dismissal can both stop the same presentation.
         guard context != nil || state == .loading else { return }
@@ -278,6 +511,15 @@ public final class PlaybackCoordinator {
         switch event {
         case .ready:
             guard !started, context != nil else { return }
+            if !configuration.isPoC {
+                let matched = await applyInitialNativeTracks(run: run)
+                guard isCurrent(run) else { return }
+                if !matched {
+                    await attemptFailed(run: run, fromEngineEvent: true)
+                    return
+                }
+            }
+            if paused { state = .paused }
             started = true
             let error = await report("")
             guard isCurrent(run) else { return }
@@ -287,7 +529,13 @@ public final class PlaybackCoordinator {
             }
             guard isCurrent(run), context != nil else { return }
             timer.start { [weak self] in await self?.progress() }
+            if trackChangePending {
+                trackChangePending = false
+                await progress()
+            }
         case .playing:
+            firstFrameTask?.cancel()
+            firstFrameTask = nil
             state = .playing
             if paused {
                 paused = false
@@ -295,11 +543,24 @@ public final class PlaybackCoordinator {
             }
         case .paused:
             guard started, !paused else { return }
+            firstFrameTask?.cancel()
             paused = true
             state = .paused
             await progress()
         case .buffering: state = .buffering
         case .seeked: await progress()
+        case .trackChanged(let kind, let id):
+            guard !configuration.isPoC else { return }
+            if kind == .audio {
+                selection.audio = id
+            } else {
+                selection.subtitle = id ?? -1
+                subtitleCues = []
+            }
+            context?.audioStreamIndex = selection.audio
+            context?.subtitleStreamIndex = selection.subtitle
+            refreshDiagnostics()
+            await progress()
         case .ended:
             let terminalRun = generation + 1
             let error = await finish(state: .ended, failed: false)
@@ -308,6 +569,11 @@ public final class PlaybackCoordinator {
         case .failed(.cancelled): break
         case .failed: await attemptFailed(run: run, fromEngineEvent: true)
         }
+    }
+
+    private func refreshDiagnostics() {
+        guard let sourceSnapshot, let playMethod else { return }
+        diagnostics = PlaybackDiagnostics(source: sourceSnapshot, method: playMethod, selection: selection)
     }
 
     private func progress() async {
@@ -326,6 +592,8 @@ public final class PlaybackCoordinator {
     @discardableResult
     private func finish(state terminal: PlaybackState, failed: Bool) async -> APIError? {
         generation += 1
+        firstFrameTask?.cancel()
+        firstFrameTask = nil
         retryTask?.cancel()
         retryTask = nil
         timer.cancel()
@@ -333,6 +601,7 @@ public final class PlaybackCoordinator {
         eventsTask = nil
         let stopped = context
         context = nil
+        subtitleCues = []
         let position = engineLoaded ? engine.position : startPosition
         let canSeek = engineLoaded && engine.canSeek
         engineLoaded = false
@@ -379,6 +648,7 @@ public final class PlaybackCoordinator {
     }
 
     isolated deinit {
+        firstFrameTask?.cancel()
         retryTask?.cancel()
         eventsTask?.cancel()
         timer.cancel()
