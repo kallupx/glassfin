@@ -15,6 +15,7 @@ public final class AuthFlow {
     public private(set) var noticeKey: AuthCopy.Key?
     public private(set) var isProbing = false
     public private(set) var isPolling = false
+    public private(set) var isSigningOut = false
     public private(set) var quickConnectCode: String?
     public private(set) var quickConnectExpired = false
     public private(set) var quickConnectRenewals = 0
@@ -47,6 +48,7 @@ public final class AuthFlow {
     }
 
     public var appPhase: AppState.Phase { app.phase }
+    public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
     public var homeErrorKey: AuthCopy.Key? {
         guard cachedHome == nil else { return nil }
@@ -344,7 +346,9 @@ public final class AuthFlow {
     }
 
     public func confirmLogout() async {
-        guard case .signedIn(let session) = app.phase else { return }
+        guard !isSigningOut, case .signedIn(let session) = app.phase else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
         var serverFailed = true
         if let token = loadToken(serverID: session.server.id, userID: session.userID) {
             do {
@@ -376,6 +380,7 @@ public final class AuthFlow {
     }
 
     public func cancelLogout() {
+        guard !isSigningOut else { return }
         screen = .home
         confirmFocus = nil
         focus = homeErrorKey == nil ? .connect : .tryAgain
