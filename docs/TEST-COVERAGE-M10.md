@@ -1,10 +1,10 @@
 # M10 PoC settings
 
 This branch implements the minimal M10 tier: Sign out and the app version. The
-scope follows SPEC.md section 3a on `origin/spec/poc-tier-followup`, M04 Q4-12,
+scope follows `spec/SPEC.md` section 3a, M04 Q4-12,
 and the repository's canonical `spec/TESTPLAN-PoC-ACCEPTANCE.md` J8. There is no
-dedicated TESTPLAN-M10.md. The base branch and the external specification copy
-still contain the full MVP description; this change does not replace those files.
+dedicated TESTPLAN-M10.md. `spec/10-settings.md` still describes the full MVP;
+this change does not replace that file.
 
 Settings uses a shared observable view model and the M05 spacing, typography,
 system focus, and glass button styles. Local content reclaims AppState.currentView
@@ -62,10 +62,51 @@ bash scripts/ci-grep.sh
 The coverage gate includes all seven new shared-core tests. Apple-hosted logic and
 UI tests cannot execute on Linux.
 
-Verified on Linux: the coverage gate passed with 343 tests, 5 skipped integration
-tests, no failures, and 92.46% line coverage (6637/7178 lines). Strict swift-format,
+Verified on Linux after merging main `45e21b4` and M05 `d2d780b`: the coverage
+gate passed with 434 tests, 7 skipped integration tests, no failures, and 92.52%
+line coverage (7352/7946 lines). Strict swift-format,
 the design-system check, String Catalog validation, the DEBUG-only string check,
 and ci-grep passed. The skipped tests require an external integration server.
+
+## CI run 40619479956 investigation
+
+The [run at head 4c32988](https://github.com/kallupx/glassfin/actions/runs/40619479956)
+passed lint, test-tvos, and full-ui. `gh run view 40619479956 -R kallupx/glassfin
+--log-failed` returned no output because test-ios was cancelled, not marked failed.
+The [test-ios job](https://github.com/kallupx/glassfin/actions/runs/40619479956/job/122590315082)
+annotation explicitly states: "The job has exceeded the maximum execution time
+of 25m0s". The step ran from 02:43:43 to 03:08:45 UTC; job cleanup ended at 03:09:16.
+
+The [ios-results artifact](https://github.com/kallupx/glassfin/actions/runs/40619479956/artifacts/12788967506)
+contains release-build.log, release-binary.txt, package-test.log, and app-test.log.
+The Release binary scan and package tests passed. package-test.log records all
+seven T10SettingsTests passing; app-test.log records the hosted
+T10SettingsLogicTests test and all three T10SettingsUITests passing. The UI suite
+nevertheless completed 17 tests with three failures before the job timed out,
+so this was not solely an infrastructure
+flake:
+
+- T05-54 failed twice while looking for Search under the phone's native More tab.
+  Merging M05 `da38a26` brings its compact-width limit of one inline library plus
+  Libraries, leaving five native tabs total. Conflict resolution retains M10's
+  existing Home/Search/Settings ordering and tvOS focus behavior.
+- T04-03 found quickconnect.code, then lost it while reading its label. The failure
+  snapshot already contains home.root. M04's DEBUG backend approves after two
+  seconds, so the test races the transition to Home on this slow simulator.
+  This is an M04 fixture/test synchronization issue outside M10's scope; its code
+  and assertions remain unchanged.
+
+The merge commits include main `45e21b4` (M04 squash `b0f0f22`, HLS auth `924888d`,
+and spec updates) and M05 `da38a26`, followed by its newer tip `d2d780b`.
+The newer M05 tip supplies the source-check exception for main's M04 glass and
+background, which are restored while retaining M10's settings integration.
+Main's workflows, project.yml, Info.plist
+files, and M08 sources/tests are retained exactly. Existing M10 settings, sign-out
+guards, catalog copy, and shared design-system integration are preserved. No new
+test or assertion changes were needed. The pre-existing T04-68 adjustment remains:
+Cancel returns to Settings, so it omits the Home assertion and reopening Settings.
+Apple simulator verification of the merged head is still required; the timeout
+and the M04 race are not claimed resolved by Linux checks.
 
 ## tvOS simulator verification
 
@@ -75,11 +116,15 @@ On a Mac with the project's Xcode and a tvOS 26+ simulator:
 xcodegen generate
 xcodebuild test -scheme Glassfin-tvOS \
   -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' \
-  -only-testing:Glassfin-tvOSTests/T10SettingsLogicTests \
   -only-testing:Glassfin-tvOSUITests/T10SettingsUITests \
   -only-testing:Glassfin-tvOSUITests/T04AuthUITests/testT04_68_settingsSignOutDefaultsToCancelAndKeepsServer \
   CODE_SIGNING_ALLOWED=NO
 ```
+
+Main's project.yml does not define the hosted Glassfin-tvOSTests or
+Glassfin-iOSTests targets. Their logic/snapshot test sources are retained, but
+they will not run through the generated app schemes until M05's project setup is
+integrated separately. No project changes are made here.
 
 The UI tests use the existing DEBUG-only M04 mock launch path and Siri Remote
 helpers. Screenshot attachments show Settings, confirmation, and the sign-out /
@@ -124,6 +169,3 @@ For acceptance, use the integrated PoC build with native macOS Jellyfin servers
 - QPOC-08 / Q4-12 leaves the post-sign-out target partly open. Existing M04
   behavior is retained: another saved user leads to the user picker; otherwise
   the login-method screen, or credentials when Quick Connect is disabled.
-- The base/external SPEC.md copies omit the PoC section. This branch follows
-  the explicit minimal M10 scope in the canonical PoC acceptance plan and the
-  pending PoC specification branch instead of introducing inactive MVP controls.
