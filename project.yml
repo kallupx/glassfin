@@ -96,8 +96,6 @@ targets:
       - path: Apps/Shared/Tests/Snapshots
     dependencies:
       - target: Glassfin-tvOS
-      - package: GlassfinCore
-        product: GlassfinCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.tvos.unittests
@@ -113,8 +111,6 @@ targets:
       - path: Apps/Shared/Tests/Snapshots
     dependencies:
       - target: Glassfin-iOS
-      - package: GlassfinCore
-        product: GlassfinCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.glassfin.app.ios.unittests
