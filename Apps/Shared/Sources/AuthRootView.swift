@@ -332,7 +332,14 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             HomeMockControls.current = nil
-            if configuration.useMockServer || configuration.resetState {
+            if configuration.resetState {
+                do {
+                    try UITestStateReset.reset()
+                } catch {
+                    preconditionFailure("UI-test state reset failed")
+                }
+            }
+            if configuration.useMockServer {
                 if arguments.contains("-uitest-home-network-controls") {
                     HomeMockControls.current = HomeMockControls()
                 }

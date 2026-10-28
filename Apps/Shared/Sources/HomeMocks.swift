@@ -44,7 +44,7 @@ import SwiftUI
     enum HomeMockLaunch {
         static var enabled: Bool {
             let configuration = LaunchConfiguration(arguments: ProcessInfo.processInfo.arguments)
-            return configuration.useMockServer || configuration.resetState
+            return configuration.useMockServer
         }
         @MainActor
         static func seed(_ app: AppState) {
