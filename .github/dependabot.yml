@@ -1,5 +1,6 @@
 version: 2
-# No auto-merge. A grouped dependency pull request stays red until macOS has run.
+# No auto-merge. Dependabot pull requests fail the gate until full-ci is added.
+# Every path-selected macOS job must succeed; no selected paths means no build.
 updates:
   - package-ecosystem: swift
     directory: /Packages/GlassfinCore

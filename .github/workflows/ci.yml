@@ -311,28 +311,35 @@ jobs:
             artifacts/tvOS/*.txt
           retention-days: 7
 
-  # Unrequested Dependabot macOS checks are skipped, just like the build jobs.
-  # When full-ci is requested, require every path-selected macOS job to pass.
+  # After lint succeeds, report even when macOS jobs were skipped or failed.
+  # Dependabot requires full-ci and every path-selected macOS job to pass.
   # Use the PR author: a maintainer may be the actor on a labeled event.
   dependabot-macos:
     needs: [lint, test-tvos, test-ios]
-    if: >
-      always() && needs.lint.result == 'success' &&
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: always() && needs.lint.result == 'success'
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Require successful macOS results for selected paths
         env:
+          EVENT: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           TVOS_REQUIRED: ${{ needs.lint.outputs.macos }}
           IOS_REQUIRED: ${{ needs.lint.outputs.ios }}
           TVOS: ${{ needs.test-tvos.result }}
           IOS: ${{ needs.test-ios.result }}
         run: |
           set -euo pipefail
+          if [[ "$EVENT" != "pull_request" || "$PR_AUTHOR" != "dependabot[bot]" ]]; then
+            echo "Dependabot macOS gate applies only to Dependabot pull requests."
+            exit 0
+          fi
+          if [[ "$FULL_CI" != "true" ]]; then
+            echo "::error::Maintainers must add the full-ci label to this Dependabot pull request before merging."
+            exit 1
+          fi
           require_result() {
             local job="$1" required="$2" result="$3"
             echo "$job: $result (selected by path filter: $required)" | tee -a "$GITHUB_STEP_SUMMARY"
