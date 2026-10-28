@@ -45,7 +45,7 @@ final class StringCatalogTests: XCTestCase {
 
     func testModelsCatalogKeysAndLocalizedAccessor() throws {
         let englishValues = try catalogEnglishValues(module: "CoreModels")
-        XCTAssertEqual(englishValues.count, 16)
+        XCTAssertEqual(englishValues.count, 17)
         for key in englishValues.keys.sorted() {
             try assertLocalized(AppErrorMessage.localized(key), key: key, englishValues: englishValues)
         }

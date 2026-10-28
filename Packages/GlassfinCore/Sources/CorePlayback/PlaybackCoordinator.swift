@@ -16,6 +16,10 @@ public enum PlaybackStartChoice: Sendable, Equatable {
 public final class PlaybackCoordinator {
     public private(set) var state: PlaybackState = .idle
     public private(set) var failure: PlaybackFailure?
+    /// App-level error for the generic playback failure, sharing the UI's catalog key.
+    public var appError: AppError? {
+        failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
+    }
     public let engine: any PlaybackEngine
 
     private let session: any PlaybackSessionProviding
@@ -122,9 +126,6 @@ public final class PlaybackCoordinator {
                 itemID: try ItemID.require(itemID).value, mediaSourceID: try ItemID.require(sourceID).value,
                 playSessionID: playSessionID, method: decision == .directPlay ? .directPlay : .directStream
             )
-            if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
-                throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
-            }
             // Preserve the server's raw query before the video-copy builder strips credentials.
             let playlistCredentials: ServerHLSCredentialQuery?
             if delivery == .serverHLS, let transcodingURL = source.TranscodingUrl,
@@ -136,6 +137,15 @@ public final class PlaybackCoordinator {
                 playlistCredentials = ServerHLSCredentialQuery(transcodingURL: original)
             } else {
                 playlistCredentials = nil
+            }
+            // Q8P-24: header-only playlists cannot authenticate AVPlayer's segment requests.
+            // Reject remux before preparation sends its first playlist GET.
+            if case .directStream = decision, playlistCredentials == nil {
+                log.warning("Remux rejected: server playlist credential query is missing")
+                throw AppError.playback(.couldNotPlay)
+            }
+            if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
+                throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
             }
             let header = try session.identity.authorizationHeader()
             let result = try await PlaybackPreparation(client: origin, log: log).prepare(

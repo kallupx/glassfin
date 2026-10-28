@@ -288,6 +288,23 @@
           }
         }
       }
+    },
+    "playback.error.couldNotPlay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file could not be played"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tätä tiedostoa ei voitu toistaa"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
