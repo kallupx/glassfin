@@ -4,6 +4,17 @@ name: integration
 # Run locally with scripts/docker-integration.sh. Credentials are generated per run.
 on:
   workflow_dispatch:
+    inputs:
+      versions:
+        description: Space-separated server versions (empty runs all pinned versions)
+        required: false
+        default: ''
+        type: string
+      probe_args:
+        description: HLS probe flags (empty is report-only; e.g. --expect-segment-auth kept)
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -20,24 +31,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: T01-20 and T01-30
-        run: bash scripts/docker-integration.sh
-      - name: Scan search benchmark artifacts for credentials
-        id: search_scan
-        if: always()
+      - name: HLS segment auth probe, T01-20, and T01-30
+        env:
+          GLASSFIN_SERVER_VERSIONS: ${{ inputs.versions }}
+          GLASSFIN_HLS_PROBE_ARGS: ${{ inputs.probe_args }}
         run: |
-          python3 scripts/scan_benchmark_artifacts.py \
-            artifacts/integration/search/search-10.10.7.json \
-            artifacts/integration/search/search-10.11.11.json \
-            artifacts/integration/search/search-12.2.json
-      # M09 needs retained measurements from every version, not only the console output.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always() && steps.search_scan.outcome == 'success'
-        with:
-          name: search-backend-benchmarks
-          path: |
-            artifacts/integration/search/search-10.10.7.json
-            artifacts/integration/search/search-10.11.11.json
-            artifacts/integration/search/search-12.2.json
-          if-no-files-found: error
-          retention-days: 7
+          versions=()
+          read -r -a versions <<< "$GLASSFIN_SERVER_VERSIONS"
+          bash scripts/docker-integration.sh "${versions[@]}"
