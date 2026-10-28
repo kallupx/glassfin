@@ -56,3 +56,10 @@ H.264 MP4 with two AAC/two mov_text tracks, H.264 MKV with two AAC/external SRT
 tracks, and MPEG-2 MKV intended for video transcoding. A short local generation
 and ffprobe verify the streams; negotiated playback still needs owner/device
 evidence. None of these files contain personal media or credentials.
+
+The final rebase also includes main's `c87d897` CI-only change. Its new opt-in
+native Jellyfin E2E job is outside this task's mocks/Docker-only server scope,
+so the PR uses ordinary tvOS/iOS CI without `full-ci`. The queued opt-in job was
+cancelled before any step ran. Regular tvOS runs the identical suite as the
+optional duplicate full-ui job; no tests, assertions, selectors, or workflow
+conditions are changed by this kit to exclude test coverage.

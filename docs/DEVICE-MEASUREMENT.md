@@ -236,9 +236,15 @@ Targets below are **A15 / oldest**, from M02. Timings are milliseconds unless no
   snapshot, rather than measuring real focus/scroll hitches. M06/M09 tests cover
   state, image sizing/decoding, caching, and event propagation.
 - `ci.yml` runs lint/Linux tests and path-selected macOS tvOS/iOS tests through
-  `scripts/macos-ci.sh`. `integration.yml` is manually dispatched Docker protocol
-  testing. There is **no `poc-acceptance` job** in this base; the spec's acceptance
-  plan is documentation, not a runnable CI journey. Do not record it as passed.
+  `scripts/macos-ci.sh`. These ordinary jobs run the complete mock performance
+  suite. `integration.yml` is manually dispatched Docker protocol testing.
+  There is no job literally named `poc-acceptance`. Main's opt-in `jellyfin-e2e`
+  job (`scripts/ci/jellyfin-e2e.py`) starts native loopback Jellyfin for F3/F4
+  acceptance tests when available; it does not implement every PoC journey or
+  measure P1–P15. It runs on `workflow_dispatch` or the `full-ci` label. This
+  Docker-only measurement workflow uses the ordinary PR jobs and leaves that
+  label off. The optional `full-ui` job duplicates the regular tvOS suite; its
+  absence does not remove any XCTest assertions from the ordinary tvOS job.
 - `generate-playback-media.sh`, `jellyfin_bootstrap.py`, and
   `docker-integration.sh` seed/probe a small throwaway library, not the full
   performance library. `prepare-perf-library.py` creates the 5,000/500 offline
