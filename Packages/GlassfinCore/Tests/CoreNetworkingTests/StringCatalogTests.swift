@@ -4,15 +4,9 @@ import Foundation
 import XCTest
 
 final class StringCatalogTests: XCTestCase {
-    /// The restack preserves the union of old and new catalog keys, including superseded copy.
-    private let retainedModelKeys: Set<String> = [
-        "The server certificate is not trusted",
-        "Server version %@ is too old (required ≥ %@)",
-        "Switch server",
-        "Playback is unavailable without a network connection",
-        "Playback is unavailable because the server cannot be reached",
-        "This file could not be played",
-        "You do not have permission for this action",
+    private let playbackKeys: Set<String> = [
+        PlaybackCopy.unsupportedVideoKey, PlaybackCopy.couldNotPlayKey, PlaybackCopy.insecureRedirectKey,
+        PlaybackCopy.pinnedHLSKey, PlaybackCopy.okKey,
     ]
 
     /// Every `*.xcstrings` in the checkout is checked, not only CoreModels.
@@ -51,11 +45,14 @@ final class StringCatalogTests: XCTestCase {
             key: SessionEndCopy.serverSessionMayRemainKey,
             englishValues: englishValues
         )
+        for key in playbackKeys.sorted() {
+            try assertLocalized(PlaybackCopy.message(for: key), key: key, englishValues: englishValues)
+        }
     }
 
     func testModelsCatalogKeysAndLocalizedAccessor() throws {
         let englishValues = try catalogEnglishValues(module: "CoreModels")
-        XCTAssertEqual(Set(englishValues.keys), Set(AuthCopy.Key.allCases.map(\.rawValue)).union(retainedModelKeys))
+        XCTAssertEqual(Set(englishValues.keys), Set(AuthCopy.Key.allCases.map(\.rawValue)).union(playbackKeys))
         for key in englishValues.keys.sorted() {
             try assertLocalized(AppErrorMessage.localized(key), key: key, englishValues: englishValues)
         }
@@ -84,7 +81,7 @@ final class StringCatalogTests: XCTestCase {
         XCTAssertFalse(keys.isEmpty, "\(module): expected source key constants")
         if module == "CoreModels" {
             keys.formUnion(AuthCopy.Key.allCases.map(\.rawValue))
-            keys.formUnion(retainedModelKeys)
+            keys.formUnion(playbackKeys)
         }
         let data = try Data(contentsOf: sources.appendingPathComponent("Localizable.xcstrings"))
         let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])

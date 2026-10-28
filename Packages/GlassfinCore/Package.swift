@@ -15,11 +15,9 @@ let externalDependencies: [Package.Dependency] = [
     let packageDependencies = externalDependencies
     let coreAPIExternal: [Target.Dependency] = []
     // The Linux toolchain has no xcstringstool. Exclude the catalog and copy a marker
-    // so SwiftPM still generates Bundle.module for String(localized:bundle: .module).
+    // so SwiftPM still generates Bundle.module for the shared catalog localization helper.
     let coreModelsExclude = ["Localizable.xcstrings"]
     let coreModelsResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
-    let coreNetworkingExclude = ["Localizable.xcstrings"]
-    let coreNetworkingResources: [Resource] = [.copy("LinuxStringCatalogMarker.txt")]
 #else
     let packageDependencies = externalDependencies
     let coreAPIExternal: [Target.Dependency] = [
@@ -30,8 +28,6 @@ let externalDependencies: [Package.Dependency] = [
     ]
     let coreModelsExclude = ["LinuxStringCatalogMarker.txt"]
     let coreModelsResources: [Resource] = [.process("Localizable.xcstrings")]
-    let coreNetworkingExclude = ["LinuxStringCatalogMarker.txt"]
-    let coreNetworkingResources: [Resource] = [.process("Localizable.xcstrings")]
 #endif
 
 let debugSettings: [SwiftSetting] = [
@@ -60,8 +56,6 @@ let package = Package(
         .target(
             name: "CoreNetworking",
             dependencies: ["CoreModels"],
-            exclude: coreNetworkingExclude,
-            resources: coreNetworkingResources,
             swiftSettings: debugSettings
         ),
         // GlassfinServices, not CoreServices: that module name collides with the system
