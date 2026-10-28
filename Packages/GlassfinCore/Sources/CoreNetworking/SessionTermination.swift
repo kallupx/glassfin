@@ -44,26 +44,22 @@ public struct SessionEndResult: Sendable, Equatable {
         self.serverSessionMayRemain = serverSessionMayRemain
     }
 
-    /// Catalog key for ``userMessage``, or nil when no message should be shown.
     public var userMessageKey: String? {
-        serverSessionMayRemain ? SessionEndCopy.serverSessionMayRemainKey : nil
+        messageKey?.rawValue
+    }
+
+    public var messageKey: AuthCopy.Key? {
+        serverSessionMayRemain ? .serverSessionMayRemain : nil
     }
 
     public var userMessage: String? {
-        guard userMessageKey != nil else { return nil }
-        return SessionEndCopy.serverSessionMayRemain
+        serverSessionMayRemain ? SessionEndCopy.serverSessionMayRemain : nil
     }
 }
 
 public enum SessionEndCopy {
-    /// Key in CoreNetworking `Localizable.xcstrings` (development language `en`, plus `fi`).
-    /// Define each English source sentence once as a key and use `localizedString(key)` for user-facing copy.
-    public static let serverSessionMayRemainKey =
-        "The server session may remain active until an administrator removes this device."
-
-    public static var serverSessionMayRemain: String {
-        localizedString(serverSessionMayRemainKey)
-    }
+    public static var serverSessionMayRemainKey: String { AuthCopy.Key.serverSessionMayRemain.rawValue }
+    public static var serverSessionMayRemain: String { AuthCopy.localized(.serverSessionMayRemain) }
 }
 
 public enum SessionTermination {

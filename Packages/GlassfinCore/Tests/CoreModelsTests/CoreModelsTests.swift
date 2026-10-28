@@ -70,10 +70,17 @@ final class TicksTests: XCTestCase {
 
 final class SemVerTests: XCTestCase {
     func testMinimumServerFloor() {
-        XCTAssertEqual(SemVer(parsing: "10.10.7"), SemVer.minimumJellyfin)
+        XCTAssertEqual(SemVer(parsing: "10.10.0"), SemVer.minimumJellyfin)
+        XCTAssertEqual(SemVer(parsing: "10.10"), SemVer.minimumJellyfin)
+        XCTAssertEqual(SemVer(parsing: "10.10.7")?.meetsMinimumServer, true)
         XCTAssertEqual(SemVer(parsing: "12.2.0+meta")?.meetsMinimumServer, true)
         XCTAssertEqual(SemVer(parsing: "10.11.11")?.meetsMinimumServer, true)
-        XCTAssertEqual(SemVer(parsing: "10.10.6")?.meetsMinimumServer, false)
+        XCTAssertEqual(SemVer(parsing: "12.2.0-rc1")?.meetsMinimumServer, true)
+        XCTAssertEqual(SemVer(parsing: "10.10.6")?.meetsMinimumServer, true)
+        XCTAssertEqual(SemVer(parsing: "10.9.11")?.meetsMinimumServer, false)
+        XCTAssertNil(SemVer(parsing: "10"))
+        XCTAssertNil(SemVer(parsing: "abc"))
+        XCTAssertNil(SemVer(parsing: ""))
         XCTAssertNil(SemVer(parsing: "not-a-version"))
     }
 }
@@ -94,6 +101,7 @@ final class APIErrorTests: XCTestCase {
             .redirectRejected(.httpsDowngrade),
             .invalidURL,
             .headerRejected,
+            .transportSecurity,
         ]
         for error in kept {
             XCTAssertFalse(LogoutPolicy.shouldLogOut(error), "\(error)")
@@ -202,8 +210,87 @@ final class MapperTests: XCTestCase {
         }
     }
 
+    func testT04_20_versionMatrixUsesTheSingleParser() throws {
+        let supported = ["10.10.0", "10.10", "10.10.7", "10.11.11", "12.2.0", "12.2.0-rc1", "10.10.0-beta.1"]
+        for raw in supported {
+            let version = SemVer(parsing: raw)
+            XCTAssertEqual(version?.meetsMinimumServer, true, raw)
+            XCTAssertNil(ServerVersionGate.failure(for: try XCTUnwrap(version)), raw)
+        }
+        XCTAssertEqual(
+            ServerVersionGate.failure(for: try XCTUnwrap(SemVer(parsing: "10.9.11"))),
+            .unsupportedServer(version: "10.9.11")
+        )
+        for raw in ["10", "abc", "", "not-a-version", "10.ten", "10.10.x", "10.10.0.beta"] {
+            XCTAssertNil(SemVer(parsing: raw), raw)
+        }
+    }
+
+    func testSharedAuthErrorKeysReuseAppErrorMessageConstants() {
+        let shared: [(AuthCopy.Key, String)] = [
+            (.tryAgain, AppErrorMessage.retryKey),
+            (.switchServer, AppErrorMessage.changeServerKey),
+            (.sessionExpired, AppErrorMessage.sessionExpiredKey),
+            (.serverUnreachable, AppErrorMessage.serverDownKey),
+            (.noNetworkConnection, AppErrorMessage.offlineKey),
+            (.forbidden, AppErrorMessage.forbiddenKey),
+            (.invalidCredentials, AppErrorMessage.invalidCredentialsKey),
+            (.playbackFailed, AppErrorMessage.playbackFailedKey),
+            (.buffering, AppErrorMessage.bufferingKey),
+            (.playbackOffline, AppErrorMessage.playbackOfflineKey),
+            (.playbackUnreachable, AppErrorMessage.playbackUnreachableKey),
+            (.certificateUntrusted, AppErrorMessage.tlsUntrustedKey),
+            (.insecureRedirect, AppErrorMessage.insecureRedirectKey),
+            (.itemNotFound, AppErrorMessage.notFoundKey),
+            (.serverError, AppErrorMessage.serverErrorKey),
+            (.unsupportedServerDetail, AppErrorMessage.unsupportedServerKey),
+        ]
+        for (authKey, errorKey) in shared {
+            XCTAssertEqual(authKey.rawValue, errorKey)
+        }
+        let authKeys = AuthCopy.Key.allCases.map(\.rawValue)
+        XCTAssertEqual(Set(authKeys).count, authKeys.count)
+    }
+
+    func testAuthCatalogHasEnglishAndFinnishForEveryKey() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/CoreModels/Localizable.xcstrings")
+        let data = try Data(contentsOf: url)
+        let catalog = try JSONDecoder().decode(StringCatalogFile.self, from: data)
+        XCTAssertEqual(catalog.sourceLanguage, "en")
+        for key in AuthCopy.Key.allCases {
+            let entry = try XCTUnwrap(catalog.strings[key.rawValue], key.rawValue)
+            XCTAssertFalse(entry.value(for: "en")?.isEmpty ?? true, key.rawValue)
+            XCTAssertFalse(entry.value(for: "fi")?.isEmpty ?? true, key.rawValue)
+        }
+    }
+
     private func decodeItem(_ name: String) throws -> MediaItem {
         let dto = try JSONDecoder().decode(BaseItemDTO.self, from: Fixtures.data(name))
         return try XCTUnwrap(DTOMapper.mediaItem(dto, log: SilentLog()))
+    }
+}
+
+private struct StringCatalogFile: Decodable {
+    var sourceLanguage: String
+    var strings: [String: Entry]
+
+    struct Entry: Decodable {
+        var localizations: [String: Localization]?
+
+        func value(for language: String) -> String? {
+            localizations?[language]?.stringUnit?.value
+        }
+    }
+
+    struct Localization: Decodable {
+        var stringUnit: Unit?
+    }
+
+    struct Unit: Decodable {
+        var value: String
     }
 }

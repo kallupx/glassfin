@@ -4,15 +4,20 @@ import Foundation
 import XCTest
 
 final class StringCatalogTests: XCTestCase {
-    /// Every `*.xcstrings` in the checkout is checked, not only CoreNetworking.
+    private let playbackKeys: Set<String> = [
+        PlaybackCopy.unsupportedVideoKey, PlaybackCopy.couldNotPlayKey, PlaybackCopy.insecureRedirectKey,
+        PlaybackCopy.pinnedHLSKey, PlaybackCopy.okKey,
+    ]
+
+    /// Every `*.xcstrings` in the checkout is checked, not only CoreModels.
     /// That includes `Apps/Shared/Resources/Localizable.xcstrings`.
     func testEveryStringCatalogHasTranslatedEnglishAndFinnish() throws {
         let root = try XCTUnwrap(repositoryRoot(), "Repository root not found from \(#filePath)")
         let catalogs = StringCatalogLint.catalogs(at: root)
         XCTAssertFalse(catalogs.isEmpty, "Expected at least one .xcstrings catalog")
         XCTAssertTrue(
-            catalogs.contains { $0.path.hasSuffix("Sources/CoreNetworking/Localizable.xcstrings") },
-            "CoreNetworking string catalog was not discovered"
+            catalogs.contains { $0.path.hasSuffix("Sources/CoreModels/Localizable.xcstrings") },
+            "CoreModels string catalog was not discovered"
         )
         let sharedSuffix = "Apps/Shared/Resources/Localizable.xcstrings"
         XCTAssertTrue(
@@ -24,8 +29,7 @@ final class StringCatalogTests: XCTestCase {
     }
 
     func testNetworkingCatalogKeysAndLocalizedAccessors() throws {
-        // This constant names an Info.plist field rather than user-facing copy.
-        let englishValues = try catalogEnglishValues(module: "CoreNetworking", excluding: ["infoDictionaryKey"])
+        let englishValues = try catalogEnglishValues(module: "CoreModels")
         try assertLocalized(
             ServerTransportPolicy.unencryptedWarning,
             key: ServerTransportPolicy.unencryptedWarningKey,
@@ -41,11 +45,14 @@ final class StringCatalogTests: XCTestCase {
             key: SessionEndCopy.serverSessionMayRemainKey,
             englishValues: englishValues
         )
+        for key in playbackKeys.sorted() {
+            try assertLocalized(PlaybackCopy.message(for: key), key: key, englishValues: englishValues)
+        }
     }
 
     func testModelsCatalogKeysAndLocalizedAccessor() throws {
         let englishValues = try catalogEnglishValues(module: "CoreModels")
-        XCTAssertEqual(englishValues.count, 17)
+        XCTAssertEqual(Set(englishValues.keys), Set(AuthCopy.Key.allCases.map(\.rawValue)).union(playbackKeys))
         for key in englishValues.keys.sorted() {
             try assertLocalized(AppErrorMessage.localized(key), key: key, englishValues: englishValues)
         }
@@ -72,6 +79,10 @@ final class StringCatalogTests: XCTestCase {
             }
         }
         XCTAssertFalse(keys.isEmpty, "\(module): expected source key constants")
+        if module == "CoreModels" {
+            keys.formUnion(AuthCopy.Key.allCases.map(\.rawValue))
+            keys.formUnion(playbackKeys)
+        }
         let data = try Data(contentsOf: sources.appendingPathComponent("Localizable.xcstrings"))
         let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
@@ -111,14 +122,14 @@ final class StringCatalogTests: XCTestCase {
         #endif
     }
 
-    func testScannerChecksCatalogsOutsideCoreNetworking() throws {
+    func testScannerChecksCatalogsOutsideCoreModels() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(
             "glassfin-catalogs-\(UUID().uuidString)",
             isDirectory: true
         )
         defer { try? FileManager.default.removeItem(at: root) }
         let packageCatalog = root.appendingPathComponent(
-            "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings"
+            "Packages/GlassfinCore/Sources/CoreModels/Localizable.xcstrings"
         )
         let appCatalog = root.appendingPathComponent("Apps/Shared/Resources/Localizable.xcstrings")
         try writeCatalog(packageCatalog, fi: ("translated", "fi-translation"))
@@ -129,13 +140,13 @@ final class StringCatalogTests: XCTestCase {
             catalogs.map { StringCatalogLint.relative($0, root: root) },
             [
                 "Apps/Shared/Resources/Localizable.xcstrings",
-                "Packages/GlassfinCore/Sources/CoreNetworking/Localizable.xcstrings",
+                "Packages/GlassfinCore/Sources/CoreModels/Localizable.xcstrings",
             ]
         )
         let issues = catalogs.flatMap { StringCatalogLint.issues(in: $0, root: root) }
         let appIssues = issues.filter { $0.hasPrefix("Apps/Shared/Resources/Localizable.xcstrings") }
         XCTAssertTrue(appIssues.contains { $0.contains("missing fi") })
-        XCTAssertFalse(issues.contains { $0.contains("Sources/CoreNetworking/Localizable.xcstrings") })
+        XCTAssertFalse(issues.contains { $0.contains("Sources/CoreModels/Localizable.xcstrings") })
     }
 
     func testCatalogLintRejectsMissingOrUntranslatedLocales() throws {

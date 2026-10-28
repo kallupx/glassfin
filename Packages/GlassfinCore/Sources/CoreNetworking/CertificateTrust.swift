@@ -14,6 +14,24 @@ public struct CertificatePresentation: Sendable, Equatable {
     }
 }
 
+/// A pin authorizes only the HTTPS origin where its certificate was presented.
+public struct OriginCertificatePin: Sendable, Equatable {
+    public let url: URL
+    public let sha256: String
+
+    public init(url: URL, sha256: String) {
+        self.url = url
+        self.sha256 = sha256
+    }
+
+    public func fingerprint(for target: URL) -> String? {
+        guard target.scheme?.lowercased() == "https", RedirectPolicy.originsMatch(url, target),
+            CertificateFingerprint.isValid(sha256)
+        else { return nil }
+        return sha256
+    }
+}
+
 public enum ServerTrustDecision: Sendable, Equatable {
     /// CA-validated certificates are not pinned, so a renewed public certificate still connects.
     case performDefaultHandling

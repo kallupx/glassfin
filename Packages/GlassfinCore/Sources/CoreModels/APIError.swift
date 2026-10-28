@@ -35,6 +35,9 @@ public enum APIError: Error, Sendable, Equatable {
     case headerRejected
     /// A path segment was not a 32-hex GUID (dashes optional).
     case invalidItemID
+    /// `NSURLErrorAppTransportSecurityRequiresSecureConnection` (-1022).
+    /// Shown with the same copy as an explicit public `http://` address.
+    case transportSecurity
 }
 
 public enum LogoutPolicy {
@@ -67,7 +70,13 @@ public enum HTTPStatusMapper {
 }
 
 public enum URLErrorMapper {
+    /// `NSURLErrorAppTransportSecurityRequiresSecureConnection`.
+    public static let appTransportSecurityRequiresSecureConnection = -1022
+
     public static func map(_ error: URLError) -> APIError {
+        if error.code.rawValue == appTransportSecurityRequiresSecureConnection {
+            return .transportSecurity
+        }
         switch error.code {
         case .timedOut:
             return .timeout
