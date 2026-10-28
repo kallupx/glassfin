@@ -273,7 +273,7 @@ private struct HomeMediaRow: View {
             }
             .padding(.vertical, SpacingToken.m)
         }
-        .focusSection()
+        .designFocusSection()
         #if os(tvOS)
             .focusScope(rowNamespace)
         #endif
