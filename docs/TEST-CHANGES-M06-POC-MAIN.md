@@ -1,6 +1,6 @@
 # M06 PoC follow-ups: main merge and app hooks
 
-Date: 2026-10-28. Branch: `test/poc-m06-followups`, PR #33. This app follow-up starts at `9071de5`, after the merges described below. `origin/main` remains at `eaf26b5`; it is already an ancestor of this branch.
+Date: 2026-10-28. Branch: `test/poc-m06-followups`, PR #33. This app follow-up starts at `9071de5`, after the merges described below. Main advanced to `3a07600` during validation; a final merge incorporates that CI caching change after app commit `13c9168`.
 
 ## App changes after CI run 40695296939
 
@@ -22,6 +22,8 @@ The original PR-local test changes relative to main are still confined to `Apps/
 ## Merge history and inherited tests
 
 Branch before the main merge: `280bdfe9b986d372a57a5f40fdbca33656eb1a38`. Merge `836c286113500d6f21b5989e54635adf678526d3` incorporates `b70aea11eb3272086bcb27a7062116993ee49125` (M06 #22). Merge `9071de5` incorporates `eaf26b5ba0208ad2d8e7453495d411404a4ec6b7` (M10 Settings #28). Both are merge commits; no history was rebased or force-pushed.
+
+The final merge incorporates `3a07600ef158548965cdd4bc30cd3488d239112f` (CI SwiftPM SourcePackages caching, #36) without conflicts. Its upstream changes affect only `.github/workflows/ci.yml`, `.gitignore` and `scripts/macos-ci.sh`; no app, package or test sources change. The main ancestry and merged shell syntax were checked again before pushing.
 
 Those merges initially preserved all main app code, removing the earlier branch-only Home hooks. CI run 40695296939 then failed T06-30 on the absent fifth Next Up card and T06-42/T06-43 on the absent request counter. The app implementation above supersedes that earlier test/doc-only scope.
 
