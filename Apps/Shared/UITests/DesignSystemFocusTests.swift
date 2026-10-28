@@ -259,6 +259,7 @@ final class DesignSystemFocusTests: XCTestCase {
             require(element(app, "design.settings.root"))
         }
 
+        @MainActor
         private func selectTab(
             _ app: XCUIApplication,
             label: String,

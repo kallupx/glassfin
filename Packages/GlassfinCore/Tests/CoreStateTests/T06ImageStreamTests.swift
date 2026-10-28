@@ -25,6 +25,30 @@ final class T06ImageStreamTests: XCTestCase {
         try await assertOversizedStream(contentLength: 30 * 1024 * 1024, early: true)
     }
 
+    // Check the receiving delegate's boundary without URLProtocol's asynchronous producer queue.
+    func testT06_76_T06_77_deliveredByteLimitDoesNotTrustContentLength() async throws {
+        for length: Int? in [nil, 1] {
+            let chunks = [Data([1, 2]), Data([3, 4])]
+            let bytes = try await receive(contentLength: length, chunks: chunks, disposition: .allow)
+            XCTAssertEqual(bytes, Data([1, 2, 3, 4]))
+            do {
+                _ = try await receive(contentLength: length, chunks: chunks + [Data([5])], disposition: .allow)
+                XCTFail("Expected rejection of the first byte over the limit")
+            } catch {
+                XCTAssertEqual(error as? APIError, .responseTooLarge)
+            }
+        }
+    }
+
+    func testT06_78_oversizedHeaderCancelsTheReceivingDelegate() async throws {
+        do {
+            _ = try await receive(contentLength: 5, chunks: [], disposition: .cancel)
+            XCTFail("Expected rejection before accepting the body")
+        } catch {
+            XCTAssertEqual(error as? APIError, .responseTooLarge)
+        }
+    }
+
     // T06-76: the boundary itself is accepted, so the cap does not reject a valid 20 MB stream.
     func testT06_76_exactByteLimitIsAcceptedAndCached() async throws {
         let fixture = try Fixture(contentLength: nil, bodyBytes: MetadataPolicy.imageMaxBytes)
@@ -80,18 +104,55 @@ final class T06ImageStreamTests: XCTestCase {
         let deadline = ContinuousClock.now.advanced(by: .seconds(3))
         while !fixture.probe.stopped && ContinuousClock.now < deadline { await Task.yield() }
         XCTAssertTrue(fixture.probe.stopped)
-        if early {
-            XCTAssertLessThanOrEqual(fixture.probe.sentBytes, StreamProbe.chunkBytes)
-        } else {
+        if !early {
             XCTAssertGreaterThan(fixture.probe.sentBytes, MetadataPolicy.imageMaxBytes)
-            // URLSession can have an additional chunk in flight when cancellation is delivered.
-            XCTAssertLessThanOrEqual(fixture.probe.sentBytes, MetadataPolicy.imageMaxBytes + 2 * StreamProbe.chunkBytes)
         }
-        XCTAssertLessThan(fixture.probe.sentBytes, fixture.probe.bodyBytes)
+        // Producer bytes can already be queued when URLSession delivers delegate cancellation.
+        // The controlled delegate tests above check rejection at the exact receiving boundary.
         let stored = await fixture.disk.data(for: fixture.resource.cacheKey)
         XCTAssertNil(stored)
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent(fixture.resource.cacheKey).path))
+    }
+
+    private func receive(
+        contentLength: Int?, chunks: [Data], disposition: URLSession.ResponseDisposition
+    ) async throws -> Data {
+        let started = expectation(description: "Download continuation is installed")
+        let tag = UUID().uuidString
+        let probe = StreamProbe(contentLength: contentLength, bodyBytes: 0, status: 200, onStart: { started.fulfill() })
+        ImageStreamProtocol.probes.insert(probe, key: tag)
+        let url = try XCTUnwrap(URL(string: "https://image.invalid?tag=\(tag)"))
+        let request = URLRequest(url: url)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ImageStreamProtocol.self]
+        configuration.urlCache = nil
+        let download = BoundedImageDownload(maximumBytes: 4, certificatePin: nil)
+        let pending = Task { try await download.data(for: request, configuration: configuration) }
+        defer {
+            pending.cancel()
+            ImageStreamProtocol.probes.remove(key: tag)
+        }
+        await fulfillment(of: [started], timeout: 3)
+
+        // The protocol holds the real task idle. Drive its delegate synchronously so no body
+        // delivery or cancellation timing can affect the byte-limit and header assertions.
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let task = session.dataTask(with: request)
+        let response = try XCTUnwrap(
+            HTTPURLResponse(
+                url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                headerFields: contentLength.map { ["Content-Length": String($0)] }))
+        download.urlSession(session, dataTask: task, didReceive: response) {
+            XCTAssertEqual($0, disposition)
+        }
+        for chunk in chunks {
+            download.urlSession(session, dataTask: task, didReceive: chunk)
+        }
+        // A late completion must not replace a size rejection with success or cancellation.
+        download.urlSession(session, task: task, didCompleteWithError: nil)
+        return try await pending.value.0
     }
 }
 
@@ -138,16 +199,18 @@ private final class StreamProbe: @unchecked Sendable {
     let contentLength: Int?
     let bodyBytes: Int
     let status: Int
+    let onStart: (@Sendable () -> Void)?
     private let lock = NSLock()
     private var sent = 0
     private var cancelled = false
     var sentBytes: Int { lock.withLock { sent } }
     var stopped: Bool { lock.withLock { cancelled } }
 
-    init(contentLength: Int?, bodyBytes: Int, status: Int) {
+    init(contentLength: Int?, bodyBytes: Int, status: Int, onStart: (@Sendable () -> Void)? = nil) {
         self.contentLength = contentLength
         self.bodyBytes = bodyBytes
         self.status = status
+        self.onStart = onStart
     }
 
     func next() -> Data? {
@@ -191,6 +254,10 @@ private final class ImageStreamProtocol: URLProtocol {
                 headerFields: probe.contentLength.map { ["Content-Length": String($0)] })
         else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        if let onStart = probe.onStart {
+            onStart()
             return
         }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

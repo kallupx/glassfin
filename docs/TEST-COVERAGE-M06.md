@@ -53,9 +53,9 @@ The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied ve
 | T06-73 | `T06MetadataTests.testT06_73_metadataPreservesLiteralMarkupAndEntities`; `T06MetadataTests.testT06_73_limitsCountCleanedGraphemeClusters`; `T06MetadataTests.testT06_73_displayTextCaps500GraphemesWithoutSplittingEmojiOrCombiningMarks`; `T06MetadataTests.testT06_73_displayTextStripsEveryControlAndBidiScalarBeforeCapping`; `T06MetadataTests.testT06_73_allMappedNamesAreCappedAndKeepLiteralMarkup`; `T06HomeServiceTests.testT06_73_filterGenresUseLiteralTextAndPolicyLimits`; `T06HomeTests.testT06_73_metadataIsCleanedThroughLiveAndCachedViewModels`; `DesignSystemLogicTests.testT05_15_overviewIsPlainText` |
 | T06-74 | `scripts/ci-grep.sh`; existing M03 redactor tests |
 | T06-75 | `scripts/redact_artifacts.py --self-test` (redactor only; final artifacts pending) |
-| T06-76 | `T06ImageStreamTests.testT06_76_missingContentLengthAbortsDuringDownload`; `T06ImageStreamTests.testT06_76_exactByteLimitIsAcceptedAndCached` |
-| T06-77 | `T06ImageStreamTests.testT06_77_lyingContentLengthAbortsDuringDownload` |
-| T06-78 | `T06ImageStreamTests.testT06_78_advertisedOversizeRejectsBeforeBody` |
+| T06-76 | `T06ImageStreamTests.testT06_76_missingContentLengthAbortsDuringDownload`; `T06ImageStreamTests.testT06_76_exactByteLimitIsAcceptedAndCached`; `T06ImageStreamTests.testT06_76_T06_77_deliveredByteLimitDoesNotTrustContentLength` |
+| T06-77 | `T06ImageStreamTests.testT06_77_lyingContentLengthAbortsDuringDownload`; `T06ImageStreamTests.testT06_76_T06_77_deliveredByteLimitDoesNotTrustContentLength` |
+| T06-78 | `T06ImageStreamTests.testT06_78_advertisedOversizeRejectsBeforeBody`; `T06ImageStreamTests.testT06_78_oversizedHeaderCancelsTheReceivingDelegate` |
 | T06-80 | `T06ImageOptionsTests.testT06_80_thumbnailOptionsUseDisplayedPixelsOnEveryPlatform`; `T06ImageDecodeTests.testT06_80_decoderDownsamplesToDisplayedPixelSize` |
 | T06-81 | `scripts/check-image-pipeline.py` and its `--self-test`, invoked by `scripts/ci-grep.sh` |
 | T06-82 | `T06ImageTests.testT06_82_imageByteLimitRejectsOversize`; `T06ImageDecodeTests.testT06_82_invalidImageFailsBeforePublishingBitmap`; `T06ImageStoreTests.testT06_82_loaderAndDiskRejectOversizedImageWithoutCaching`; `T06ImageStreamTests.testT06_82_cancelledStreamCannotCachePartialImage` |
