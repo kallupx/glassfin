@@ -97,6 +97,30 @@ final class PlaybackCoordinatorTests: XCTestCase {
         }
     }
 
+    /// T08P-101: keep the original query across the video-copy builder, preparation and engine handoff.
+    func testT08P_101_serverQuerySurvivesOnlyInPlaylistCarrier() async throws {
+        let rig = try rig(
+            data: playbackFixture(
+                container: "mkv", direct: false,
+                transcodingURL: "/master.m3u8?ApiKey=server%2bcanary&PlaySessionId=keep"))
+        await started(rig)
+        let carrier = try XCTUnwrap(rig.engine.loads.first?.carrier)
+        XCTAssertFalse(carrier.assetURL.absoluteString.contains("canary"))
+        XCTAssertFalse(carrier.originURL.absoluteString.contains("canary"))
+        let credentials = try XCTUnwrap(carrier.playlistCredentials)
+        let requests = await rig.origin.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertNil(requests.first?.authorizationHeader)
+        XCTAssertTrue(requests.first?.url.absoluteString.contains("ApiKey=server%2bcanary") == true)
+        let request = try XCTUnwrap(
+            ResourceLoadPlanner.originRequest(
+                assetURL: carrier.assetURL, authorizationHeader: carrier.authorizationHeader,
+                trust: carrier.trust, range: nil, allowedOrigin: carrier.originURL, playlistCredentials: credentials))
+        XCTAssertNil(request.authorizationHeader)
+        XCTAssertTrue(request.url.absoluteString.contains("ApiKey=server%2bcanary"))
+        await rig.coordinator.stop()
+    }
+
     /// T08P-55: pinned DirectPlay keeps the trust policy and header through the loader.
     func testT08P_55_pinnedDirectPlayUsesLoader() async throws {
         let rig = try rig()
@@ -426,7 +450,8 @@ final class PlaybackCoordinatorTests: XCTestCase {
             XCTAssertFalse(MediaCredentialQuery.contains(carrier.originURL))
             let requests = await rig.origin.requests
             XCTAssertEqual(requests.first?.method, "GET")
-            XCTAssertEqual(requests.first?.authorizationHeader, try rig.session.identity.authorizationHeader())
+            XCTAssertNil(requests.first?.authorizationHeader)
+            XCTAssertTrue(requests.first.map { MediaCredentialQuery.contains($0.url) } == true)
             let calls = await rig.client.calls
             XCTAssertEqual(try jsonBody(calls.last?.body)["PlayMethod"] as? String, "DirectStream")
             await rig.coordinator.stop()
@@ -1086,7 +1111,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
         if !rejected {
             let reply = try XCTUnwrap(replies.first, file: file, line: line)
             let keyURL = try XCTUnwrap(URL(string: key), file: file, line: line)
-            let wrappedKey = try XCTUnwrap(MediaAssetScheme.wrap(keyURL), file: file, line: line)
+            let wrappedKey = try XCTUnwrap(MediaAssetScheme.wrap(keyURL, isKey: true), file: file, line: line)
             let expected = playlist.replacingOccurrences(of: "URI=\"\(key)\"", with: "URI=\"\(wrappedKey)\"")
             XCTAssertEqual(String(decoding: reply.data, as: UTF8.self), expected, file: file, line: line)
         }

@@ -32,6 +32,7 @@
         private let authorizationHeader: String
         private let trust: ServerTrustClass
         private let allowedOrigin: URL
+        private let playlistCredentials: ServerHLSCredentialQuery?
         private let onFailure: (@Sendable (APIError) -> Void)?
         private let failures = LoaderFailures()
         private let queue: DispatchQueue
@@ -48,6 +49,7 @@
             self.authorizationHeader = carrier.authorizationHeader
             self.trust = carrier.trust
             self.allowedOrigin = carrier.originURL
+            self.playlistCredentials = carrier.playlistCredentials
             self.onFailure = onFailure
             self.gate = gate
             self.queue = DispatchQueue(label: "org.glassfin.media-loader")
@@ -73,7 +75,8 @@
                     authorizationHeader: authorizationHeader,
                     trust: trust,
                     range: range,
-                    allowedOrigin: allowedOrigin
+                    allowedOrigin: allowedOrigin,
+                    playlistCredentials: playlistCredentials
                 )
             else {
                 loadingRequest.finishLoading(with: URLError(.badURL))

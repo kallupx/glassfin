@@ -17,7 +17,8 @@ public enum PlaybackResolutionFailure: Sendable, Equatable {
 }
 
 public enum MediaCredentialMode: Sendable, Equatable {
-    /// Token in `Authorization`. Credential queries are stripped before the fetch.
+    /// Token in `Authorization`, except D4 playlists with a separate server-query carrier.
+    /// Other credential queries are stripped before the fetch.
     case authorizationHeader
     /// Opt-in fallback. No `Authorization` header. A same-origin redirect keeps the credential query.
     case queryCredential
@@ -48,7 +49,8 @@ public struct PlaybackURLResolver: Sendable {
         method: String,
         authorizationHeader: String?,
         trust: ServerTrustClass,
-        mode: MediaCredentialMode = .authorizationHeader
+        mode: MediaCredentialMode = .authorizationHeader,
+        playlistCredentials: ServerHLSCredentialQuery? = nil
     ) async throws(APIError) -> PlaybackResolution {
         guard MediaURLValidation.hasNoUserInfo(start) else { return .rejected(.insecureRedirect) }
         let header: String? = mode == .authorizationHeader ? authorizationHeader : nil
@@ -61,11 +63,19 @@ public struct PlaybackURLResolver: Sendable {
         var verb = method
         var retriedMethod = false
         while true {
+            // D4 also applies to the preparation GET. Never send the header beside the
+            // server query, and never carry it to another origin (including an HTTP upgrade).
+            if let playlistCredentials, PlaylistSniffer.isPlaylistURL(current) {
+                guard MediaOrigin.matches(start, current),
+                    let authenticated = playlistCredentials.appending(toPlaylist: current)
+                else { return .rejected(.insecureRedirect) }
+                current = authenticated
+            }
             guard
                 let request = OriginMediaRequest(
                     method: verb,
                     url: current,
-                    authorizationHeader: header,
+                    authorizationHeader: MediaCredentialQuery.contains(current) ? nil : header,
                     range: retriedMethod ? HTTPByteRange(start: 0, end: 1) : nil,
                     trust: trust
                 )
@@ -81,7 +91,8 @@ public struct PlaybackURLResolver: Sendable {
             }
             if (200..<300).contains(response.status) {
                 log.debug("Playback URL resolved: \(MediaLogRedactor.redact(current.absoluteString))")
-                return .resolved(current)
+                // D4 credentials stay in the request/carrier, never in a resolved player handoff.
+                return .resolved(playlistCredentials == nil ? current : MediaCredentialQuery.stripping(current))
             }
             guard (300..<400).contains(response.status), let location = response.location else {
                 log.debug("Playback URL probe failed with status \(response.status)")
