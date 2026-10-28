@@ -4,6 +4,17 @@ struct LibraryTabShell: View {
     var libraries: [LibraryTabItem]
     var home: AnyView
     @State private var selection: String = "home"
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
+    private var usesCompactTabs: Bool {
+        #if os(iOS)
+            sizeClass == .compact
+        #else
+            false
+        #endif
+    }
 
     private var plan: LibraryTabPlan {
         LibraryTabModel.plan(libraries: libraries)
@@ -12,14 +23,21 @@ struct LibraryTabShell: View {
     var body: some View {
         TabView(selection: $selection) {
             homeTab
+            if usesCompactTabs {
+                // Keep essential destinations ahead of library tabs in the phone's native overflow.
+                searchTab
+                settingsTab
+            }
             ForEach(plan.inline) { library in
                 libraryTab(library)
             }
             if !plan.overflow.isEmpty {
                 overflowTab
             }
-            searchTab
-            settingsTab
+            if !usesCompactTabs {
+                searchTab
+                settingsTab
+            }
         }
         .modifier(PlatformTabChrome())
         .accessibilityElement(children: .contain)

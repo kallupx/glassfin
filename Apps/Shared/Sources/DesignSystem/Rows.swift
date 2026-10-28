@@ -55,11 +55,16 @@ struct MediaRow: View {
 struct GlassActionBar: View {
     var actions: [GlassAction]
     var prominentID: String
+    var focus: FocusState<String?>.Binding? = nil
     var onActivate: (String) -> Void
 
-    @FocusState private var focus: String?
+    @FocusState private var localFocus: String?
     @Namespace private var glassNamespace
     @DesignAccessibility private var accessibility
+
+    private var actionFocus: FocusState<String?>.Binding {
+        focus ?? $localFocus
+    }
 
     var body: some View {
         ContainedGlass(spacing: SpacingToken.m) {
@@ -81,15 +86,15 @@ struct GlassActionBar: View {
                         in: glassNamespace,
                         enabled: MotionPolicy.allowsMorph(accessibility.reduceMotion)
                     )
-                    .focused($focus, equals: action.id)
+                    .focused(actionFocus, equals: action.id)
                     .accessibilityIdentifier(action.identifier)
                 }
             }
         }
-        .defaultFocus($focus, Optional(prominentID), priority: .userInitiated)
+        .defaultFocus(actionFocus, Optional(prominentID), priority: .userInitiated)
         .onAppear {
-            if focus == nil {
-                focus = prominentID
+            if actionFocus.wrappedValue == nil {
+                actionFocus.wrappedValue = prominentID
             }
         }
     }

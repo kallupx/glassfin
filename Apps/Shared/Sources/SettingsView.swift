@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var model: SettingsViewModel
     @FocusState private var signOutFocused: Bool
+    @Namespace private var focusScope
 
     init(flow: AuthFlow) {
         _model = State(initialValue: SettingsViewModel(auth: flow))
@@ -18,6 +19,9 @@ struct SettingsView: View {
             }
             .buttonStyle(.glass)
             .focused($signOutFocused)
+            #if os(tvOS)
+                .prefersDefaultFocus(in: focusScope)
+            #endif
             .accessibilityIdentifier("settings.signOut")
 
             Text(verbatim: versionText)
@@ -27,7 +31,16 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.version")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .defaultFocus($signOutFocused, true)
+        .defaultFocus($signOutFocused, true, priority: .userInitiated)
+        #if os(tvOS)
+            .focusScope(focusScope)
+            .task {
+                // The tab content must join the focus hierarchy before reclaiming the originating row.
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                signOutFocused = true
+            }
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("settings.root")
         .onAppear { model.onAppear() }
