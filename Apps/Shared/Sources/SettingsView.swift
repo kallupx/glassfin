@@ -14,6 +14,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: SpacingToken.l) {
+            PlaybackSettingsView()
             Button {
                 model.requestSignOut()
             } label: {
