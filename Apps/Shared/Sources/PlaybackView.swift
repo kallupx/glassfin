@@ -167,12 +167,16 @@
             }
 
             #if os(tvOS)
-                func playerViewController(
+                nonisolated func playerViewController(
                     _ playerViewController: AVPlayerViewController,
                     willTransitionToVisibilityOfTransportBar visible: Bool,
                     with coordinator: any AVPlayerViewControllerAnimationCoordinator
                 ) {
-                    companion.transportVisible = visible
+                    // AVKit's delegate requirement is nonisolated. Only the visibility
+                    // value crosses to the main actor that owns playback UI state.
+                    Task { @MainActor [weak self] in
+                        self?.companion.transportVisible = visible
+                    }
                 }
 
                 func playerViewControllerWillDismiss(_ playerViewController: AVPlayerViewController) {

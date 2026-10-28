@@ -11,7 +11,9 @@
         @State private var image: CGImage?
         @State private var nextImage: CGImage?
         @State private var decoder = TrickplayImageDecoder()
-        @State private var dragStart: Duration?
+        #if os(iOS)
+            @State private var dragStart: Duration?
+        #endif
         @FocusState private var playFocused: Bool
         @FocusState private var scrubFocused: Bool
         @DesignAccessibility private var accessibility
@@ -97,12 +99,13 @@
                             if direction == .right { companion.scrub(to: position + .seconds(10)) }
                         }
                         .onExitCommand { Task { await companion.endScrubbing(commit: false) } }
+                    #else
+                        .gesture(
+                            DragGesture().onChanged { gesture in
+                                if dragStart == nil { dragStart = position }
+                                companion.scrub(to: (dragStart ?? position) + .seconds(gesture.translation.width / 10))
+                            }.onEnded { _ in dragStart = nil })
                     #endif
-                    .gesture(
-                        DragGesture().onChanged { gesture in
-                            if dragStart == nil { dragStart = position }
-                            companion.scrub(to: (dragStart ?? position) + .seconds(gesture.translation.width / 10))
-                        }.onEnded { _ in dragStart = nil })
                 }
                 .padding(SpacingToken.l)
                 .ownGlassSurface(in: ContentShape.concentric)
