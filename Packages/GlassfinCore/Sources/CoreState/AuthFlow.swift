@@ -56,8 +56,7 @@ public final class AuthFlow: ViewContentProviding {
         guard case .signedIn(let session) = app.phase,
             let token = loadToken(serverID: session.server.id, userID: session.userID)
         else { throw .unauthorized }
-        let fingerprint = try? pins.fingerprint(for: session.server.id)
-        let pin = fingerprint.map { OriginCertificatePin(url: session.server.url, sha256: $0) }
+        let pin = try pins.certificatePin(for: session.server.id, url: session.server.url)
         let deviceID: String
         do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
             throw .headerRejected
