@@ -69,6 +69,15 @@ public final class RequestScope: @unchecked Sendable {
         return id
     }
 
+    @discardableResult
+    public func trackCancellation(_ cancel: @escaping @Sendable () -> Void) -> UUID {
+        let id = UUID()
+        lock.lock()
+        tasks[id] = cancel
+        lock.unlock()
+        return id
+    }
+
     public func untrack(_ id: UUID) {
         lock.lock()
         tasks[id] = nil

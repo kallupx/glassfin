@@ -136,6 +136,8 @@ public struct MediaSegmentDTO: Decodable, Sendable {
 }
 
 public struct SearchHintDTO: Decodable, Sendable {
+    public var PrimaryImageTag: String?
+    public var ThumbImageTag: String?
     public var ItemId: String?
     public var Id: String?
     public var Name: String?

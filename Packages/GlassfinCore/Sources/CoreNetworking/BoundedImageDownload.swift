@@ -27,7 +27,8 @@ final class BoundedImageDownload: NSObject, URLSessionDataDelegate, @unchecked S
 
     func data(for request: URLRequest, configuration: URLSessionConfiguration) async throws -> (Data, URLResponse, Int?)
     {
-        try await withTaskCancellationHandler {
+        configuration.urlCache = nil
+        return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 lock.lock()
                 guard !finished else {
