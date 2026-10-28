@@ -1,0 +1,41 @@
+import CoreModels
+import CoreNetworking
+import Foundation
+
+/// Focus targets for the authentication screens. Q4-05 is decided: the address field,
+/// or Continue when that field is already filled, and Cancel on the cleartext and certificate screens.
+public enum AuthFocus: Hashable, Sendable {
+    case connect
+    case addressField
+    case continueButton
+    case cancel
+    case quickConnect
+    case usePassword
+    case username
+    case password
+    case signIn
+    case tryAgain
+    case back
+    case newCode
+    case quickConnectCode
+}
+
+public enum AuthFocusPolicy {
+    public static func address(fieldIsEmpty: Bool) -> AuthFocus {
+        fieldIsEmpty ? .addressField : .continueButton
+    }
+
+    public static let cleartextAndCertificate = AuthFocus.cancel
+}
+
+public enum AuthServerName {
+    /// Q4-16 is confirmed by Security: use the shared M03 sanitizer everywhere.
+    public static func display(_ raw: String, host: String = "") -> String {
+        MetadataSanitizer.displayName(raw, fallbackHost: host)
+    }
+}
+
+public enum AuthSessionTiming {
+    /// `/Users/Me` at launch. One attempt, no retry.
+    public static let currentUserTimeout: Duration = .seconds(5)
+}

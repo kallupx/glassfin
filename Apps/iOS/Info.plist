@@ -4,11 +4,6 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>en</string>
-		<string>fi</string>
-	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Glassfin</string>
 	<key>CFBundleExecutable</key>

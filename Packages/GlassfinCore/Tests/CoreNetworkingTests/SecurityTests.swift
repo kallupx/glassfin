@@ -90,7 +90,7 @@ final class SecurityCredentialTests: XCTestCase {
         try pins.save(fingerprint: fingerprint, serverID: otherServer)
 
         let client = RecordingAPIClient(error: .network)
-        let failed = await SessionTermination.logOut(
+        let failed = await CoreNetworking.SessionTermination.logOut(
             serverID: serverID, userID: userID, vault: vault, client: client)
         XCTAssertEqual(client.calls().map(\.path), ["/Sessions/Logout"])
         XCTAssertEqual(client.calls().map(\.method), ["POST"])
@@ -98,17 +98,16 @@ final class SecurityCredentialTests: XCTestCase {
         XCTAssertFalse(failed.serverCallSucceeded)
         XCTAssertTrue(failed.tokenRemoved)
         XCTAssertTrue(failed.serverSessionMayRemain)
-        XCTAssertEqual(failed.userMessageKey, SessionEndCopy.serverSessionMayRemainKey)
-        XCTAssertNotNil(failed.userMessage)
+        XCTAssertEqual(failed.messageKey, .serverSessionMayRemain)
         XCTAssertNil(try vault.loadToken(serverID: serverID, userID: userID))
 
         let ok = RecordingAPIClient(error: nil)
-        let succeeded = await SessionTermination.logOut(
+        let succeeded = await CoreNetworking.SessionTermination.logOut(
             serverID: serverID, userID: otherUser, vault: vault, client: ok)
         XCTAssertTrue(succeeded.serverCallSucceeded)
         XCTAssertTrue(succeeded.tokenRemoved)
         XCTAssertNil(succeeded.userMessage)
-        XCTAssertNil(succeeded.userMessageKey)
+        XCTAssertNil(succeeded.messageKey)
         XCTAssertEqual(try vault.loadToken(serverID: otherServer, userID: userID), "kept-token")
 
         try ServerDataRemoval.remove(serverID: serverID, vault: vault, pins: pins)
@@ -128,7 +127,7 @@ final class SecurityCredentialTests: XCTestCase {
         ]
         for error in failures {
             let vault = try seededVault()
-            let effect = try SessionTermination.apply(
+            let effect = try CoreNetworking.SessionTermination.apply(
                 error: error, kind: .authenticated, serverID: serverID, userID: userID, vault: vault)
             XCTAssertEqual(effect, .keepToken)
             XCTAssertEqual(try vault.loadToken(serverID: serverID, userID: userID), token)
@@ -136,7 +135,7 @@ final class SecurityCredentialTests: XCTestCase {
         }
         let expired = try seededVault()
         XCTAssertEqual(
-            try SessionTermination.apply(
+            try CoreNetworking.SessionTermination.apply(
                 error: .unauthorized, kind: .authenticated, serverID: serverID, userID: userID, vault: expired),
             .endSession
         )
@@ -144,7 +143,7 @@ final class SecurityCredentialTests: XCTestCase {
 
         let login = try seededVault()
         XCTAssertEqual(
-            try SessionTermination.apply(
+            try CoreNetworking.SessionTermination.apply(
                 error: .unauthorized, kind: .login, serverID: serverID, userID: userID, vault: login),
             .invalidCredentials
         )
@@ -322,7 +321,7 @@ final class SecurityTransportTests: XCTestCase {
             XCTAssertEqual(ServerTransportPolicy.evaluate(url), .publicHTTPRejected, host)
             XCTAssertEqual(
                 ServerTransportPolicy.messageKey(for: .publicHTTPRejected),
-                ServerTransportPolicy.publicAddressRequiresHTTPSKey
+                .publicAddressRequiresHTTPS
             )
             let transport = RecordingRequestTransport()
             let client = HTTPJellyfinClient(
@@ -507,19 +506,20 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertEqual(saw, allowed)
     }
 
-    /// T03-13. Public HTTP is rejected. Local HTTP is allowed and marked unencrypted. Credentials are stripped.
+    /// T03-13. Public HTTP is rejected. Local HTTP is allowed and marked unencrypted. Userinfo is rejected.
     func testT03_13_publicHTTPIsRejectedAndLocalHTTPIsMarked() throws {
         let publicHTTP = try XCTUnwrap(URL(string: "http://jellyfin.example.com"))
         XCTAssertEqual(ServerTransportPolicy.evaluate(publicHTTP), .publicHTTPRejected)
         XCTAssertEqual(
             ServerTransportPolicy.messageKey(for: .publicHTTPRejected),
-            ServerTransportPolicy.publicAddressRequiresHTTPSKey
+            .publicAddressRequiresHTTPS
         )
         XCTAssertFalse(ServerTransportPolicy.showsUnencryptedMark(publicHTTP))
 
         let lan = try XCTUnwrap(URL(string: "http://192.168.0.2:8096"))
         XCTAssertEqual(ServerTransportPolicy.evaluate(lan), .unencryptedLocal)
-        XCTAssertEqual(ServerTransportPolicy.badge(for: lan).messageKey, ServerTransportPolicy.unencryptedWarningKey)
+        XCTAssertEqual(
+            ServerTransportPolicy.messageKey(for: ServerTransportPolicy.evaluate(lan)), .connectionNotEncrypted)
         XCTAssertTrue(ServerTransportPolicy.badge(for: lan).showsUnencryptedMark)
         XCTAssertEqual(
             ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "http://jellyfin.local"))), .unencryptedLocal)
@@ -531,9 +531,9 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertEqual(
             ServerTransportPolicy.evaluate(try XCTUnwrap(URL(string: "ftp://jellyfin.example.com"))), .invalid)
 
+        XCTAssertThrowsError(try ServerAddress.canonical(XCTUnwrap(URL(string: "https://user:secret@example.com"))))
         let canonical = try ServerAddress.canonical(
-            XCTUnwrap(
-                URL(string: "https://user:secret@media.example/jellyfin/../jellyfin/./web?ApiKey=sekret&x=1#frag"))
+            XCTUnwrap(URL(string: "https://media.example/jellyfin/../jellyfin/./web?ApiKey=sekret&x=1#frag"))
         )
         XCTAssertNil(canonical.user)
         XCTAssertNil(canonical.password)
@@ -542,15 +542,15 @@ final class SecurityTransportTests: XCTestCase {
         XCTAssertNil(canonical.fragment)
         XCTAssertFalse(canonical.absoluteString.contains("sekret"))
         XCTAssertFalse(canonical.absoluteString.contains("secret"))
-        XCTAssertTrue(canonical.query?.contains("x=1") == true)
+        XCTAssertNil(canonical.query)
         XCTAssertThrowsError(try ServerAddress.canonical(XCTUnwrap(URL(string: "ftp://media.example/jellyfin"))))
     }
 
     func testTransportMessageKeysCoverEveryVerdict() throws {
-        let cases: [(String, ServerTransportPolicy.Verdict, String?)] = [
+        let cases: [(String, ServerTransportPolicy.Verdict, AuthCopy.Key?)] = [
             ("https://jellyfin.example.com", .secure, nil),
-            ("http://192.168.0.2:8096", .unencryptedLocal, ServerTransportPolicy.unencryptedWarningKey),
-            ("http://jellyfin.example.com", .publicHTTPRejected, ServerTransportPolicy.publicAddressRequiresHTTPSKey),
+            ("http://192.168.0.2:8096", .unencryptedLocal, .connectionNotEncrypted),
+            ("http://jellyfin.example.com", .publicHTTPRejected, .publicAddressRequiresHTTPS),
             ("ftp://jellyfin.example.com", .invalid, nil),
         ]
         for (address, verdict, expectedKey) in cases {
@@ -721,8 +721,12 @@ final class SecurityDiscoveryTests: XCTestCase {
     func testT03_24_forgedDiscoveryDoesNotAutoConnect() throws {
         let stored = try XCTUnwrap(URL(string: "http://192.168.1.9:8096"))
         let name = "<script>alert(1)</script><b>" + String(repeating: "N", count: 80) + "</b>\n"
+        let rejected = try JSONSerialization.data(withJSONObject: [
+            "Address": "http://user:pass@192.168.1.50:8096/jellyfin"
+        ])
+        XCTAssertNil(DiscoveryPolicy.parse(rejected, storedURL: stored, publicInfoID: nil))
         let packet = try JSONSerialization.data(withJSONObject: [
-            "Address": "http://user:pass@192.168.1.50:8096/jellyfin",
+            "Address": "http://192.168.1.50:8096/jellyfin",
             "Id": "discovered-id",
             "Name": name,
         ])

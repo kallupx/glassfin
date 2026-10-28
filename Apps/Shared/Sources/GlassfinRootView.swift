@@ -1,13 +1,14 @@
+import GlassfinCore
 import SwiftUI
 
 struct GlassfinRootView: View {
+    var flow: AuthFlow
+
     var body: some View {
         #if DEBUG
             switch DesignSystemLaunch.screen {
             case .welcome:
-                NavigationStack {
-                    WelcomeView()
-                }
+                AuthRootView(flow: flow)
             case .focus:
                 DesignSystemFocusDemo()
             case .error:
@@ -21,9 +22,7 @@ struct GlassfinRootView: View {
                 NavigationPrototype()
             }
         #else
-            NavigationStack {
-                WelcomeView()
-            }
+            AuthRootView(flow: flow)
         #endif
     }
 }

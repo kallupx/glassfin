@@ -361,10 +361,13 @@ final class MediaLoaderSecurityTests: XCTestCase {
         }
     }
 
-    /// T08P-70/88: both master and variant playlists use the header; server segment credentials stay on-origin.
+    /// T08P-70/88/101: playlists use the server query only; server segment/MAP credentials stay on-origin.
     func testT08P_70_88_masterAndVariantUseLoaderAndSegmentsStayOnOrigin() async throws {
         let master = URL(string: "https://example.invalid/master.m3u8")!
         let variant = URL(string: "https://example.invalid/variant.m3u8")!
+        let credentials = try XCTUnwrap(
+            ServerHLSCredentialQuery(
+                transcodingURL: URL(string: master.absoluteString + "?ApiKey=server-secret")!))
         let responses = [
             OriginMediaResponse(
                 status: 200, contentType: "application/vnd.apple.mpegurl",
@@ -380,7 +383,8 @@ final class MediaLoaderSecurityTests: XCTestCase {
         let masterRequest = try XCTUnwrap(
             ResourceLoadPlanner.originRequest(
                 assetURL: try XCTUnwrap(MediaAssetScheme.wrap(master)),
-                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master))
+                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master,
+                playlistCredentials: credentials))
         try await ChunkedMediaLoader.load(
             request: masterRequest, range: nil, client: client,
             isCancelled: { false }, receive: { reply async throws(APIError) in await masterSink.receive(reply) })
@@ -393,15 +397,19 @@ final class MediaLoaderSecurityTests: XCTestCase {
         let variantRequest = try XCTUnwrap(
             ResourceLoadPlanner.originRequest(
                 assetURL: variantAsset,
-                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master))
+                authorizationHeader: "header-secret", trust: .publiclyTrusted, range: nil, allowedOrigin: master,
+                playlistCredentials: credentials))
         let variantSink = ChunkSink()
         try await ChunkedMediaLoader.load(
             request: variantRequest, range: nil, client: client,
             isCancelled: { false }, receive: { reply async throws(APIError) in await variantSink.receive(reply) })
         let requests = await client.requests
-        XCTAssertEqual(requests.map(\.url), [master, variant])
         XCTAssertTrue(
-            requests.allSatisfy { $0.authorizationHeader == "header-secret" && !MediaCredentialQuery.contains($0.url) })
+            requests.map(\.url) == [
+                credentials.appending(toPlaylist: master), credentials.appending(toPlaylist: variant),
+            ])
+        XCTAssertTrue(
+            requests.allSatisfy { $0.authorizationHeader == nil && MediaCredentialQuery.contains($0.url) })
         let text = await variantSink.text
         XCTAssertTrue(text.contains("https://example.invalid/segment.m4s?ApiKey=server-secret"))
         XCTAssertTrue(text.contains("https://example.invalid/init.mp4?ApiKey=server-secret"))
