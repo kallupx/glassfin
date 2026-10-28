@@ -12,14 +12,21 @@ struct LibraryTabShell: View {
     var body: some View {
         TabView(selection: $selection) {
             homeTab
+            #if os(iOS)
+                // Keep primary destinations ahead of libraries in the compact tab bar.
+                searchTab
+                settingsTab
+            #endif
             ForEach(plan.inline) { library in
                 libraryTab(library)
             }
             if !plan.overflow.isEmpty {
                 overflowTab
             }
-            searchTab
-            settingsTab
+            #if !os(iOS)
+                searchTab
+                settingsTab
+            #endif
         }
         .modifier(PlatformTabChrome())
         .accessibilityElement(children: .contain)
@@ -41,12 +48,17 @@ struct LibraryTabShell: View {
             Text(verbatim: library.title)
                 .accessibilityIdentifier("design.library.\(library.id)")
         } label: {
-            Label {
-                Text(verbatim: library.title)
-            } icon: {
-                GlassIcon(systemName: "rectangle.stack", label: .tabLibraries)
-            }
-            .accessibilityIdentifier("design.tab.library.\(library.id)")
+            #if os(iOS)
+                // Native tab items derive their accessible title from the label, including in More.
+                Label(library.title, systemImage: "rectangle.stack")
+            #else
+                Label {
+                    Text(verbatim: library.title)
+                } icon: {
+                    GlassIcon(systemName: "rectangle.stack", label: .tabLibraries)
+                }
+                .accessibilityIdentifier("design.tab.library.\(library.id)")
+            #endif
         }
     }
 
@@ -89,13 +101,19 @@ struct LibraryTabShell: View {
         }
     }
 
+    @ViewBuilder
     private func tabLabel(_ key: CopyKey, symbol: String, identifier: String) -> some View {
-        Label {
-            Copy.text(key)
-        } icon: {
-            GlassIcon(systemName: symbol, label: key)
-        }
-        .accessibilityIdentifier(identifier)
+        #if os(iOS)
+            // Tab accessibility modifiers affect the content, not UIKit's generated tab-bar button.
+            Label(Copy.string(key), systemImage: symbol)
+        #else
+            Label {
+                Copy.text(key)
+            } icon: {
+                GlassIcon(systemName: symbol, label: key)
+            }
+            .accessibilityIdentifier(identifier)
+        #endif
     }
 }
 
