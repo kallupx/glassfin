@@ -89,6 +89,10 @@ import XCTest
 
         private func liveServer() async throws -> PoCLiveServer {
             guard let configuration = PoCLiveServerConfiguration.fromEnvironment() else {
+                if PoCLiveServerConfiguration.isRequired() {
+                    XCTFail("\(PoCLiveServerConfiguration.requiredKey)=1 but " + PoCLiveServerConfiguration.skipReason)
+                    throw PoCLiveServerError.missingRequiredConfiguration
+                }
                 throw XCTSkip(PoCLiveServerConfiguration.skipReason)
             }
             return try await PoCLiveServer.connect(configuration)

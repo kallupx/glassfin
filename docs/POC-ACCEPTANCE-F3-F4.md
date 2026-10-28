@@ -84,6 +84,9 @@ piece. Each item needs app or CI changes, which this PR deliberately does not ma
    would let one simulator run journeys back to back.
 4. **CI job.** No workflow job starts the native macOS Jellyfin server, runs the bootstrap and passes the
    `TEST_RUNNER_GLASSFIN_POC_*` variables to the tvOS UI tests. Until one exists these tests skip in CI.
+   The `jellyfin-e2e` job (#50) now provides this. It must also set `TEST_RUNNER_GLASSFIN_POC_REQUIRED=1`:
+   with that flag a missing or invalid configuration fails the journey instead of skipping it, so the job
+   cannot pass green with zero executed journeys.
 5. **Optional identifiers.** Assertions use server state plus the absence of alerts. A `playback.root`
    identifier and a `playback.error` element carrying the catalog key would make failures easier to read.
 6. **Risk: ATS in the test runner.** The runner calls `http://127.0.0.1:8096` directly. If ATS blocks it,

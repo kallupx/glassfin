@@ -14,6 +14,13 @@ struct PoCLiveServerConfiguration: Sendable {
     static let adminUsernameKey = "GLASSFIN_POC_ADMIN_USERNAME"
     static let adminPasswordKey = "GLASSFIN_POC_ADMIN_PASSWORD"
     static let allKeys = [serverURLKey, usernameKey, passwordKey, adminUsernameKey, adminPasswordKey]
+    /// When "1", a missing or invalid configuration fails the journey instead of skipping it, so a CI job
+    /// that is supposed to run against a live server cannot pass green with zero executed journeys.
+    static let requiredKey = "GLASSFIN_POC_REQUIRED"
+
+    static func isRequired(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        environment[requiredKey]?.trimmingCharacters(in: .whitespacesAndNewlines) == "1"
+    }
 
     let serverURL: URL
     let username: String
@@ -91,6 +98,7 @@ enum PoCLiveServerError: Error, CustomStringConvertible {
     case decoding(path: String)
     case missingSeed(String)
     case noPlaybackSession(String)
+    case missingRequiredConfiguration
 
     var description: String {
         switch self {
@@ -98,6 +106,7 @@ enum PoCLiveServerError: Error, CustomStringConvertible {
         case .decoding(let path): "Live server \(path) returned an unexpected body"
         case .missingSeed(let what): "Seed is missing \(what) (TPOC-02 / QPOC-03)"
         case .noPlaybackSession(let state): "The server never reported a transcoding session (\(state))"
+        case .missingRequiredConfiguration: "Live server configuration is required but missing or invalid"
         }
     }
 }
