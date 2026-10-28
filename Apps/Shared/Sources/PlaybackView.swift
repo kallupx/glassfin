@@ -200,8 +200,10 @@
                     }
                 }
 
-                func playerViewControllerShouldDismiss(_ playerViewController: AVPlayerViewController) -> Bool {
-                    onClose()
+                nonisolated func playerViewControllerShouldDismiss(_ playerViewController: AVPlayerViewController)
+                    -> Bool
+                {
+                    Task { @MainActor [weak self] in self?.onClose() }
                     return false
                 }
             #endif

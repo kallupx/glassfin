@@ -122,6 +122,47 @@ credentials; #50's native-server job is excluded under the mocks/Docker-only
 constraint. No real or native test server is started. Device playback, physical
 remote input, performance and reviewed snapshot baselines remain unverified.
 
+## Refreshed Apple CI findings
+
+Run [40765717404](https://github.com/kallupx/glassfin/actions/runs/40765717404)
+validated head `704b5aae3a1ac961889bca425b5b845245d77a36`. Linux passed 738
+tests (728 passed, 10 skipped) with 92.11% CI coverage (11476/12459).
+The Apple jobs completed with code/test failures, not mid-build timeouts.
+No infrastructure rerun was warranted for those failures.
+
+### tvOS compile failure: #51 dismissal callback
+
+Both `test-tvos` and `full-ui` fail Release and Debug compilation in
+`Apps/Shared/Sources/PlaybackView.swift:146` / `:203`. The compiler identifies
+`playerViewControllerShouldDismiss(_:)` as a main-actor-isolated method satisfying
+a nonisolated `AVPlayerViewControllerDelegate` requirement. This also affects #51
+independently; #42's transport-visibility callback already uses the correct
+nonisolated bridge. Mark the dismissal method `nonisolated`, schedule `onClose`
+with `Task { @MainActor [weak self] ... }`, and return `false` synchronously so
+#51's awaited stop/data-update path continues to own dismissal. The canary applies
+this production correction without touching tests.
+
+### iOS UI failures to adopt in owning PRs
+
+The iOS Release build and package tests pass: 748 package tests, 738 passed,
+10 skipped, zero failures. App unit tests pass: 49 total, 41 passed and eight
+snapshot-reference skips. The UI run executes 43 methods: 33 passed, 10 failed.
+It reports these failures.
+
+| File / test | Observed cause and evidence | Owning PR / proposed correction |
+| --- | --- | --- |
+| `Apps/Shared/UITests/T04AuthUITests.swift:177`, `testT04_01_welcomeIsTheConnectButton` | XCTest cannot terminate the app process during launch; this is a simulator lifecycle failure, separate from a build hang. | Existing auth suite / CI runner: validate on the next run with a fresh simulator. No assertion or timeout change. |
+| `Apps/Shared/UITests/T08PlaybackWiringUITests.swift`, `testDetailPlayOpensPlayerAndReturnsToDetail`, `testFromBeginningReturnsFocusToItsButton`, `testStartupFailureShowsLocalizedError` (failure through `UIInteraction.swift:21`) | Detail action frames have negative X coordinates (`detail.play` at -719 and `detail.startOver` at -577.3), so XCTest cannot compute a hit point. The M07 hero requests a fixed 1920-wide backdrop and uses a single horizontal action row. | #23 with #51: make the hero artwork and action layout fit the phone width; preserve the existing Play/Start-over/error assertions. This is an inherited iOS layout problem exposed by the new wiring tests. |
+| `Apps/Shared/UITests/T09SearchMVPTests.swift:66`, `testT09_12_tabRoundTripKeepsQueryAndResults` | The Home fixture identifier is absent after the helper selects Home. Keyboard/tab interaction is the likely cause; the log does not prove a state-model failure. | #46: inspect the native hierarchy and dismiss the search keyboard before tab activation in the iOS helper, retaining all round-trip assertions. |
+| Same file `:375`, `:84-85`, `:114`: `testT09_29_failedSeriesRequestKeepsMoviesAndEpisodesVisible`, `testT09_31_groupedResultsHaveMoviesSeriesAndEpisodesHeaders`, `testT09_32_emptySeriesGroupHasNoHeader` | Expected row headers cannot be found; the Movie card is found before the reveal helper fails. The production row assigns its identifier to a VStack without an explicit accessibility container, and the helper swipes the whole app while the native keyboard can remain active. Which effect hides each header needs native hierarchy confirmation. | #46 / Search UI: preserve child header identifiers with an explicit accessibility container; target the actual vertical scroll view and dismiss the iOS keyboard before revealing rows. Keep all header and sibling-row assertions. |
+| Same file `:148-149`, `testT09_41_all24CardsAreReachableWithoutSeeMore` | Horizontal drag traversal leaves cards non-hittable and ultimately cannot find card 4. Linux backend/view-model tests retain all 24 IDs in order. The UI gesture or scroll-container targeting fails; data loss is not established. | #46: inspect row bounds, target the horizontal scroll view, and make every existing card assertion pass without changing its count or expected labels. |
+| Same file `:185-186`, `testT09_56_offlineBannerKeepsRecentQueryUsable` | Selecting the recent query updates the field, but `search.banner` is absent. The log alone cannot distinguish fixture connectivity/banner state from native Search inset accessibility. Linux offline-state tests pass. | #46: inspect fixture connectivity/banner state and the top inset's accessibility tree, then fix the rendering/fixture path while retaining the offline-key and editable-recents assertions. |
+
+These independent UI findings are retained for the owners rather than weakening,
+removing or skipping their assertions. The next push validates the delegate
+correction and exposes any further tvOS UI failures previously hidden by the
+compiler error. The branch remains a draft canary even when CI is red.
+
 ## Historical first pass (superseded)
 
 The following archive describes the original baseline, inputs, fixes and known
