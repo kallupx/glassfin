@@ -97,10 +97,30 @@ job from #50 is not imported or executed.
 
 ## Current validation and findings
 
-Pending the refreshed combined Linux suite and GitHub Actions. Apple builds and
-tests run only in GitHub Actions. Existing assertions must remain unchanged;
-all integration-authored test edits are audited in
-[TEST-CHANGES-INTEGRATION-MVP.md](TEST-CHANGES-INTEGRATION-MVP.md).
+The refreshed combined Linux suite passes: 738 total, 728 passed, 10 opt-in
+server skips, zero failures. The coverage gate passes the same suite with
+92.10% line coverage (11475/12459), minimum 80%. Strict swift-format, SwiftLint,
+source/catalog/security checks, entitlements, debug-string and unit-target checks,
+license checks, 33 Python bootstrap/HLS tests and 22 script self-tests pass.
+Local SwiftLint's SourceKit-dependent custom rule is unavailable; the source
+security grep independently checks its no-print policy.
+
+All seven input heads (main plus six PRs) are ancestors of the refreshed head.
+Every source catalog entry is retained verbatim with translated en/fi values.
+All 30 changed test/fixture paths match an owning source head byte-for-byte;
+no manual test edits or assertion changes were needed during this refresh.
+See [TEST-CHANGES-INTEGRATION-MVP.md](TEST-CHANGES-INTEGRATION-MVP.md).
+
+Apple validation runs only in GitHub Actions. The draft PR retains `full-ci`;
+CI status is reported in its body and the final report for the pushed head.
+
+Current product limits: Search retains its standalone detail placeholder, and
+#44 track preferences still depend on the shell's selected playback configuration.
+#51 now wires Home/library/detail playback through the coordinator and preserves
+awaited stop and focus return. #47 acceptance tests remain gated without server
+credentials; #50's native-server job is excluded under the mocks/Docker-only
+constraint. No real or native test server is started. Device playback, physical
+remote input, performance and reviewed snapshot baselines remain unverified.
 
 ## Historical first pass (superseded)
 
