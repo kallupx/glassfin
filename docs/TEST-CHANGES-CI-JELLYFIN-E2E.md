@@ -1,6 +1,8 @@
 # Test changes: local Jellyfin E2E CI
 
-No existing test file or assertion is modified, weakened or removed.
+No existing test file or assertion is modified, weakened or removed by this
+change relative to main. The merge of updated origin/main includes #44's own
+test changes, documented upstream in `docs/TEST-CHANGES-M08a-TRACKS.md`.
 
 - Added `Apps/Shared/Tests/Logic/UITestStateResetTests.swift`: verifies reset-only
   launch arguments keep mock mode disabled, clears isolated defaults/cache and

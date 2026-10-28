@@ -84,8 +84,8 @@ reports unavailable acceptance tests with zero tests run until that source lands
 An unavailable suite is not a playback acceptance pass. Once present, failures
 are fatal, including missing M07 identifiers or M08 player wiring.
 
-PR #47 is stacked on #44. This branch intentionally does not merge those app
-changes. Its tests currently launch with `-AppleLanguages (en)` only and rely on
+PR #47 was stacked on #44, which has now merged into main. This branch follows
+main without importing draft test sources. The acceptance tests currently launch with `-AppleLanguages (en)` only and rely on
 a clean simulator; this job erases the simulator first. Future tests can add
 `-uitest-reset` without enabling mocks. iOS acceptance is omitted because #47's
 journeys are compiled only for tvOS. Normal iOS and tvOS CI continues to check
