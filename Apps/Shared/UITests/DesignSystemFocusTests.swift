@@ -207,6 +207,8 @@ final class DesignSystemFocusTests: XCTestCase {
             XCTAssertFalse(element(app, "design.banner.offline").hasFocus)
             let tab = element(app, "design.tab.home")
             XCTAssertTrue(tab.hasFocus || play.hasFocus)
+            // Finish the native Up transition before sending its return command.
+            waitUntilFocused(tab)
             remote(.down)
             waitUntilFocused(play)
         }
