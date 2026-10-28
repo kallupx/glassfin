@@ -14,7 +14,10 @@
                 if let key = failureKey {
                     PlaybackErrorView(messageKey: key, onClose: onClose)
                 } else {
-                    NativePlaybackView(player: (coordinator.engine as? AVPlayerEngine)?.player, onClose: onClose)
+                    NativePlaybackView(
+                        player: (coordinator.engine as? AVPlayerEngine)?.player,
+                        trackMenuItems: PlaybackTrackMenus.items(playback: coordinator), onClose: onClose)
+                    PlaybackSubtitleOverlay(playback: coordinator)
                     if coordinator.state == .loading || coordinator.state == .buffering { ProgressView() }
                     #if DEBUG
                         if coordinator.engine is MockPlaybackEngine {
@@ -68,6 +71,7 @@
 
     private struct NativePlaybackView: UIViewControllerRepresentable {
         let player: AVPlayer?
+        let trackMenuItems: [UIMenuElement]
         let onClose: @MainActor () -> Void
 
         func makeCoordinator() -> DismissalHandler { DismissalHandler(onClose: onClose) }
@@ -77,6 +81,7 @@
             controller.player = player
             controller.delegate = context.coordinator
             #if os(tvOS)
+                controller.transportBarCustomMenuItems = trackMenuItems
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
             #endif
             return controller
@@ -84,6 +89,9 @@
 
         func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
             controller.player = player
+            #if os(tvOS)
+                controller.transportBarCustomMenuItems = trackMenuItems
+            #endif
         }
 
         static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: DismissalHandler) {
@@ -91,7 +99,7 @@
         }
 
         @MainActor
-        final class DismissalHandler: NSObject, AVPlayerViewControllerDelegate {
+        final class DismissalHandler: NSObject, @MainActor AVPlayerViewControllerDelegate {
             let onClose: @MainActor () -> Void
             init(onClose: @escaping @MainActor () -> Void) { self.onClose = onClose }
 

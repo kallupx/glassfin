@@ -912,3 +912,39 @@ The inventory is checked against the complete test/test-support path diff from
 main. Main's existing assertion lines are retained, the resolved T02 file
 matches the M07 parent, and the imported pin-recovery file matches main.
 Apple simulator verification is delegated to PR #23's CI checks after pushing.
+
+### Main advanced during CI: #44 reconciliation
+
+Merge `45de3ec` passed every check in CI run `40747825750`: lint, iOS, tvOS,
+full UI, and the macOS gate. Linux ran 648 tests (638 passed, ten integration
+skips); iOS recorded 716 passed and ten skips; each tvOS job recorded 750
+passed and ten skips. No infrastructure rerun was needed.
+
+While that run was in progress, main advanced to
+`085582bdcc5154753beeb48cf1d2d4d122dcc365` (#44, M08a playback tracks), making
+PR #23 conflict again. A second merge includes that current main tip. Its only
+conflict is `Packages/GlassfinCore/Sources/CoreModels/DTOs.swift`: retain M07's
+person/studio and technical metadata fields alongside main's playback-user
+configuration and track fields, with one shared `Channels` declaration.
+No test file conflicts in this second merge.
+
+The complete 13-file test inventory and additional `LibraryFixtures.swift`
+test-support entry above also apply unchanged relative to current main
+`085582b`. Changes remain additive only: both parents' existing tests and
+assertions are preserved; no new feature or test is authored for either merge.
+
+The only test-file changes relative to `45de3ec` are these imports, all
+byte-for-byte identical to current main:
+
+| File | Existing upstream change imported unchanged |
+| --- | --- |
+| `Packages/GlassfinCore/Tests/CorePlaybackTests/DefaultAudioSelectionTests.swift` | Five existing default-audio selection regressions. |
+| `Packages/GlassfinCore/Tests/CorePlaybackTests/FullPlaybackTests.swift` | 29 existing runtime-profile, playback negotiation, track, subtitle, and fallback tests. |
+| `Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift` | Existing rig explicitly selects `configuration: .poc`; all 50 test methods and every assertion remain unchanged. This is an upstream setup change, not a local assertion edit. |
+
+After this reconciliation, the same Linux `swift test` command passes:
+682 executed, 672 passed, ten existing integration skips, zero failures.
+The current-main test inventory and unchanged upstream assertion lines are
+verified again. Strict swift-format for the resolved DTO file, both String
+Catalog checks, and `git diff --check` pass. Final Apple verification runs on
+the new merge head in PR #23 CI.

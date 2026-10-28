@@ -135,7 +135,10 @@ struct ItemDetailScreen: View {
             onFavorite: { Task { await session.actions.toggleFavorite(item) } },
             onMore: { model.overviewExpanded.toggle() },
             backdropContent: AnyView(
-                LibraryArtwork(item: item, type: .backdrop, size: CGSize(width: 1920, height: 640), session: session)),
+                GeometryReader { geometry in
+                    LibraryArtwork(item: item, type: .backdrop, size: geometry.size, session: session)
+                        .clipped()
+                }),
             logoContent: item.images.logoTag == nil
                 ? nil
                 : AnyView(
@@ -275,47 +278,55 @@ struct LibraryDetailActions: View {
 
     var body: some View {
         ContainedGlass {
-            HStack(spacing: SpacingToken.s) {
-                Button {
-                    onPlay(false)
-                } label: {
-                    Text(verbatim: title)
-                }
-                .buttonStyle(.glassProminent).focused(focus, equals: .play)
-                .accessibilityIdentifier("detail.play")
-                #if DEBUG
-                    .accessibilityValue(playKey.rawValue)
-                #endif
-                if hasProgress || focus.wrappedValue == .startOver {
-                    Button {
-                        onPlay(true)
-                    } label: {
-                        Copy.text(.detailStartOver)
-                    }
-                    .buttonStyle(.glass).focused(focus, equals: .startOver).accessibilityIdentifier("detail.startOver")
-                }
-                Button {
-                    Task { await session.actions.togglePlayed(item) }
-                } label: {
-                    Copy.text(item.userData.played ? .actionMarkUnplayed : .actionMarkPlayed)
-                }.buttonStyle(.glass).accessibilityIdentifier("detail.played")
-                Button {
-                    Task { await session.actions.toggleFavorite(item) }
-                } label: {
-                    Copy.text(item.userData.isFavorite ? .actionRemoveFavorite : .actionAddFavorite)
-                }.buttonStyle(.glass).accessibilityIdentifier("detail.favorite")
-                trackMenu
-                Button {
-                    model.overviewExpanded.toggle()
-                } label: {
-                    Copy.text(.actionMore)
-                }
-                .buttonStyle(.glass).accessibilityIdentifier("detail.more")
-            }
+            #if os(iOS)
+                ScrollView(.horizontal) { actions }
+            #else
+                actions
+            #endif
         }
         .designFocusSection()
         .defaultFocus(focus, Optional(.play))
         .onAppear { if focus.wrappedValue == nil { focus.wrappedValue = .play } }
+    }
+
+    private var actions: some View {
+        HStack(spacing: SpacingToken.s) {
+            Button {
+                onPlay(false)
+            } label: {
+                Text(verbatim: title)
+            }
+            .buttonStyle(.glassProminent).focused(focus, equals: .play)
+            .accessibilityIdentifier("detail.play")
+            #if DEBUG
+                .accessibilityValue(playKey.rawValue)
+            #endif
+            if hasProgress || focus.wrappedValue == .startOver {
+                Button {
+                    onPlay(true)
+                } label: {
+                    Copy.text(.detailStartOver)
+                }
+                .buttonStyle(.glass).focused(focus, equals: .startOver).accessibilityIdentifier("detail.startOver")
+            }
+            Button {
+                Task { await session.actions.togglePlayed(item) }
+            } label: {
+                Copy.text(item.userData.played ? .actionMarkUnplayed : .actionMarkPlayed)
+            }.buttonStyle(.glass).accessibilityIdentifier("detail.played")
+            Button {
+                Task { await session.actions.toggleFavorite(item) }
+            } label: {
+                Copy.text(item.userData.isFavorite ? .actionRemoveFavorite : .actionAddFavorite)
+            }.buttonStyle(.glass).accessibilityIdentifier("detail.favorite")
+            trackMenu
+            Button {
+                model.overviewExpanded.toggle()
+            } label: {
+                Copy.text(.actionMore)
+            }
+            .buttonStyle(.glass).accessibilityIdentifier("detail.more")
+        }
     }
 
     private var trackMenu: some View {

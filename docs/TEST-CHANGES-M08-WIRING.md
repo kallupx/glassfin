@@ -1,6 +1,6 @@
 # M08 playback wiring test audit
 
-Existing test files and assertions are unchanged. This PR adds:
+The wiring change adds two test files and preserves every existing assertion. The required M07/main merge also inherits the test files described below unchanged from that base. This PR adds:
 
 - `Packages/GlassfinCore/Tests/CoreStateTests/T08PlaybackWiringTests.swift`: five tests covering detail Resume versus From beginning through PlaybackInfo and engine loading, Stopped payloads and idempotent dismissal, optimistic UserDataStore updates that preserve favorites, return focus identifiers, natural-end reporting before dismissal, track options, negative tick clamping, and startup failure.
 - `Apps/Shared/UITests/T08PlaybackWiringUITests.swift`: five tvOS / three iOS tests covering the shared presentation host with the existing library fixtures and mock playback engine. They assert `playback.root`, Menu return to detail, From beginning focus restoration, episode selection, Home Play/Pause and card focus restoration, and localized startup errors.
@@ -14,3 +14,16 @@ The tvOS AVKit wrapper uses Apple's `playerViewControllerShouldDismiss(_:)` dele
 Linux validation runs `swift test` for `Packages/GlassfinCore`, plus repository source, localization, formatting, lint and coverage checks. Apple builds and UI tests run only in GitHub Actions. While this PR targets `feat/m07-library-detail`, the PR workflow does not run for that base. After #23 merges, retarget to `main`, merge `origin/main` with a merge commit, and watch the resulting checks.
 
 Known scope limits: mock UI tests validate presentation, report sequencing and focus rather than AV decoding or device playback performance. The existing M08a PoC codec, remux, pinning and reporting limits remain. Search playback and advanced playback features are outside this wiring change.
+
+## M07/main synchronization and CI corrections
+
+The required merge of `origin/feat/m07-library-detail` at `942f4f0` inherits main's merged #44 (`085582b`). PR #42 is not merged. The resumed task explicitly identified this updated main as the continuation point.
+
+Inherited test files match the M07 base byte for byte:
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/DefaultAudioSelectionTests.swift` (added by #44).
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/FullPlaybackTests.swift` (added by #44).
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift` (the base selects its preserved PoC configuration; assertions are untouched).
+
+The first manual Apple run exposed a tvOS delegate conformance isolation error and iOS detail actions laid out outside the screen. The delegate conformance is now explicitly isolated to MainActor. Detail backdrop layout uses its displayed size, and the iOS action bar scrolls horizontally so Play and From beginning remain reachable. No test or assertion was weakened to fix these failures. The base's track menus, subtitle overlay, full negotiation and PoC regression path are retained.
+
+After base synchronization: Linux `scripts/coverage-gate.sh` passes 687 tests with 10 skipped and zero failures; line coverage is 92.19% (10887/11809). Formatting, SwiftLint, source/design/catalog checks, debug-string checks, and test-target checks pass.
