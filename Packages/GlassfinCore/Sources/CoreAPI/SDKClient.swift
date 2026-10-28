@@ -25,14 +25,16 @@ import Foundation
         private let jellyfin: JellyfinClient
         private let server: URL
         private let headerDelegate: GlassfinHeaderDelegate
+        private let certificatePin: OriginCertificatePin?
         public var identity: ClientIdentity
 
-        public init(server: URL, identity: ClientIdentity) {
+        public init(server: URL, identity: ClientIdentity, certificatePin: OriginCertificatePin? = nil) {
             self.server = server
             self.identity = identity
+            self.certificatePin = certificatePin
             let headerDelegate = GlassfinHeaderDelegate()
             self.headerDelegate = headerDelegate
-            let redirectDelegate = RedirectSessionDelegate()
+            let redirectDelegate = RedirectSessionDelegate(certificatePin: certificatePin)
             let configuration = JellyfinClient.Configuration(
                 url: server,
                 accessToken: identity.token,
@@ -48,10 +50,14 @@ import Foundation
             )
         }
 
+        var boundedClient: HTTPJellyfinClient {
+            HTTPJellyfinClient(server: server, identity: identity, certificatePin: certificatePin)
+        }
+
         public func send(_ request: APIRequest) async throws(CoreModels.APIError) -> Data {
             // SDK data(for:) buffers whole bodies. Bounded image requests must use CoreNetworking's delegate.
             if request.maximumResponseBytes != nil {
-                return try await HTTPJellyfinClient(server: server, identity: identity).send(request)
+                return try await boundedClient.send(request)
             }
             do {
                 headerDelegate.header = try identity.authorizationHeader()
@@ -93,11 +99,13 @@ import Foundation
 #endif
 
 public enum JellyfinClientFactory {
-    public static func make(server: URL, identity: ClientIdentity) -> any JellyfinAPIClient {
+    public static func make(
+        server: URL, identity: ClientIdentity, certificatePin: OriginCertificatePin? = nil
+    ) -> any JellyfinAPIClient {
         #if canImport(JellyfinAPI)
-            SDKJellyfinAPIClient(server: server, identity: identity)
+            SDKJellyfinAPIClient(server: server, identity: identity, certificatePin: certificatePin)
         #else
-            HTTPJellyfinClient(server: server, identity: identity)
+            HTTPJellyfinClient(server: server, identity: identity, certificatePin: certificatePin)
         #endif
     }
 }

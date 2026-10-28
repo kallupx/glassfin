@@ -4,24 +4,38 @@ import SwiftUI
 struct SearchFeatureHost: View {
     let flow: AuthFlow
     @State private var feature: SearchFeature?
+    @State private var failure: String?
 
     var body: some View {
         Group {
             if let feature {
                 SearchView(feature: feature)
+            } else if let failure {
+                SearchErrorState(key: failure, retry: load)
             } else {
                 ProgressView()
             }
         }
         .task {
             guard feature == nil else { return }
+            load()
+        }
+    }
+
+    private func load() {
+        failure = nil
+        do {
             #if DEBUG
                 if LaunchConfiguration(arguments: ProcessInfo.processInfo.arguments).useMockServer {
-                    feature = flow.makeSearchFeature(client: SearchUITestClient())
+                    feature = try flow.makeSearchFeature(client: SearchUITestClient())
                     return
                 }
             #endif
-            feature = flow.makeSearchFeature()
+            feature = try flow.makeSearchFeature()
+        } catch {
+            let mapped = AppErrorMapping.map(
+                error, context: .authenticated, deviceOffline: flow.connectivity == .offline)
+            failure = AppErrorMessage.messageKey(for: mapped)
         }
     }
 }

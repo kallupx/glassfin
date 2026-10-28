@@ -105,7 +105,7 @@ private final class HomeContext {
         let service: any LibraryService
         #if DEBUG
             if HomeMockLaunch.enabled {
-                service = HomeMockLibrary(mode: HomeMockLaunch.mode)
+                service = HomeMockLibrary(mode: HomeMockLaunch.mode, controls: HomeMockControls.current)
                 images = HomeMockImages()
             } else {
                 let client = (try? flow.makeHomeClient()) ?? HomeUnavailableClient()

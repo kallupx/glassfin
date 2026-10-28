@@ -1,6 +1,6 @@
 # M09 MVP test additions
 
-Based on `feat/m09-search` at `3f4586fd13e186098179314d1df7fb1bcd78ec5f` (PR #24). The plan in this checkout is [spec/TESTPLAN-M09.md](../spec/TESTPLAN-M09.md); there is no `docs/TESTPLAN-M09*.md` or explicit MVP marking. This change supplements 24 automated scenarios/gaps identified in the [canonical mapping](M09-TEST-MAPPING.md), including every row explicitly named in the request. It does not redefine the plan or claim full M09 acceptance.
+Originally based on `feat/m09-search` at `3f4586fd13e186098179314d1df7fb1bcd78ec5f` (PR #24). After M09 merged to main as `87540f9`, merge main at `4f81fed` into `test/m09-mvp` and open a replacement PR to main. Supersedes #41, which closed when its base branch was deleted. The plan in this checkout is [spec/TESTPLAN-M09.md](../spec/TESTPLAN-M09.md). This change supplements 24 automated scenarios/gaps identified in the [canonical mapping](M09-TEST-MAPPING.md). It does not redefine the plan or claim full M09 acceptance. [TEST-CHANGES-M09-MVP-MAIN.md](TEST-CHANGES-M09-MVP-MAIN.md) records the merge and test-file provenance.
 
 All 32 test methods are new. No existing test file or assertion is modified. New source files are [core card tests](../Packages/GlassfinCore/Tests/CoreModelsTests/T09MVPCardTests.swift), [core state tests](../Packages/GlassfinCore/Tests/CoreStateTests/T09MVPTests.swift), [UI tests](../Apps/Shared/UITests/T09SearchMVPTests.swift), and [snapshot tests](../Apps/Shared/Tests/Snapshots/T09SearchSnapshotTests.swift).
 
@@ -52,15 +52,15 @@ GLASSFIN_SCREENSHOT_DIR="$PWD/artifacts/screenshots" bash scripts/macos-ci.sh tv
 GLASSFIN_SCREENSHOT_DIR="$PWD/artifacts/screenshots" bash scripts/macos-ci.sh iOS
 ```
 
-Images are attached to xcresult and also written under `artifacts/screenshots/m09-{tvos,ios}` when the variable reaches the test process. Use the existing exported readable artifacts/attachments for review. Review both scales and platforms before copying reference PNGs into the paths above and rerunning. Pin the simulator, SDK and appearance for reference comparisons. The current workflow PR branch filter excludes `feat/m09-search`; this stacked draft needs a workflow dispatch on `test/m09-mvp` or the commands above. Workflows are unchanged.
+Images are attached to xcresult and also written under `artifacts/screenshots/m09-{tvos,ios}` when the variable reaches the test process. Use the existing exported readable artifacts/attachments for review. Review both scales and platforms before copying reference PNGs into the paths above and rerunning. Pin the simulator, SDK and appearance for reference comparisons. The replacement PR targets main, so the existing CI path filter schedules the tvOS and iOS jobs. Run Apple commands only in GitHub Actions. Workflows are unchanged relative to main.
 
 ## Validation and remaining limits
 
 On Linux with Swift 6.4.1 and `LD_LIBRARY_PATH=/home/box/.local/lib/swiftcompat`:
 
-- `swift test --package-path Packages/GlassfinCore`: 560 passed, 10 existing opt-in live-server skips, no failures.
-- `bash scripts/coverage-gate.sh`: 570 total tests, 10 skips, no failures; 91.72% line coverage (8939/9746), above 80%.
+- After merging main at `4f81fed`, `swift test --package-path Packages/GlassfinCore`: 590 total tests, 580 passed, 10 existing opt-in server skips, no failures.
+- `bash scripts/coverage-gate.sh`: 590 total tests, 10 skips, no failures; 92.27% line coverage (9034/9791), above 80%.
 - SwiftLint 0.65.1 and recursive strict swift-format lint passed. SwiftLint reports the environment's SourceKit restriction for its custom rule; `ci-grep.sh` separately enforces the no-print rule.
-- Design-system, catalog, image-pipeline (including self-test), M09 source, debug-only-string (including self-test), unit-test-target (including self-test), entitlement, license (including self-test), artifact-redactor self-test and whitespace checks passed.
+- Design-system, catalog, image-pipeline, M09 source, debug-only-string (including self-test), unit-test-target (including self-test), entitlement, license (including self-test), artifact-redactor self-test and whitespace checks passed. Bootstrap and HLS probe suites passed (16 and 17 tests); the Docker integration script self-test passed all 22 cases without starting a server.
 
 Apple compilation, UI behavior/focus, PNG rendering and visual comparisons are not verified locally. Snapshot comparison remains skipped even on Apple until reference images are recorded/reviewed. The fixtures do not establish real-server latency, live endpoint/encoding acceptance, direct playback, M07 destination integration, dictation, physical-remote behavior, 60 fps, device memory/P11, or decompression-bomb resilience. The new T09-69 UI fault is an oversized-image rejection, not an actual streamed payload or bomb; existing Linux tests retain their real streamed-byte assertions. T09-41 uses a final 24-item page; larger-total automatic paging and Q9-16 are unchanged. Existing Linux cancellation/security regressions remain intact.

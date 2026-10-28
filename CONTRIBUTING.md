@@ -6,11 +6,15 @@ In CoreNetworking, define each English source sentence once in a catalog key con
 
 ## Dependency pull requests
 
-Dependabot opens one grouped pull request for Swift packages and one for GitHub Actions (`open-pull-requests-limit: 1` in `.github/dependabot.yml`). Those runs execute the Linux `lint` job only.
+Dependabot opens one grouped pull request for Swift packages and one for GitHub Actions (`open-pull-requests-limit: 1` in `.github/dependabot.yml`). Without the `full-ci` label, those runs execute the Linux `lint` job and skip the macOS build jobs. After lint succeeds, `dependabot-macos` still runs and fails with instructions to add `full-ci`.
 
-A grouped dependency pull request is not mergeable on lint alone, and Dependabot auto-merge stays off. Before merging:
+Keep Dependabot auto-merge off. Before merging:
 
-1. Add the `full-ci` label, or start the `ci` workflow with `workflow_dispatch` on that branch. `workflow_dispatch` runs the macOS jobs. The pull request check turns green only after a `pull_request` run with `full-ci` records those jobs.
-2. Wait until `test-tvos` and `test-ios` are green. The `dependabot-macos` check is green for every other pull request, and it fails a Dependabot pull request until `full-ci` is set and at least one of those jobs succeeded. A path-filter skip is not a macOS build. Require that check in branch protection so lint alone cannot merge the pull request.
+1. Add the `full-ci` label to start the macOS jobs selected by the path filters. Dependabot is identified by the pull request author, so a maintainer adding a label does not change this policy.
+2. Wait until `dependabot-macos` is green. On a Dependabot pull request with `full-ci`, it requires each path-selected `test-tvos` and `test-ios` job to succeed, rejects failures and cancellations, and accepts a skip only for paths that do not select that job. After lint succeeds, it runs and passes on other pull requests and non-PR events.
 
-`full-ci` also runs the `full-ui` job.
+With `full-ci`, a Dependabot GitHub Actions update that selects neither macOS path passes `dependabot-macos` without a macOS build. This is intentional: the gate does not require at least one macOS job to succeed. Changes under `.github/workflows/` currently select both macOS jobs.
+
+`full-ci` also runs `full-ui` when the macOS path filter selects it. To run both macOS build jobs manually, start the `ci` workflow with `workflow_dispatch` on that branch and review the results directly. A manual run does not satisfy the pull request gate: the Dependabot pull request still needs `full-ci`.
+
+Require `dependabot-macos` in branch protection so an unlabeled Dependabot pull request cannot merge on lint alone. The gate has no token permissions; the other CI jobs retain read-only permissions. These runs do not require repository secrets or `pull_request_target`.
