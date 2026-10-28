@@ -125,7 +125,9 @@ struct LibraryGridView: View {
             ) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     if let id = ItemID(item.id) {
-                        NavigationLink(value: id) {
+                        NavigationLink {
+                            ItemDetailScreen(id: id.value, kind: item.kind, session: session)
+                        } label: {
                             LibraryMediaCardFace(
                                 item: session.actions.visible(item), focused: focus == item.id, session: session)
                         }

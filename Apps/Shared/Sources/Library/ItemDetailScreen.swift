@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ItemDetailScreen: View {
     let id: String
+    let kind: MediaKind?
     let session: LibrarySession
     @State private var model: ItemDetailViewModel
     @State private var series: SeriesViewModel
@@ -10,8 +11,9 @@ struct ItemDetailScreen: View {
     @State private var playbackError: String?
     @FocusState private var focus: SeriesFocus?
 
-    init(id: String, session: LibrarySession) {
+    init(id: String, kind: MediaKind? = nil, session: LibrarySession) {
         self.id = id
+        self.kind = kind
         self.session = session
         _model = State(initialValue: ItemDetailViewModel(library: session.service, app: session.app))
         _series = State(
@@ -95,12 +97,7 @@ struct ItemDetailScreen: View {
     }
 
     private func load() async {
-        await model.load(id: id)
-        guard !Task.isCancelled, let item else { return }
-        if item.kind == .series { await series.load(seriesID: item.id) }
-        if item.kind == .season, let seriesID = item.seriesID {
-            await series.load(seriesID: seriesID, seasonID: item.id)
-        }
+        await model.load(id: id, kind: kind, series: series)
     }
 
     private func hero(_ item: MediaItem) -> some View {
@@ -142,10 +139,10 @@ struct ItemDetailScreen: View {
             }
             Text(verbatim: (item.detail?.genres ?? []).joined(separator: " · "))
             Text(verbatim: (item.detail?.studios ?? []).joined(separator: " · "))
-            if let streams = item.detail?.streams, !streams.isEmpty {
+            if let streams = item.detail?.technicalStreams, !streams.isEmpty {
                 Copy.text(.detailTechnical).font(.title3)
                 ForEach(Array(streams.enumerated()), id: \.offset) { _, stream in
-                    Text(verbatim: stream.technicalValue).accessibilityIdentifier("detail.technical.\(stream.id)")
+                    Text(verbatim: stream.technicalLabel).accessibilityIdentifier("detail.technical.\(stream.id)")
                 }
             }
             if let people = item.detail?.people, !people.isEmpty {
@@ -173,7 +170,9 @@ struct ItemDetailScreen: View {
                 LazyHStack(spacing: CardMetrics.spacing) {
                     ForEach(items) { item in
                         if let target = ItemID(item.id) {
-                            NavigationLink(value: target) {
+                            NavigationLink {
+                                ItemDetailScreen(id: target.value, kind: item.kind, session: session)
+                            } label: {
                                 LibraryMediaCardFace(
                                     item: session.actions.visible(item), focused: true, session: session)
                             }
