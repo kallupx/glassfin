@@ -1,9 +1,10 @@
 import CoreModels
 import CoreNetworking
-@testable import CoreState
 import Foundation
 import Observation
 import XCTest
+
+@testable import CoreState
 
 final class T04AuthFlowTests: XCTestCase {
     @MainActor

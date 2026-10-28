@@ -125,7 +125,9 @@ public enum DTOMapper {
             url: url,
             audioTracks: tracks(streams, type: "Audio"),
             subtitleTracks: tracks(streams, type: "Subtitle"),
-            transcodeReasons: VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl)
+            transcodeReasons: VideoTranscodeReasons.parse(transcodingURL: source.TranscodingUrl).map {
+                MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax)
+            }
         )
     }
 

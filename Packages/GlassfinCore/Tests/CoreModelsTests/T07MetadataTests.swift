@@ -34,7 +34,12 @@ final class T07MetadataTests: XCTestCase {
                 "VideoRangeType": raw,
             ]
         }
-        let source: [String: Any] = ["Id": "source", "MediaStreams": streams, "TranscodeReasons": [raw]]
+        var transcodingURL = URLComponents()
+        transcodingURL.path = "/master.m3u8"
+        transcodingURL.queryItems = [URLQueryItem(name: "TranscodeReasons", value: raw)]
+        let source: [String: Any] = [
+            "Id": "source", "MediaStreams": streams, "TranscodingUrl": try XCTUnwrap(transcodingURL.string),
+        ]
         for kind in ["Movie", "Series", "Season", "Episode"] {
             let object: [String: Any] = [
                 "Id": "item", "Type": kind, "Name": raw, "OfficialRating": raw,
