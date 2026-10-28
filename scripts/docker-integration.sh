@@ -1,9 +1,101 @@
 #!/usr/bin/env bash
 # T01-20 and T01-30 against throwaway jellyfin/jellyfin containers.
 # Pins are the OCI index digests of tags 10.10.7, 10.11.11, and 12.2.
-# Usage: scripts/docker-integration.sh [version ...]
+# Usage: scripts/docker-integration.sh [--self-test | version ...]
 # GLASSFIN_HLS_PROBE_ARGS: whitespace-separated probe flags (no shell evaluation).
 set -euo pipefail
+# Check before displaying anything: a rejected capture must produce no stdout.
+show_checked_output() {
+  local captured="$1"
+  if ! python3 - "$captured" <<'PYTHON'
+import re
+import sys
+from pathlib import Path
+
+# Match complete credential field names, including MediaBrowser's Token field.
+# Concatenate the legacy spelling to keep credential-name source scans green.
+pattern = re.compile(
+    r"(?<![\w-])(?:apikey|api" + r"_key|token)\s*=\s*"
+    r"(?:\"([^\"]*)\"|'([^']*)'|([^&\s,;\"']+))",
+    re.IGNORECASE,
+)
+redacted = {"<redacted>", "[redacted]", "redacted"}
+with Path(sys.argv[1]).open(encoding="utf-8", errors="replace") as captured:
+    for line in captured:
+        for match in pattern.finditer(line):
+            value = next(value for value in match.groups() if value is not None)
+            if value and value.casefold() not in redacted:
+                sys.exit(1)
+PYTHON
+  then
+    echo "docker-integration: captured output contains an unredacted credential; output withheld" >&2
+    return 1
+  fi
+  cat "$captured"
+}
+
+self_test_checked_output() (
+  local work sample case_number=0
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  # All credential samples are obvious fakes, never values from the environment.
+  local leaking=(
+    'https://example.invalid/master?ApiKey=deadbeefdeadbeefdeadbeefdeadbeef'
+    'https://example.invalid/master?API_KEY=deadbeefdeadbeefdeadbeefdeadbeef'
+    'Token="deadbeefdeadbeefdeadbeefdeadbeef"'
+    'tOkEn=FAKE_TOKEN_VALUE'
+    'MediaBrowser Client="Glassfin", Device="TV", Token="FAKE_TOKEN_VALUE"'
+    'mEdIaBrOwSeR Client="Glassfin", tOkEn=FAKE_TOKEN_VALUE'
+    'MediaBrowser Token = "deadbeefdeadbeefdeadbeefdeadbeef"'
+    "Token='FAKE_TOKEN_VALUE'"
+    'https://example.invalid/master?token=FAKE_TOKEN_VALUE&keep=1'
+    'Token="REDACTED" Token=FAKE_TOKEN_VALUE'
+    'All checks passed
+Token=FAKE_TOKEN_VALUE'
+  )
+  for sample in "${leaking[@]}"; do
+    case_number=$((case_number + 1))
+    printf '%s\n' "$sample" >"$work/input"
+    if show_checked_output "$work/input" >"$work/stdout" 2>"$work/stderr"; then
+      echo "docker-integration self-test: leaking case $case_number was accepted" >&2
+      return 1
+    fi
+    if [[ -s "$work/stdout" ]] || ! grep -qxF \
+      'docker-integration: captured output contains an unredacted credential; output withheld' "$work/stderr"; then
+      echo "docker-integration self-test: leaking case $case_number was not safely withheld" >&2
+      return 1
+    fi
+  done
+  local clean=(
+    'All checks passed; MediaBrowser client configured'
+    'Token count: 3; tokenization completed; tokenizer=ready; mytoken=ready'
+    'ApiKeyValue=example; api_key_name=example; not-token=example'
+    'Token="<redacted>" ApiKey=<redacted> API_KEY=REDACTED'
+    'MediaBrowser Client="Glassfin", Token="REDACTED"'
+    "Token='[REDACTED]'"
+    'Token='
+    'Token=""'
+    "Token=''"
+    'https://example.invalid/master?PlaySessionId=example'
+    ''
+  )
+  for sample in "${clean[@]}"; do
+    case_number=$((case_number + 1))
+    printf '%s\n' "$sample" >"$work/input"
+    if ! show_checked_output "$work/input" >"$work/stdout" 2>"$work/stderr" \
+      || ! cmp -s "$work/input" "$work/stdout" || [[ -s "$work/stderr" ]]; then
+      echo "docker-integration self-test: clean case $case_number was altered or rejected" >&2
+      return 1
+    fi
+  done
+  echo "docker-integration self-test: $case_number cases passed"
+)
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  self_test_checked_output
+  exit 0
+fi
+
 root="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -x /opt/swift/usr/bin/swift ]]; then
   export PATH="/opt/swift/usr/bin:$PATH"
@@ -73,16 +165,6 @@ probe_args=()
 # T08P-102: require the old failure and D4 headerless media success, including fMP4 init.
 read -r -a probe_args <<< "${GLASSFIN_HLS_PROBE_ARGS:---assert stripped:segment_noheader=401 --assert loader:segment_noheader=200 --assert loader:map_noheader=200}"
 
-show_checked_output() {
-  local captured="$1"
-  # Concatenate the legacy spelling to keep credential-name source scans green.
-  local credential_pattern='(apikey|api''_key)=[^&[:space:]]*[0-9a-f]{16}'
-  if LC_ALL=C grep -Eiq -- "$credential_pattern" "$captured"; then
-    echo "docker-integration: captured output contains an unredacted credential; output withheld" >&2
-    return 1
-  fi
-  cat "$captured"
-}
 for version in "${versions[@]}"; do
   image="${images[$version]:-}"
   if [[ -z "$image" ]]; then

@@ -13,7 +13,6 @@ public enum MediaAssetScheme {
         guard MediaURLValidation.hasNoUserInfo(origin) else { return nil }
         guard !MediaCredentialQuery.contains(origin) else { return nil }
         let clean = origin
-        guard !MediaCredentialQuery.contains(clean) else { return nil }
         guard clean.scheme?.lowercased() == "https" || clean.scheme?.lowercased() == "http" else { return nil }
         var components = URLComponents()
         components.scheme = name

@@ -332,6 +332,7 @@ final class ADRM08PrototypeTests: XCTestCase {
         XCTAssertNotNil(client.requests()[0].authorizationHeader)
         let crafted = credentialAssetURL()
         XCTAssertNil(MediaAssetScheme.unwrap(crafted))
+        XCTAssertNil(MediaAssetScheme.wrap(try XCTUnwrap(queryOnly.url)))
         XCTAssertNil(MediaAssetScheme.wrap(mediaURL("ftp://media.example/a")))
     }
 
