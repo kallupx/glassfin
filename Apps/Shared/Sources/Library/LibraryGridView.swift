@@ -67,6 +67,8 @@ struct LibraryGridView: View {
                 focus = model.focusedID
             }
             .onChange(of: focus) { _, id in
+                let interval = DevicePerformance.begin(.focusUpdate)
+                defer { interval?.end() }
                 if let id {
                     model.focusedID = id
                     model.scrollID = id

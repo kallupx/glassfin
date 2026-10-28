@@ -18,13 +18,19 @@ public actor LibraryImageLoader: LibraryImageLoading {
 
     public func data(for request: LibraryImageRequest) async throws(APIError) -> Data {
         if Task.isCancelled { throw .cancelled }
+        let cacheInterval = DevicePerformance.begin(.posterCache)
         if let data = await cache.data(for: request.cacheKey), data.count <= MetadataPolicy.imageMaxBytes {
+            cacheInterval?.end()
             return data
         }
+        cacheInterval?.end(completed: false)
+        let networkInterval = DevicePerformance.begin(.posterNetwork)
+        defer { networkInterval?.end(completed: false) }
         let data = try await client.send(request.apiRequest)
         if Task.isCancelled { throw .cancelled }
         guard data.count <= MetadataPolicy.imageMaxBytes else { throw .decoding }
         await cache.store(key: request.cacheKey, data: data)
+        networkInterval?.end()
         return data
     }
 }

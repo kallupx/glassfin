@@ -44,6 +44,40 @@ final class DevicePerformanceTests: XCTestCase {
             }
             app.terminate()
         }
+        @MainActor
+        func testP3_P11_mockTwoThousandItemGrid() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "-uitest-mock-server", "-uitest-library", "grid",
+                "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            ]
+            app.launch()
+            let count = app.descendants(matching: .any).matching(identifier: "library.count").firstMatch
+            XCTAssertTrue(count.waitForExistence(timeout: 20))
+            XCTAssertTrue(count.label.contains("2,000"))
+            let focusedCard = app.buttons.matching(
+                NSPredicate(format: "hasFocus == true AND identifier BEGINSWITH 'library.item.'")
+            ).firstMatch
+            for _ in 0..<4 {
+                if focusedCard.exists { break }
+                XCUIRemote.shared.press(.down)
+            }
+            XCTAssertTrue(focusedCard.exists)
+            let options = XCTMeasureOptions()
+            options.iterationCount = 3
+            measure(
+                metrics: [
+                    XCTClockMetric(), XCTMemoryMetric(application: app), XCTCPUMetric(application: app),
+                    XCTOSSignpostMetric(
+                        subsystem: "org.glassfin.app", category: "DevicePerformance", name: "browse.focusUpdate"),
+                ], options: options
+            ) {
+                for _ in 0..<12 { XCUIRemote.shared.press(.down) }
+                for _ in 0..<12 { XCUIRemote.shared.press(.up) }
+                XCTAssertTrue(focusedCard.exists)
+            }
+            app.terminate()
+        }
     #endif
 
     @MainActor

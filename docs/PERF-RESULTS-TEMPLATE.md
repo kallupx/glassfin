@@ -79,6 +79,7 @@ Final minus warm baseline: ___ MB. Retained-object findings: ___.
 |---|---|---|---|---|---|---|---|
 | P1 mock Home | | | | | | | |
 | P3/P11 mock Home focus | | | | | | | |
+| P3/P11 mock 2,000-item grid | | | | | | | |
 | P5 native mock byte origin | | | | | | | |
 | P12/P13 ten native mock cycles | | | | | | | |
 

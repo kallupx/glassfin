@@ -33,3 +33,12 @@ main's track state/cleanup and playback negotiation, and classifies the new
 first-frame interval from the negotiated PlayMethod. Full M08a track selection
 also gets a fixed-name application/handoff interval. Neither instrument changes
 negotiation, playback state, selected tracks, fallback policy, or rendering.
+
+Main subsequently advanced to `f5f63e3` (M07), and the kit is rebased onto that
+commit too. All M07 test files/assertions are inherited unchanged. The new
+`DevicePerformanceTests` file adds `testP3_P11_mockTwoThousandItemGrid` without
+changing its existing assertions: it verifies the fixture total, retains focus
+while scrolling down/up through lazy pages, and collects clock/app CPU/app memory
+and focus-update metrics. The fixture uses the existing Debug-only M07 host.
+M07 grid focus, artwork loading, and thumbnail decoding now share the kit's fixed
+measurement scopes; no paging, cache, decode, or UI behavior changes.
