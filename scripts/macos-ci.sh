@@ -5,6 +5,7 @@ set -euo pipefail
 platform="${1:?tvOS or iOS}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
+source_packages="$root/SourcePackages"
 artifacts="$root/artifacts/$platform"
 mkdir -p "$artifacts/screenshots"
 status=0
@@ -60,6 +61,7 @@ xcodebuild build \
   -scheme "$scheme" \
   -configuration Release \
   -destination "$generic" \
+  -clonedSourcePackagesDirPath "$source_packages" \
   -derivedDataPath "$release_data" \
   CODE_SIGNING_ALLOWED=NO \
   | tee "$artifacts/release-build.log" || status=$?
@@ -83,6 +85,7 @@ else
     xcodebuild test \
       -scheme GlassfinCore \
       -destination "$destination" \
+      -clonedSourcePackagesDirPath "$source_packages" \
       -derivedDataPath "$root/DerivedData-package-$platform" \
       -resultBundlePath "$artifacts/package.xcresult" \
       CODE_SIGNING_ALLOWED=NO
@@ -92,6 +95,7 @@ fi
 xcodebuild test \
   -scheme "$scheme" \
   -destination "$destination" \
+  -clonedSourcePackagesDirPath "$source_packages" \
   -derivedDataPath "$root/DerivedData-$platform" \
   -resultBundlePath "$artifacts/app.xcresult" \
   CODE_SIGNING_ALLOWED=NO \
