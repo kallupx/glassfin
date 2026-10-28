@@ -11,6 +11,8 @@ struct AuthRootView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
+    @State private var selectedTab = "home"
+    @State private var restoreSettingsFocus = false
 
     var body: some View {
         ZStack {
@@ -28,12 +30,22 @@ struct AuthRootView: View {
                 focused = .password
             }
         }
+        .onChange(of: flow.screen) { previous, screen in
+            restoreSettingsFocus = previous == .logoutConfirm && screen == .home && selectedTab == "settings"
+        }
+        .onChange(of: selectedTab) { _, _ in
+            restoreSettingsFocus = false
+        }
         .task { await flow.restoreSession() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { flow.sceneBecameBackground() }
             if phase == .active { Task { await flow.sceneBecameActive() } }
         }
         .onChange(of: flow.appPhase) { _, _ in
+            switch flow.appPhase {
+            case .signedIn: break
+            default: selectedTab = "home"
+            }
             Task { await flow.synchronizeSession() }
         }
     }
@@ -280,19 +292,24 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        HomeRootView(flow: flow)
+        HomeRootView(flow: flow, selectedTab: $selectedTab, restoreSettingsFocus: $restoreSettingsFocus)
     }
 
     private var logoutConfirm: some View {
         VStack(spacing: 16) {
             Text(verbatim: AuthCopy.localized(.signOutConfirm))
                 .accessibilityIdentifier("logout.root")
-            Button(AuthCopy.localized(.signOut)) { Task { await flow.confirmLogout() } }
+            Button(AuthCopy.localized(.signOut), role: .destructive) { Task { await flow.confirmLogout() } }
+                .buttonStyle(.glass)
+                .disabled(flow.isSigningOut)
                 .accessibilityIdentifier("logout.confirm")
             Button(AuthCopy.localized(.cancel)) { flow.cancelLogout() }
+                .buttonStyle(.glassProminent)
+                .disabled(flow.isSigningOut)
                 .accessibilityIdentifier("logout.cancel")
                 .focused($focused, equals: .cancel)
         }
+        .onAppear { focused = .cancel }
     }
 
     private var backButton: some View {

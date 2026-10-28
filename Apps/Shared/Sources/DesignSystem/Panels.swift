@@ -12,6 +12,8 @@ struct HeroHeader: View {
     var onFavorite: () -> Void
     var onMore: () -> Void
 
+    @FocusState private var focusedAction: String?
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             backdrop
@@ -33,7 +35,9 @@ struct HeroHeader: View {
                     .lineLimit(expanded ? TruncationPolicy.errorMessageLineLimit : 2)
                     .focusable(false)
                     .accessibilityIdentifier(overviewIdentifier)
-                GlassActionBar(actions: Self.actions(canResume: canResume), prominentID: "play") { id in
+                GlassActionBar(
+                    actions: Self.actions(canResume: canResume), prominentID: "play", focus: $focusedAction
+                ) { id in
                     switch id {
                     case "play":
                         onPlay()
@@ -52,6 +56,7 @@ struct HeroHeader: View {
         .frame(height: 640)
         // The full hero guides Down from the tab bar to the action bar's default Play button.
         .designFocusSection()
+        .defaultFocus($focusedAction, Optional("play"), priority: .userInitiated)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.hero.root")
     }
