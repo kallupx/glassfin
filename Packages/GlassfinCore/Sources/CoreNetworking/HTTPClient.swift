@@ -78,9 +78,15 @@ struct URLSessionRequestTransport: RequestTransport {
 
     func data(for request: URLRequest, maximumBytes: Int?) async throws -> (Data, URLResponse, Int?) {
         if let maximumBytes {
-            return try await BoundedImageDownload(
-                maximumBytes: maximumBytes, certificatePin: certificatePin
-            ).data(for: request, configuration: session.configuration)
+            // Each bounded transfer owns a session; task identifiers are local to that session.
+            let owner = RedirectSessionDelegate()
+            let proxy = RedirectTaskProxy(owner: owner, certificatePin: certificatePin)
+            let result = try await BoundedResponseDownload(maximumBytes: maximumBytes, redirects: proxy)
+                .data(for: request, configuration: session.configuration)
+            if let identifier = result.2, let reason = owner.consumeRejection(for: identifier) {
+                throw APIError.redirectRejected(reason)
+            }
+            return result
         }
         let proxy = RedirectTaskProxy(owner: redirects, certificatePin: certificatePin)
         let (data, response) = try await session.data(for: request, delegate: proxy)
@@ -241,6 +247,8 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             var items = components.queryItems ?? []
             items.append(contentsOf: query)
             components.queryItems = items
+            // Query parsers treat a literal plus as a space; keep search/image tag text literal.
+            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         }
         guard let url = components.url else { throw APIError.invalidURL }
         return url
@@ -248,7 +256,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
 }
 
 /// Per-request delegate so a redirect rejection stays tied to that task.
-private final class RedirectTaskProxy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class RedirectTaskProxy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let owner: RedirectSessionDelegate
     private let lock = NSLock()
     private var identifier: Int?

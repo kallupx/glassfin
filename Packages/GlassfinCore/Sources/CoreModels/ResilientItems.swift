@@ -60,7 +60,8 @@ public enum ResilientItemDecoder {
                 MediaItem(
                     id: id,
                     kind: MediaKind.from(serverType: hint.`Type` ?? ""),
-                    name: MetadataSanitizer.displayText(hint.Name ?? "", limit: MetadataPolicy.nameMax)
+                    name: MetadataSanitizer.displayText(hint.Name ?? "", limit: MetadataPolicy.nameMax),
+                    images: ImageSet(primaryTag: hint.PrimaryImageTag, thumbTag: hint.ThumbImageTag)
                 )
             )
         }

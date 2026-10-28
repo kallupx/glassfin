@@ -8,7 +8,8 @@ import notify
 
 @MainActor
 final class T04AuthUITests: XCTestCase {
-    func testT04_01_welcomeIsTheConnectButton() {
+    @MainActor
+    func testT04_01_welcomeIsTheConnectButton() async {
         let app = launch()
         let root = app.descendants(matching: .any)["welcome.root"]
         XCTAssertTrue(root.waitForExistence(timeout: 20))
@@ -18,13 +19,15 @@ final class T04AuthUITests: XCTestCase {
         save(app.screenshot(), name: "welcome")
     }
 
-    func testT04_02_welcomeHasNoCustomMenuHandler() {
+    @MainActor
+    func testT04_02_welcomeHasNoCustomMenuHandler() async {
         let app = launch()
         XCTAssertTrue(app.descendants(matching: .any)["welcome.root"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.descendants(matching: .any)["navigation.back"].exists)
     }
 
-    func testT04_03_quickConnectReachesHome() {
+    @MainActor
+    func testT04_03_quickConnectReachesHome() async {
         let approvalName = "org.glassfin.uitest-qc-approval.\(UUID().uuidString)"
         var approvalToken: Int32 = 0
         XCTAssertEqual(notify_register_check(approvalName, &approvalToken), UInt32(NOTIFY_STATUS_OK))
@@ -48,7 +51,8 @@ final class T04AuthUITests: XCTestCase {
         save(app.screenshot(), name: "home")
     }
 
-    func testT04_11_explicitPublicHTTPShowsTheKey() {
+    @MainActor
+    func testT04_11_explicitPublicHTTPShowsTheKey() async {
         let app = launch()
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
@@ -60,7 +64,8 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["address.httpSkipped"].exists)
     }
 
-    func testT04_25_privateHTTPShowsCleartextCancelFirst() {
+    @MainActor
+    func testT04_25_privateHTTPShowsCleartextCancelFirst() async {
         let app = launch()
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
@@ -71,7 +76,8 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
     }
 
-    func testT04_45_passwordFieldIsSecure() {
+    @MainActor
+    func testT04_45_passwordFieldIsSecure() async {
         let app = launch()
         openPassword(app)
         let password = app.secureTextFields["credentials.password"]
@@ -80,7 +86,8 @@ final class T04AuthUITests: XCTestCase {
         save(app.screenshot(), name: "password")
     }
 
-    func testT04_49_backFromQuickConnectReturnsToTheMethodScreen() {
+    @MainActor
+    func testT04_49_backFromQuickConnectReturnsToTheMethodScreen() async {
         let app = launch(arguments: ["-uitest-qc-pending"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
@@ -94,7 +101,8 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["login.quickConnect"].waitForExistence(timeout: 10))
     }
 
-    func testT04_34_disabledQuickConnectSkipsMethodAndBackReturnsToAddress() {
+    @MainActor
+    func testT04_34_disabledQuickConnectSkipsMethodAndBackReturnsToAddress() async {
         let app = launch(arguments: ["-uitest-qc-disabled"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
@@ -107,7 +115,8 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["address.root"].waitForExistence(timeout: 10))
     }
 
-    func testT04_40_expiredCodeOffersFocusedNewCodeButton() {
+    @MainActor
+    func testT04_40_expiredCodeOffersFocusedNewCodeButton() async {
         let app = launch(arguments: ["-uitest-qc-expired"])
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
@@ -129,7 +138,8 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["quickconnect.root"].waitForExistence(timeout: 10))
     }
 
-    func testT04_68_settingsSignOutDefaultsToCancelAndKeepsServer() {
+    @MainActor
+    func testT04_68_settingsSignOutDefaultsToCancelAndKeepsServer() async {
         let app = launch()
         openPassword(app)
         let username = app.descendants(matching: .any)["credentials.username"]
@@ -160,6 +170,7 @@ final class T04AuthUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["login.serverName"].exists)
     }
 
+    @MainActor
     private func launch(arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments.append(contentsOf: ["-uitest-mock-server", "-uitest-reset"] + arguments)
@@ -167,12 +178,14 @@ final class T04AuthUITests: XCTestCase {
         return app
     }
 
+    @MainActor
     private func openAddress(_ app: XCUIApplication) {
         XCTAssertTrue(app.descendants(matching: .any)[WelcomeCopy.Key.connect.rawValue].waitForExistence(timeout: 20))
         activate(app.descendants(matching: .any)[WelcomeCopy.Key.connect.rawValue], in: app)
         XCTAssertTrue(app.descendants(matching: .any)["address.field"].waitForExistence(timeout: 10))
     }
 
+    @MainActor
     private func openPassword(_ app: XCUIApplication) {
         openAddress(app)
         let field = app.descendants(matching: .any)["address.field"]
@@ -183,6 +196,7 @@ final class T04AuthUITests: XCTestCase {
         activate(password, in: app)
     }
 
+    @MainActor
     private func save(_ shot: XCUIScreenshot, name: String) {
         let attachment = XCTAttachment(screenshot: shot)
         attachment.name = name

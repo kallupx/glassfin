@@ -366,10 +366,12 @@ public final class PlaybackCoordinator {
     }
 
     private func fail(_ reason: PlaybackFailure) async {
-        failure = reason
         let terminalRun = generation + 1
         let error = await finish(state: .failed(localizedKey: reason.localizedKey), failed: true)
-        if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
+        // Publish the final reason after Stopped completes, unless another playback has taken over.
+        guard generation == terminalRun else { return }
+        failure = reason
+        if error == .unauthorized { await checkCurrentUser(run: terminalRun) }
     }
 
     private func mediaUnauthorized() async {
