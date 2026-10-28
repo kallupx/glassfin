@@ -306,7 +306,8 @@ enum AuthAssembly {
             if configuration.useMockServer || configuration.resetState {
                 let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
-                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock())
+                    clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock(),
+                    path: StaticConnectivityPath(online: true))
                 if configuration.startOnHome {
                     HomeMockLaunch.seed(flow.homeApp)
                 }
@@ -325,14 +326,15 @@ enum AuthAssembly {
     @MainActor
     private static func assemble(
         backend: any AuthBackend, secure: any SecureStore, settings: any SettingsStore,
-        clock: any GlassfinClock = SystemGlassfinClock()
+        clock: any GlassfinClock = SystemGlassfinClock(),
+        path: any ConnectivityPath = SystemPathMonitor()
     ) -> AuthFlow {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Glassfin", isDirectory: true)
         let app = AppState(
             secureStore: secure,
             settings: settings,
-            path: SystemPathMonitor(),
+            path: path,
             pinger: AuthAssemblyPinger(backend: backend, settings: settings, secure: secure),
             cacheRoot: root
         )
@@ -433,7 +435,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
         }
 
         func currentUser(on server: ServerInfo, token: String) async throws(APIError) -> UserSession {
-            if ProcessInfo.processInfo.arguments.contains("-uitest-home-cached-down") { throw .network }
+            if HomeMockLaunch.mode == "down" { throw .network }
             _ = token
             return UserSession(server: server, userID: Self.user, userName: "Ada", isAdministrator: false)
         }

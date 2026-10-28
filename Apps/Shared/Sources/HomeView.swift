@@ -12,6 +12,8 @@ struct HomeView: View {
     @DesignAccessibility private var accessibility
     @Environment(\.displayScale) private var displayScale
     @State private var focusedItem: MediaItem?
+    @State private var focusedRowID: String?
+    @State private var needsDefaultFocus = true
     @State private var backdropSelection = HomeBackdropModel()
     @State private var backdropID: String?
     @State private var backdrop: Image?
@@ -56,6 +58,7 @@ struct HomeView: View {
                 testRefreshFinished = true
             }
         #endif
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
         .onAppear { model.onAppear() }
         .task { model.start() }
@@ -65,6 +68,7 @@ struct HomeView: View {
         .onDisappear {
             model.onDisappear()
             backdropSelection.cancel()
+            needsDefaultFocus = true
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.foreground() }
@@ -127,6 +131,7 @@ struct HomeView: View {
                             .accessibilityIdentifier("home.empty.retry")
                         }
                         .frame(maxWidth: .infinity)
+                        .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("home.empty")
                     }
                     if let error = model.actionError, let key = AppErrorMessage.messageKey(for: error) {
@@ -163,15 +168,33 @@ struct HomeView: View {
                 HomeMediaRow(
                     rowID: id, items: state.value ?? [], style: style,
                     rememberedID: Binding(get: { model.rememberedIDs[id] }, set: { model.rememberedIDs[id] = $0 }),
+                    receivesDefaultFocus: id == defaultFocusRowID, needsDefaultFocus: $needsDefaultFocus,
                     session: session, imageLoader: imageLoader,
-                    onFocus: { focusedItem = $0 }, onDetail: onDetail,
+                    onFocus: {
+                        focusedItem = $0
+                        focusedRowID = id
+                    }, onDetail: onDetail,
                     onPlay: { play($0) },
                     onPlayed: { item in model.perform { await $0.setPlayed(item, played: !item.userData.played) } },
                     onFavorite: { item in model.perform { await $0.setFavorite(item) } },
                     onRemove: { item in model.perform { await $0.removeFromResume(item) } })
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.\(id)")
         }
+    }
+
+    private var defaultFocusRowID: String? {
+        if let focusedRowID {
+            if focusedRowID == "resume", !(model.resume.value ?? []).isEmpty { return focusedRowID }
+            if focusedRowID == "nextUp", !(model.nextUp.value ?? []).isEmpty { return focusedRowID }
+            if model.latestRows.contains(where: { $0.id == focusedRowID && !($0.state.value ?? []).isEmpty }) {
+                return focusedRowID
+            }
+        }
+        if !(model.resume.value ?? []).isEmpty { return "resume" }
+        if !(model.nextUp.value ?? []).isEmpty { return "nextUp" }
+        return model.latestRows.first { !($0.state.value ?? []).isEmpty }?.id
     }
 
     private func isIdle(_ state: LoadState<[MediaItem]>) -> Bool {
@@ -208,6 +231,8 @@ private struct HomeMediaRow: View {
     let items: [MediaItem]
     let style: CardStyle
     @Binding var rememberedID: String?
+    let receivesDefaultFocus: Bool
+    @Binding var needsDefaultFocus: Bool
     let session: UserSession
     let imageLoader: any HomeImageLoading
     var onFocus: (MediaItem) -> Void
@@ -278,6 +303,16 @@ private struct HomeMediaRow: View {
             .focusScope(rowNamespace)
         #endif
         .defaultFocus($focus, rememberedID ?? items.first?.id)
+        #if os(tvOS)
+            .onAppear {
+                guard receivesDefaultFocus, needsDefaultFocus else { return }
+                needsDefaultFocus = false
+                // Request focus after the asynchronously loaded row joins the tab's focus hierarchy.
+                DispatchQueue.main.async {
+                    focus = rememberedID ?? items.first?.id
+                }
+            }
+        #endif
         .onChange(of: focus) { _, value in
             guard let item = items.first(where: { $0.id == value }) else { return }
             rememberedID = value

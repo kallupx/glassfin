@@ -48,6 +48,7 @@ struct HomeRootView: View {
                 .buttonStyle(.glassProminent)
                 .accessibilityIdentifier("home.playback.close")
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.playback")
             .accessibilityValue(String(Ticks.outboundPositionTicks(from: request.position)))
         }
@@ -72,6 +73,7 @@ struct HomeRootView: View {
                     }
                     .buttonStyle(.glassProminent)
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.detail")
                 #if os(tvOS)
                     .onPlayPauseCommand { playback = HomePlaybackRequest(item: item) }
