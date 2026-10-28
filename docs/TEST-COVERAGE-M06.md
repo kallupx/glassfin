@@ -9,6 +9,7 @@ The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied ve
 | T06-01 | `T06HomeUITests.testT06_01_resumeFirstCardHasDefaultFocusAndDetailBackRestoresIt` |
 | T06-02 | `T06HomeUITests.testT06_02_nextUpGetsDefaultFocusWhenResumeIsEmpty` |
 | T06-04 | `T06HomeTests.testT06_04_emptyAndUnknownLibraries`; `T06HomeUITests.testT06_04_emptyLibraryHasGuidanceAndRetry` |
+| T06-05 | U (tvOS): `T06HomeUITests.testT06_05_upAndMenuFromHomeContentReachTabBar` (system exit sub-step remains manual) |
 | T06-06 | `T06HomeServiceTests.testT06_06_resumeEndpointParametersMatchSpec` |
 | T06-07 | `T06HomeServiceTests.testT06_07_nextUpEndpointParametersMatchSpec` |
 | T06-08 | `T06HomeServiceTests.testT06_08_latestEndpointParametersMatchSpec`; `T06HomeTests.testT06_08_videoLibrariesKeepServerOrderAndSeparateLatestRows` |
@@ -25,13 +26,17 @@ The only test plan is [spec/TESTPLAN-M06.md](../spec/TESTPLAN-M06.md), copied ve
 | T06-25 | `T06HomeTests.testT06_24_backdropDebouncePublishesOnlyTheLastFocusAndCancels` (Reduce Motion duration) |
 | T06-27 | `scripts/check-design-system.py` (glass placement) |
 | T06-29 | `T06ImageTests.testT06_71_imageURLHasNoCredentialQueryAndRequestHasAuthorization` (dimension and auth assertions for all four image types) |
+| T06-30 | U (tvOS): `T06HomeUITests.testT06_30_directionsAndCrossRowFocusMemoryReturnToFifthCard` |
 | T06-31 | `T06HomeUITests.testT06_01_resumeFirstCardHasDefaultFocusAndDetailBackRestoresIt` |
 | T06-32 | `T06HomeTests.testT06_32_playRequestUsesSafeResumePosition`; `T06HomeUITests.testT06_32_playPauseUsesFocusedResumePosition` |
 | T06-33 | `T06HomeTests.testT06_33_playWithoutProgressStartsAtZero` |
 | T06-34 | `T06HomeUITests.testT06_34_longPressShowsContextActions` |
 | T06-37 | `LiveServerTests.testT06_37_homeEndpointsAndResetPosition` |
 | T06-38 | `T06HomeTests.testT06_38_seriesHandoffPreservesSeasonAndIsHiddenForMovies` |
+| T06-40 | U (tvOS): `T06HomeUITests.testT06_40_contextMenuDismissalRestoresSameCard` |
 | T06-41 | `T06HomeTests.testT06_41_actionsCommitAndFailedEditsRestoreTheRow` |
+| T06-42 | U (tvOS): `T06HomeUITests.testT06_42_networkDropShowsNonFocusableBannerAndKeepsCardsBrowsable` (also checks offline Play feedback) |
+| T06-43 | U (tvOS): `T06HomeUITests.testT06_43_networkRecoveryRefreshesHomeWithoutMovingFocus` |
 | T06-44 | `T06HomeTests.testT06_44_snapshotPreservesLibraryGroupingAndRejectsOtherUser` |
 | T06-46 | `T06HomeTests.testT06_46_noContentUsesExistingServerDownTitleKey`; `ScreenReentryTests.testT06_46_homeReentryWithoutContentShowsFullScreen`; `T06HomeUITests.testT06_46_serverDownStillAllowsSettingsAndSignOut` |
 | T06-48 | `T06HomeTests.testT06_48_pingRecoversAndKeepsCachedContent`; `T06HomeTests.testT06_48_automaticPingRunsAtTenSecondsAndRecovers` |
@@ -67,7 +72,7 @@ Each row identifies the missing part of the canonical scenario and why it remain
 | Canonical ID | Remaining evidence / reason |
 |---|---|
 | T06-03 | Latest-only default focus still needs a dedicated tvOS UI scenario; the plan marks the fallback as an assumption pending Q6-01. |
-| T06-05 | System Menu-to-tab-to-exit behavior requires tvOS remote automation / Apple TV execution. |
+| T06-05 | Only Menu on the tab bar exiting the app remains manual. Up and Menu from Home content reaching the native Home tab are automated. Simulator launcher / test-runner handling of system exit is not stable evidence of app behavior; check exit on Apple TV. |
 | T06-09 | Row and tab identifiers are asserted; exact row order and Favorites absence need rendered UI review. |
 | T06-11 | Pending Q6-03 overlap decision. Requests send enableResumable=false; explicit cross-row de-duplication has no implementation/test. |
 | T06-12 | The deterministic gate test proves concurrent independent publishing; the exact 1 s per section / <1.5 s budget needs a timed Apple fixture. |
@@ -84,16 +89,12 @@ Each row identifies the missing part of the canonical scenario and why it remain
 | T06-27 | Glass placement is source-checked; final home rendering still requires snapshots. |
 | T06-28 | Bright/dark/busy backdrop readability is a visual review requiring rendered snapshots. |
 | T06-29 | Displayed-pixel request parameters are unit-tested; actual view geometry and scale require Apple rendering. |
-| T06-30 | Cross-row remote focus memory requires tvOS XCUITest execution. |
 | T06-31 | The back-restoration UI test is supplied but requires Xcode; the actual M07 detail destination is a separate module handoff. |
 | T06-35 | Mark-played-to-next-episode UI timing requires M08 integration. A dedicated successful action fixture remains pending; playback-stop refresh is automated by T06-57. |
 | T06-36 | A dedicated HTTP 500 mark-played rollback fixture is pending; the existing action test asserts rollback for 403 (T06-41). |
 | T06-37 | Reset payload and a disposable-server test are supplied; actual absence from Resume after a real refetch requires the Docker version matrix and Q6-10 verification. |
 | T06-38 | Season-preserving series handoff and movie exclusion are automated. M07 owns the per-season detail picker; UI navigation awaits that module and Xcode. |
 | T06-39 | The action test asserts favorite POST success. DELETE/failure rollback still needs a dedicated fixture; no complete favorite-action claim is made. |
-| T06-40 | Context-menu dismissal and same-card focus require tvOS remote UI execution. |
-| T06-42 | Baseline M02 tests cover path/banner state. Home-specific offline playback feedback and its <=2 s UI timing require an Apple fixture. |
-| T06-43 | Automatic refresh and stable focus after network return require a Home UI fixture and Apple execution. |
 | T06-44 | Snapshot grouping, ownership, and account isolation are automated; immediate same-user stale display and focus need a dedicated cache-launch fixture. |
 | T06-45 | Purged-cache launch needs a dedicated cold-start fixture. Cache loss is supported by the M02 stores, but that is not full Home scenario coverage. |
 | T06-46 | The shared server-down key and Settings escape have tests; default retry focus and Change server still need Apple UI execution. |
@@ -119,6 +120,27 @@ Each row identifies the missing part of the canonical scenario and why it remain
 | T06-79 | A <1 MB 30,000-pixel bomb fixture and <=50 MB peak/P11 validation need ImageIO plus Apple hardware profiling; Linux cannot supply this evidence. |
 | T06-80 | Portable production option dictionary is tested. Real 3840x2160 backdrop / 2000x3000 poster thumbnail tests are supplied but require ImageIO on Apple. |
 | T06-82 | Oversize/cancellation/no-cache logic and Apple invalid-decode test supplied. Rendered placeholder and stable focus require Apple UI execution. |
+
+## PoC tvOS follow-ups (2026-10-28)
+
+The five U scenarios above are supplied in the existing [T06HomeUITests.swift](../Apps/Shared/UITests/T06HomeUITests.swift), which is already included by the `Glassfin-tvOSUITests` source directory in `project.yml`. All five methods and remote helpers are inside `#if os(tvOS)`; methods use `@MainActor async`, with no class-level actor isolation. The iOS target continues to include the same shared file. These are automated sources awaiting macOS execution, not a claim of a successful Apple build or UI run.
+
+- T06-05 checks Up from row 1, Down back into Home, and Menu from row 2 to the native Home tab, while the app remains foreground. System exit is the only manual sub-step.
+- T06-30 traverses the first five cards of both rows, checks Left/Right/Up/Down, and returns from row 2 item 5 to row 1 item 1 and back. A frame assertion ensures the remembered fifth card is horizontally away from the first card, so geometry alone cannot satisfy the scenario. Every press has a bounded focus wait and stops the test on failure; the navigation loops have four iterations each.
+- T06-40 uses a nondefault card, a native long Select press, menu action existence, Menu dismissal, and same-card focus without a focus-restoring remote command.
+- T06-42 asserts `home.banner` appears within a 2 s wait, carries `AppErrorMessage.offlineKey`, and is skipped when moving Up to the tab bar. It checks the banner and its descendants have no focus, retained cards remain navigable in both rows, and no full-screen error appears. Context-menu Play exercises the production block and checks `home.playback.blocked` against `AppErrorMessage.playbackOfflineKey`, with no playback destination.
+- T06-43 asserts banner removal within a 2 s wait, then requires an increased fake-service Resume request count published only after Home finishes loading all sections. An inverted focus expectation runs alongside the refresh expectation for a bounded 5 s interval. No navigation or focus assignment follows the recovery command.
+
+The deterministic network control is entirely `#if DEBUG`: `AuthAssembly.make` injects [HomeMockPath](../Apps/Shared/Sources/HomeMocks.swift) only with the existing mock-server / Home arguments plus `-uitest-home-network-controls`. The fake implements the existing `ConnectivityPath` stream, so `AppState.startPathUpdates()` and the production connectivity/banner/reconnect path consume the updates. In this mode only, Play/Pause on the focused card toggles that stream. The control uses the existing remote command handler to preserve focus; it introduces no focusable test button or timed sequence. Context-menu Play retains its normal behavior. [HomeRootView.swift](../Apps/Shared/Sources/HomeRootView.swift) passes the control to the fake library, whose actual Resume calls are counted. The nonfocusable `home.test.resumeRequests` diagnostic is accessible only after the load completes. No new dependencies, catalog entries, or sleeps were added. Source checks pass; absence from an actual Release app binary still requires `scripts/macos-ci.sh tvOS` on macOS.
+
+Production fixes from scenario/source review are confined to [HomeView.swift](../Apps/Shared/Sources/HomeView.swift):
+
+- `HomeMediaRow` previously supplied a nil default focus preference while another row was active, disabling the remembered target exactly when entering that row. Every row now supplies its remembered ID with `.userInitiated` priority, matching the existing design-system `MediaRow`; the separate initial-focus task and scoped initial preference remain. Apple's [defaultFocus documentation](https://developer.apple.com/documentation/swiftui/view/defaultfocus(_:_:priority:)) describes how this priority applies when user navigation enters the region. Actual Focus Engine behavior still needs the supplied tvOS test.
+- `play(_:)` previously returned silently when connectivity blocked playback. It now displays a nonfocusable message using the existing playback-blocked catalog key next to the network banner, and clears that notice on network recovery. T06-42 checks the message through the normal context-menu Play action.
+
+CI risks: Linux cannot type-check SwiftUI/XCUIRemote against the tvOS SDK or run the Focus Engine. Native tab focus identifiers, native context-menu cell focus, the geometry precondition, and the 2 s accessibility timing need macOS CI confirmation. The tests use the same identifiers/native-cell convention as the existing M05/M06 tests and bounded XCTest waits, without retrying navigation after a failed assertion.
+
+Linux verification for this follow-up: `swift test` and `bash scripts/coverage-gate.sh` both passed (496 cases: 488 passed, eight existing live integration skips, zero failures). Coverage was 91.44% (8,051 / 8,805 lines; threshold 80%). Strict recursive `swift-format`, all four Python `check-*.py` checks, DEBUG-string and image-pipeline self-tests, `ci-grep`, license and entitlement checks, artifact-redactor self-test, 33 Python bootstrap/HLS tests, shell syntax checks, and the 22-case Docker script self-test passed. The portable Home mock/control source, with only its SwiftUI import replaced by Foundation in a temporary copy, also passed Swift 6 strict-concurrency type checking against the built core modules, including the path-injection expression. SwiftLint is unavailable on this Linux box. Apple builds, UI execution, and the Release binary scan remain unexecuted here.
 
 ## Screen re-entry regression coverage
 

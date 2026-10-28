@@ -311,10 +311,14 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             if configuration.useMockServer || configuration.resetState {
+                HomeMockControls.current =
+                    configuration.startOnHome && arguments.contains("-uitest-home-network-controls")
+                    ? HomeMockControls() : nil
+                let path: any ConnectivityPath = HomeMockControls.current?.path ?? StaticConnectivityPath(online: true)
                 let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
                     clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock(),
-                    path: StaticConnectivityPath(online: true))
+                    path: path)
                 if configuration.startOnHome {
                     HomeMockLaunch.seed(flow.homeApp)
                 }
