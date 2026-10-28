@@ -246,10 +246,33 @@ final class DesignSystemFocusTests: XCTestCase {
         func testT05_54_tabShellExposesHomeSearchAndSettings() async {
             let app = launch("-uitest-design-system-tabs-3")
             require(element(app, "design.shell.root"))
-            require(element(app, "design.tab.home"))
-            require(element(app, "design.tab.search"))
-            require(element(app, "design.tab.settings"))
-            require(element(app, "design.tab.library.0"))
+            require(app.tabBars.buttons["design.tab.library.0"])
+            selectTab(app, "design.tab.home")
+            require(element(app, "design.home.root"))
+            selectTab(app, "design.tab.search")
+            require(element(app, "design.search.root"))
+            selectTab(app, "design.tab.settings")
+            require(element(app, "design.settings.root"))
+        }
+
+        private func selectTab(
+            _ app: XCUIApplication,
+            _ identifier: String,
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) {
+            let button = app.tabBars.buttons[identifier]
+            if button.exists {
+                button.tap()
+            } else {
+                // Six tabs exceed the iPhone tab bar capacity; the system puts the rest under More.
+                let more = app.tabBars.buttons["More"]
+                require(more, file: file, line: line)
+                more.tap()
+                let overflowTab = element(app, identifier)
+                require(overflowTab, file: file, line: line)
+                overflowTab.tap()
+            }
         }
     #endif
 
@@ -257,6 +280,10 @@ final class DesignSystemFocusTests: XCTestCase {
     private func launch(_ argument: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [argument]
+        #if os(iOS)
+            // Keep the system-generated More button deterministic as well as the app's catalog copy.
+            app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        #endif
         app.launch()
         return app
     }
