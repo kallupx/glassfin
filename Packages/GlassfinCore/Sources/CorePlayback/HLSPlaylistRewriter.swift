@@ -31,9 +31,11 @@ public enum PlaylistURIRejection: Error, Sendable, Equatable {
 /// Q8-2-06: every URI is resolved against this playlist's origin. An absolute URI on
 /// another origin, or any HTTPS→HTTP change, rejects the whole playlist. Playlist and key
 /// URIs stay on that origin and move to `glassfin-media` with credential queries removed.
-/// Same-origin segment URIs stay `http`/`https` because AVFoundation does not accept segment
-/// bytes from the loader. A server-written segment credential is left in place (accepted
-/// risk) and must be redacted wherever it is logged.
+/// D4 / Q8P-23: the loader carries the server query separately and appends it only on
+/// same-origin master/variant requests, without Authorization. Keys use the header only.
+/// Same-origin segment and EXT-X-MAP URIs stay server-written `http`/`https` because
+/// AVFoundation fetches them itself. Their server-written credentials stay untouched
+/// (accepted risk); the app never adds a token to these URIs. Logs must redact them.
 public enum HLSPlaylistRewriter {
     public static func rewrite(playlist: String, baseURL: URL) -> Result<HLSRewrite, PlaylistURIRejection> {
         guard MediaURLValidation.hasNoUserInfo(baseURL) else { return .failure(.userInfo) }
@@ -112,7 +114,7 @@ public enum HLSPlaylistRewriter {
         switch kind {
         case .playlist, .key:
             let stripped = MediaCredentialQuery.stripping(resolved)
-            guard let wrapped = MediaAssetScheme.wrap(stripped) else {
+            guard let wrapped = MediaAssetScheme.wrap(stripped, isKey: kind == .key) else {
                 return .failure(.unresolvable)
             }
             rewritten += 1
