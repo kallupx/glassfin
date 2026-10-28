@@ -658,6 +658,7 @@ final class T02BehaviorTests: XCTestCase {
         XCTAssertEqual(ended(harness.signposter.snapshot(), .coldStartHomeFirstRow), 0)
         harness.library.gate?.releaseAll()
         await waitUntil { ended(harness.signposter.snapshot(), .coldStartHomeFirstRow) == 1 }
+        await waitUntil { ended(harness.signposter.snapshot(), .homeSectionsLoaded) == 1 }
         XCTAssertEqual(home.latest.value?.first?.name, "Latest")
         XCTAssertEqual(harness.library.latestIdentifiers(), [Sample.library])
     }
