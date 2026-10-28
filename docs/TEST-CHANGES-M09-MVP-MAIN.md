@@ -85,3 +85,60 @@ macOS builds, simulator UI tests and snapshot rendering run in GitHub Actions.
 580 passed, 10 opt-in server skips, zero failures. The coverage gate also
 passes with 92.27% line coverage (9034/9791; minimum 80%). SwiftLint,
 strict swift-format, source/catalog/security checks and CI script tests pass.
+
+## Watchdog restart: run 40766696774 and main c87d897
+
+Merge `origin/main` at `c87d897` with merge commit `8cfdb4c`, retaining
+M07, M08a and the local Jellyfin E2E workflow. No test conflicts occurred.
+
+The run's `--log-failed` output stops during dependency compilation; the
+downloaded readable xcresult exports and `app-test.log` artifacts provide
+the actual failures. Release builds and package tests passed. All eight
+snapshot methods completed their render/semantic checks and skipped only
+the missing reference comparison. Four UI methods failed:
+
+- tvOS T09-03 and T09-12: after selecting a recent query or returning to a
+  tab, the native field's accessibility value includes its dictation hint
+  while keyboard focus is elsewhere. The query itself remains intact.
+- iOS T09-12: swiping the content did not dismiss the keyboard; the Home
+  tab remained covered and XCUITest reported an invalid hit point.
+- iOS T09-56: the banner inherited the outer `search.root` identifier,
+  replacing `search.banner` in the accessibility hierarchy.
+
+Move the root identifier onto the scroll content before adding the banner
+inset. Handle native iOS search submission by ending focus without clearing
+the query, so the tab bar becomes reachable.
+
+Only `Apps/Shared/UITests/T09SearchMVPTests.swift` changes in this follow-up.
+Its tvOS setup returns to the native keyboard before the T09-03 value check
+and after entering Search through the tab helper. A missing keyboard/focus
+adds an explicit setup failure. Its iOS tab helper submits through the
+native keyboard and waits for that keyboard to close before switching tabs.
+Every existing assertion, exact expected value and assertion timeout remains
+unchanged. No hint stripping, relaxed matching, disabled test or new skip is
+introduced. Snapshot and core MVP test files are unchanged in this restart.
+
+The following test files are imported verbatim from main by the merge:
+
+- `Apps/Shared/Tests/Logic/T07ArtworkTests.swift`.
+- `Apps/Shared/Tests/Logic/UITestStateResetTests.swift`.
+- `Apps/Shared/UITests/T07LibraryUITests.swift`.
+- `Packages/GlassfinCore/Tests/CoreModelsTests/T07MetadataTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreNetworkingTests/T07ImageTests.swift`.
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/DefaultAudioSelectionTests.swift`.
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/FullPlaybackTests.swift`.
+- `Packages/GlassfinCore/Tests/CorePlaybackTests/PlaybackCoordinatorTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/PinFailureTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/Support.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T02BehaviorTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T02FoundationTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T04AuthTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T07DetailTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T07LibraryTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T07ScreenLifecycleTests.swift`.
+- `Packages/GlassfinCore/Tests/CoreStateTests/T07SecurityStateTests.swift`.
+
+Restart validation after merging main: 689 core tests, 679 passed, 10 opt-in
+server skips, zero failures. The coverage gate passes at 91.83% (10781/11740).
+SwiftLint, recursive strict swift-format, source/catalog/security checks,
+debug-only string checks and unit-test target checks pass.

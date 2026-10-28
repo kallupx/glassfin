@@ -82,6 +82,7 @@ struct SearchView: View {
                 }
                 .padding(SpacingToken.xl)
             }
+            .accessibilityIdentifier("search.root")
             #if os(iOS)
                 .scrollDismissesKeyboard(.interactively)
             #endif
@@ -108,6 +109,7 @@ struct SearchView: View {
             )
             #if os(iOS)
                 .searchFocused($searchFocused)
+                .onSubmit(of: .search) { searchFocused = false }
             #endif
             .navigationTitle(Copy.string(.tabSearch))
             .navigationDestination(item: $model.selectedItem) { item in
@@ -124,7 +126,6 @@ struct SearchView: View {
                 if old != nil && new == nil { model.retryAfterRecovery() }
             }
             .onDisappear { model.onDisappear() }
-            .accessibilityIdentifier("search.root")
         }
     }
 
