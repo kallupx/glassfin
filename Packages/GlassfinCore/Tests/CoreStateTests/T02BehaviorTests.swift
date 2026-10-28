@@ -650,14 +650,18 @@ final class T02BehaviorTests: XCTestCase {
         defer { harness.cleanup() }
         try harness.signIn()
         harness.library.gate = ResumeGate()
+        harness.library.latestGate = harness.library.gate
         harness.library.resumeItems = [Sample.movie()]
         harness.library.latestByID[Sample.library] = .success([Sample.movie(id: Sample.other, name: "Latest")])
         let home = harness.home()
         home.start(libraryIDs: [Sample.library, "not-a-guid"], coldStart: true)
         await waitUntil { home.resume.isLoading }
+        await waitUntil { harness.library.gate?.waiting() == 2 }
         XCTAssertEqual(ended(harness.signposter.snapshot(), .coldStartHomeFirstRow), 0)
         harness.library.gate?.releaseAll()
         await waitUntil { ended(harness.signposter.snapshot(), .coldStartHomeFirstRow) == 1 }
+        await waitUntil { ended(harness.signposter.snapshot(), .homeSectionsLoaded) == 1 }
+        XCTAssertEqual(ended(harness.signposter.snapshot(), .coldStartHomeFirstRow), 1)
         XCTAssertEqual(home.latest.value?.first?.name, "Latest")
         XCTAssertEqual(harness.library.latestIdentifiers(), [Sample.library])
     }
