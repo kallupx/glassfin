@@ -92,20 +92,34 @@ final class ServiceEndpointTests: XCTestCase {
             itemID: movieGUID, mediaSourceID: sourceGUID, playSessionID: "play", mode: .header)
         XCTAssertNotNil(header.authorizationHeader)
         XCTAssertFalse(header.url.absoluteString.contains("ApiKey"))
-        let query = try media.stream(
-            itemID: movieGUID, mediaSourceID: sourceGUID, playSessionID: "play", mode: .apiKeyQuery)
-        XCTAssertNil(query.authorizationHeader)
-        XCTAssertTrue(query.usesAPIKeyQuery)
+        #if DEBUG
+            let query = try media.stream(
+                itemID: movieGUID, mediaSourceID: sourceGUID, playSessionID: "play", mode: .apiKeyQuery)
+            XCTAssertNil(query.authorizationHeader)
+            XCTAssertTrue(query.usesAPIKeyQuery)
+            let handoff = PlaybackHandoff.make(query)
+            XCTAssertTrue(handoff.headerFields.isEmpty)
+            XCTAssertFalse(String(describing: handoff).contains("token-secret"))
+        #else
+            XCTAssertThrowsError(
+                try media.stream(
+                    itemID: movieGUID, mediaSourceID: sourceGUID,
+                    playSessionID: "play", mode: .apiKeyQuery)
+            ) {
+                XCTAssertEqual($0 as? APIError, .invalidURL)
+            }
+        #endif
         let image = try JellyfinImageService(server: server, identity: identity).imageRequest(
             itemID: movieGUID,
             imageType: "Primary",
             maxWidth: 400
         )
         XCTAssertFalse(image.url.absoluteString.contains("ApiKey"))
-        let handoff = PlaybackHandoff.make(query)
-        XCTAssertTrue(handoff.headerFields.isEmpty)
-        XCTAssertEqual(ResolvedMediaURL.httpHeaderFieldsKey, "AVURLAssetHTTPHeaderFieldsKey")
-        XCTAssertFalse(String(describing: handoff).contains("token-secret"))
+        #if DEBUG
+            XCTAssertEqual(ResolvedMediaURL.httpHeaderFieldsKey, "AVURLAssetHTTPHeaderFieldsKey")
+        #else
+            XCTAssertTrue(ResolvedMediaURL.httpHeaderFieldsKey.isEmpty)
+        #endif
         _ = try media.trickplay(itemID: movieGUID, width: 320, index: 0, mediaSourceID: sourceGUID)
         _ = try media.subtitles(itemID: movieGUID, mediaSourceID: sourceGUID, index: 1)
         XCTAssertTrue(header.url.path.contains(movieGUID))

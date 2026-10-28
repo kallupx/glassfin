@@ -145,12 +145,16 @@ public struct MediaOpenOptions: Sendable, Equatable, CustomStringConvertible, Cu
     public var trust: ServerTrustClass
     public private(set) var headerFieldsKeyAvailable: Bool
     /// Opt-in media URL that already contains `ApiKey`. Descriptions never print it.
-    public var apiKeyFallbackURL: URL?
+    public private(set) var apiKeyFallbackURL: URL?
 
     public init(trust: ServerTrustClass, headerFieldsKeyAvailable: Bool, apiKeyFallbackURL: URL? = nil) {
         self.trust = trust
         self.headerFieldsKeyAvailable = headerFieldsKeyAvailable && HeaderFieldsKeyPolicy.isAllowedInCurrentBuild
-        self.apiKeyFallbackURL = apiKeyFallbackURL
+        #if DEBUG
+            self.apiKeyFallbackURL = apiKeyFallbackURL
+        #else
+            self.apiKeyFallbackURL = nil
+        #endif
     }
 
     public var description: String {
@@ -200,6 +204,9 @@ public enum MediaOpenPlanner {
         authorizationHeader: String?,
         options: MediaOpenOptions
     ) -> MediaOpenPlan {
+        if let resolvedURL, !MediaURLValidation.hasNoUserInfo(resolvedURL) {
+            return blocked(.missingMediaURL, findings: [])
+        }
         switch delivery {
         case .directFile:
             return directFile(resolvedURL: resolvedURL, authorizationHeader: authorizationHeader, options: options)
@@ -344,7 +351,7 @@ public enum MediaOpenPlanner {
         } else {
             findings.append(.headerFieldsKeyUnavailable)
         }
-        if let fallbackURL = options.apiKeyFallbackURL {
+        if let fallbackURL = options.apiKeyFallbackURL, MediaURLValidation.hasNoUserInfo(fallbackURL) {
             result.append(.apiKeyQuery(fallbackURL))
         } else {
             findings.append(.apiKeyFallbackDisabled)
@@ -370,6 +377,7 @@ public enum DirectPlayURL {
         mediaSourceID: String,
         playSessionID: String
     ) throws(APIError) -> PreparedMediaRequest {
+        guard MediaURLValidation.hasNoUserInfo(server) else { throw .invalidURL }
         let item = try ItemID.require(itemID).value
         let source = try ItemID.require(mediaSourceID).value
         do {

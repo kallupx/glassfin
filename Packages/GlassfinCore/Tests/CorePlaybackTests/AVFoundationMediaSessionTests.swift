@@ -8,6 +8,51 @@
     @testable import CorePlayback
 
     final class AVFoundationMediaSessionTests: XCTestCase {
+        /// T08P-100 (a/b/c + control): exercise the native session with a substituted AVPlayer byte sink.
+        func testT08P_100_userInfoPlaylistsRejectBeforeAVPlayerDelivery() async throws {
+            let base = try XCTUnwrap(URL(string: "https://example.invalid/master.m3u8"))
+            let cleanSegment = "https://example.invalid/segment.m4s"
+            let cleanKey = "https://example.invalid/key"
+            for (segment, key, rejected) in [
+                ("https://user:pw@example.invalid/segment.m4s", cleanKey, true),
+                ("https://user@example.invalid/segment.m4s", cleanKey, true),
+                (cleanSegment, "https://user:pw@example.invalid/key", true),
+                (cleanSegment, cleanKey, false),
+            ] {
+                let playlist = """
+                    #EXTM3U
+                    #EXT-X-TARGETDURATION:6
+                    #EXT-X-KEY:METHOD=AES-128,URI="\(key)"
+                    #EXTINF:6,
+                    \(segment)
+                    #EXT-X-ENDLIST
+                    """
+                let origin = MockPlaybackOrigin(
+                    response: OriginMediaResponse(
+                        status: 200, contentType: "application/vnd.apple.mpegurl", body: Data(playlist.utf8)))
+                let callbacks = FailureRecorder()
+                let carrier = ResourceLoaderCarrier(
+                    assetURL: try XCTUnwrap(MediaAssetScheme.wrap(base)), originURL: base,
+                    authorizationHeader: "fake-token", trust: .publiclyTrusted, segmentPolicy: .leaveServerURLs)
+                let session = try XCTUnwrap(
+                    AVPlayerMediaSession(carrier: carrier, origin: origin, onFailure: { callbacks.record($0) }))
+                let request = try XCTUnwrap(
+                    ResourceLoadPlanner.originRequest(
+                        assetURL: carrier.assetURL, authorizationHeader: carrier.authorizationHeader,
+                        trust: carrier.trust, range: nil, allowedOrigin: base))
+                let loading = RecordingLoadingRequest()
+                await session.load(loading, request: request, range: nil)
+
+                XCTAssertEqual(loading.replyCount, rejected ? 0 : 1)
+                XCTAssertEqual(loading.completions, rejected ? [.decoding] : [nil])
+                XCTAssertEqual(callbacks.errors, rejected ? [.decoding] : [])
+                XCTAssertEqual(session.lastFailure, rejected ? .decoding : nil)
+                let requests = await origin.requests
+                XCTAssertEqual(requests.map(\.url), [base])
+                XCTAssertEqual(requests.map(\.authorizationHeader), ["fake-token"])
+            }
+        }
+
         /// T08-2-39 (loader-level partial coverage). A mocked HTTP 401 reaches complete(), lastFailure
         /// and onFailure as unauthorized. M08a covers the /Users/Me check and T08-2-49 sign-out flow.
         // TODO(M08a): T08-2-39 /Users/Me check and T08-2-49 end-to-end via MediaUnauthorizedPolicy production caller.
