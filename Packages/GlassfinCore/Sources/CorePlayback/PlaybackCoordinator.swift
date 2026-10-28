@@ -125,10 +125,23 @@ public final class PlaybackCoordinator {
             if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
                 throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
             }
+            // Preserve the server's raw query before the video-copy builder strips credentials.
+            let playlistCredentials: ServerHLSCredentialQuery?
+            if delivery == .serverHLS, let transcodingURL = source.TranscodingUrl,
+                let original = MediaURLBuilder.resolveTranscodingURL(
+                    server: session.serverURL, transcodingURL: transcodingURL),
+                MediaOrigin.matches(session.serverURL, original),
+                !MediaOrigin.isHTTPSDowngrade(session.serverURL, original)
+            {
+                playlistCredentials = ServerHLSCredentialQuery(transcodingURL: original)
+            } else {
+                playlistCredentials = nil
+            }
             let header = try session.identity.authorizationHeader()
             let result = try await PlaybackPreparation(client: origin, log: log).prepare(
                 delivery: delivery, initialURL: url, authorizationHeader: header,
-                options: MediaOpenOptions(trust: session.trust, headerFieldsKeyAvailable: false)
+                options: MediaOpenOptions(trust: session.trust, headerFieldsKeyAvailable: false),
+                playlistCredentials: playlistCredentials
             )
             guard await continueStartup(run) else { return }
             let carrier: ResourceLoaderCarrier

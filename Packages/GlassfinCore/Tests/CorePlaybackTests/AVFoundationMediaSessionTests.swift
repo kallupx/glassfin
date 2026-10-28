@@ -8,6 +8,19 @@
     @testable import CorePlayback
 
     final class AVFoundationMediaSessionTests: XCTestCase {
+        /// T08P-101: the actual AVURLAsset receives only the credential-free wrapper.
+        func testT08P_101_assetURLNeverContainsServerCredential() throws {
+            let url = try XCTUnwrap(URL(string: "https://example.invalid/master.m3u8?ApiKey=server-canary"))
+            let plan = MediaOpenPlanner.plan(
+                delivery: .serverHLS, resolvedURL: url, authorizationHeader: "header-canary",
+                options: MediaOpenOptions(trust: .publiclyTrusted, headerFieldsKeyAvailable: false))
+            guard case .resourceLoader(let carrier) = plan.primary else { return XCTFail("No loader") }
+            let session = try XCTUnwrap(AVPlayerMediaSession(carrier: carrier, origin: MockPlaybackOrigin()))
+            XCTAssertEqual(session.asset.url, carrier.assetURL)
+            XCTAssertFalse(session.asset.url.absoluteString.contains("canary"))
+            XCTAssertFalse(MediaCredentialQuery.contains(session.asset.url))
+        }
+
         /// T08P-100 (a/b/c + control): exercise the native session with a substituted AVPlayer byte sink.
         func testT08P_100_userInfoPlaylistsRejectBeforeAVPlayerDelivery() async throws {
             let base = try XCTUnwrap(URL(string: "https://example.invalid/master.m3u8"))
