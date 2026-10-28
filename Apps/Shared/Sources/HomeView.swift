@@ -88,7 +88,10 @@ struct HomeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.foreground() }
-            if phase == .background { model.onDisappear() }
+            if phase == .background {
+                DeviceLaunchMeasurement.cancel()
+                model.onDisappear()
+            }
         }
         .onChange(of: app.connectivity) { old, new in
             if new == .online && (old == .serverUnreachable || old == .offline) {
@@ -193,6 +196,9 @@ struct HomeView: View {
                         #if os(tvOS)
                             guard !needsDefaultFocus else { return }
                         #endif
+                        let interval = DevicePerformance.begin(.focusUpdate)
+                        defer { interval?.end() }
+                        DeviceLaunchMeasurement.homeReceivedFocus()
                         focusedItem = $0
                         focusedRowID = id
                     }, onDetail: onDetail,
@@ -203,6 +209,9 @@ struct HomeView: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.\(id)")
+            .onAppear {
+                if !(state.value ?? []).isEmpty { DeviceLaunchMeasurement.homeRowAppeared() }
+            }
         }
     }
 
@@ -419,13 +428,16 @@ private struct HomeCard: View {
             guard !Task.isCancelled else { return }
             placeholderImage = decodedPlaceholder.map { Image(decorative: $0, scale: 1) }
             guard let resource else { return }
+            let interval = DevicePerformance.begin(.posterReady)
             do {
                 let data = try await loader.data(for: resource)
                 let decoded = try await HomeImageDecoder.downsample(
                     data, width: resource.width, height: resource.height)
                 guard !Task.isCancelled else { return }
                 image = Image(decorative: decoded, scale: displayScale)
+                interval?.end()
             } catch {
+                interval?.end(completed: false)
                 // AsyncPoster keeps its placeholder.
             }
         }

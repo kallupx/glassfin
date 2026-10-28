@@ -65,6 +65,7 @@
             let controller = AVPlayerViewController()
             controller.player = player
             controller.delegate = context.coordinator
+            context.coordinator.observeFirstFrame(controller)
             #if os(tvOS)
                 controller.transportBarCustomMenuItems = trackMenuItems
             #endif
@@ -89,9 +90,26 @@
         @MainActor
         final class DismissalHandler: NSObject, AVPlayerViewControllerDelegate {
             let playback: PlaybackCoordinator
+            private var firstFrame: NSKeyValueObservation?
             init(playback: PlaybackCoordinator) { self.playback = playback }
 
+            func observeFirstFrame(_ controller: AVPlayerViewController) {
+                firstFrame = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) {
+                    [weak self] _, change in
+                    guard change.newValue == true else { return }
+                    Task { @MainActor [weak self] in self?.playback.noteFirstFrameReady() }
+                }
+            }
+
             #if os(tvOS)
+                func playerViewController(
+                    _ playerViewController: AVPlayerViewController,
+                    timeToSeekAfterUserNavigatedFrom oldTime: CMTime, to targetTime: CMTime
+                ) -> CMTime {
+                    (playback.engine as? AVPlayerEngine)?.beginSeekMeasurement()
+                    return targetTime
+                }
+
                 func playerViewControllerWillDismiss(_ playerViewController: AVPlayerViewController) {
                     Task { await playback.stop() }
                 }

@@ -41,6 +41,10 @@ pick_destination() {
 if ! command -v xcodegen >/dev/null 2>&1; then
   brew install xcodegen
 fi
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  brew install ffmpeg
+fi
+bash scripts/prepare-perf-fixture.sh
 xcodegen generate
 
 if [[ "$platform" == "tvOS" ]]; then

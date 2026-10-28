@@ -94,6 +94,9 @@ targets:
     sources:
       - path: Apps/Shared/Tests/Logic
       - path: Apps/Shared/Tests/Snapshots
+      - path: Tests/Media/Generated/PerfFixture.mp4
+        buildPhase: resources
+        optional: true
     dependencies:
       - target: Glassfin-tvOS
     settings:
@@ -109,6 +112,9 @@ targets:
     sources:
       - path: Apps/Shared/Tests/Logic
       - path: Apps/Shared/Tests/Snapshots
+      - path: Tests/Media/Generated/PerfFixture.mp4
+        buildPhase: resources
+        optional: true
     dependencies:
       - target: Glassfin-iOS
     settings:
