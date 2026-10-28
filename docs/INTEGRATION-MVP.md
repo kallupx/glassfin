@@ -77,6 +77,24 @@ so next-episode handoff also commits the local played state. The view uses the
 existing catalog-backed error view rather than retaining two independent close
 paths. No test file or assertion is edited for this merge.
 
+### 6. Gated F3/F4 acceptance tests (#47)
+
+This branch inherits an older copy of #44 production code. Retain the current
+combined implementation in every conflicted production file and import the two
+new test files and acceptance document unchanged.
+
+| File | Conflict | Resolution |
+| --- | --- | --- |
+| `Apps/Shared/Resources/Localizable.xcstrings` | Older ordering restores existing Home/Search/track entries at the end. | Keep the current catalog; every incoming key/value already matches it exactly. |
+| `Apps/Shared/Sources/DesignSystem/Copy.swift` | The older copy omits #42 resource mappings. | Keep the complete current mapping. |
+| `Apps/Shared/Sources/PlaybackView.swift` | Older track-only view overwrites combined presentation, companion and native callbacks; automatic merge also duplicates menu assignment. | Keep the complete #51/#42/#44 adapter from the preceding merge. |
+| `Packages/GlassfinCore/Sources/CoreModels/DTOs.swift` | Older DTOs omit M07 person/studio metadata. | Keep the current combined DTOs. |
+| `Packages/GlassfinCore/Sources/CorePlayback/PlaybackAPI.swift` | Older API removes explicit subtitle selection. | Keep both request track parameters and one set of encoded fields. |
+| `Packages/GlassfinCore/Sources/CorePlayback/PlaybackCoordinator.swift` | Older coordinator duplicates configuration fields and removes request/focus/stop integration. | Keep the combined coordinator, including track overrides and completion callbacks. |
+
+These tests remain gated and are not given server credentials. The native server
+job from #50 is not imported or executed.
+
 ## Current validation and findings
 
 Pending the refreshed combined Linux suite and GitHub Actions. Apple builds and
