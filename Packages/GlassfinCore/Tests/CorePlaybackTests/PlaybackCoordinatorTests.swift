@@ -38,7 +38,7 @@ final class PlaybackCoordinatorTests: XCTestCase {
         let timer = ManualPlaybackTimer()
         let origin = MockPlaybackOrigin(response: originResponse)
         let coordinator = PlaybackCoordinator(
-            session: session, engine: engine, origin: origin, timer: timer, log: log)
+            session: session, engine: engine, origin: origin, timer: timer, log: log, configuration: .poc)
         return Rig(
             coordinator: coordinator, session: session, engine: engine, timer: timer, client: client, origin: origin
         )
