@@ -5,10 +5,19 @@ struct LibraryTabShell: View {
     var home: AnyView
     var settings: AnyView? = nil
     var search: AnyView? = nil
-    @State private var selection: String = "home"
+    var selection: Binding<String>? = nil
+    @State private var localSelection: String = "home"
     #if os(iOS)
         @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
+
+    private var usesCompactTabs: Bool {
+        #if os(iOS)
+            sizeClass == .compact
+        #else
+            false
+        #endif
+    }
 
     private var plan: LibraryTabPlan {
         #if os(iOS)
@@ -25,23 +34,23 @@ struct LibraryTabShell: View {
     }
 
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: selection ?? $localSelection) {
             homeTab
-            #if os(iOS)
-                // Keep primary destinations ahead of libraries in the compact tab bar.
+            if usesCompactTabs {
+                // Keep essential destinations ahead of library tabs in the phone's native overflow.
                 searchTab
                 settingsTab
-            #endif
+            }
             ForEach(plan.inline) { library in
                 libraryTab(library)
             }
             if !plan.overflow.isEmpty {
                 overflowTab
             }
-            #if !os(iOS)
+            if !usesCompactTabs {
                 searchTab
                 settingsTab
-            #endif
+            }
         }
         .modifier(PlatformTabChrome())
         .accessibilityElement(children: .contain)
