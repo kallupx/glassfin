@@ -188,3 +188,98 @@ Home-ID tests and one identity-only extra are listed separately above.
 No Apple UI/snapshot execution is claimed. Xcode and Docker are unavailable in
 this environment. The merge imports v2's existing project.yml lines verbatim;
 the M07 reactivation change edits no plist, project.yml or workflow.
+
+## Stack v5 CI diagnosis and merge validation
+
+The main merge is `5ed7534`, with message
+`Merge main 45e21b4 (stack base v5)`. It includes the M04 squash `b0f0f22`,
+M08 HLS authentication fix `924888d`, and specification update `45e21b4`.
+M05 `da38a26` was already an ancestor. The later M05 head `d2d780b` is included
+by merge commit `d027a23` (`Merge M05 d2d780b (stack base v5)`).
+No history was rebased or force-pushed.
+
+Main's M04 authentication behavior and M08 playback implementation were retained.
+M07's library tabs, feature-client composition, DEBUG scenarios, screen
+reactivation hooks, and literal library metadata policy were preserved.
+`MetadataSanitizer.plainText` and `displayName` use main's authentication
+sanitization; M07 continues to use `displayText` for literal library metadata.
+The workflows, `project.yml`, and app plists now match main exactly, including
+the configuration adopted by the newer M05 merge. No configuration was authored
+for this follow-up. Main's project does not include the additional app unit and
+snapshot test targets previously inherited from M05.
+
+### CI run 40622939835 at c3258f1
+
+Diagnosis used `gh run view 40622939835 -R kallupx/glassfin --log-failed`,
+`gh run download` for both `ios-results` and `tvos-results`, the workflow files,
+and `scripts/macos-ci.sh`. The workflow uploads readable xcresult exports and
+redacted logs, not raw xcresult bundles. The downloaded `xcresult-tests.json`,
+`junit.xml`, `failed-tests.txt`, and build/test logs were inspected.
+
+- **iOS: M05 compile error.** In `DesignSystemFocusTests.swift`, the iOS-only
+  `selectTab` helper is not isolated to the main actor but calls the main-actor
+  `require` helper at lines 274 and 277. The app UI test target does not compile.
+  Package tests and the Release build/binary scan passed. An empty app failure
+  list in the xcresult export does not establish that app tests ran.
+- **tvOS: M05 focus failure.**
+  `testT05_29_upLeavesTheHeroForAnotherTarget` reached the hero, pressed Up and
+  Down, then timed out waiting for `design.hero.play` to regain focus at line
+  211. The same run's separate `full-ui` job passed with the same tvOS script
+  and head, which is evidence of an intermittent focus failure. The available
+  evidence does not establish an infrastructure outage or its precise focus
+  race. This belongs to M05, whose focus code and assertions were left intact.
+- All 13 M07 tvOS library UI tests and the M07 artwork test passed in the
+  downloaded tvOS results. M07 package tests passed in the iOS package results.
+  No M07 production defect was identified in this run.
+
+Both reported failures remain in M05 `d2d780b`; this M07 follow-up does not
+claim to fix them or to establish a green Apple CI run.
+
+### Explicit test and assertion reconciliation
+
+The merge exposed incompatible expectations between main's auth sanitizer and
+M07's library display policy. These test changes were necessary to preserve
+both contracts; no assertion was deleted or weakened to hide a failure.
+
+- `T07MetadataTests.testT07_77_metadataBoundariesAndDisplayNamesUseTheSharedConstants`:
+  the literal-markup assertion now calls `displayText(literal, limit: .max)`
+  instead of `plainText(literal)`. Its expected literal string is unchanged.
+- `SecurityDiscoveryTests.testT03_24_forgedDiscoveryDoesNotAutoConnect`:
+  restored main's two `XCTAssertFalse` expectations for `<` and `alert` in the
+  discovered server name. Authentication/discovery sanitization belongs to M04.
+- `SecurityContentTests.testT03_14_plainTextLinksSubtitlesAndSearch`:
+  restored main's `plainText` expectation,
+  `Hello Tom & Jerry **bold** [x](http://e.test)`. The existing M07 DTO assertions
+  still require literal `<b>North</b>` and `<p>A quiet film.</p>`.
+- `T04AuthFlowTests.testT04_59_launchFailureLoadsCachedHomeAndKeepsToken`:
+  retained the pre-merge M07 fixture with `[Sample.movie()]` in Resume, rather
+  than main's empty snapshot. Every assertion is unchanged: retained-content
+  behavior requires actual content. The existing M07
+  `testT02_35a_returningToAuthHomeKeepsBannerWithCachedContent` and
+  `testT02_35b_returningToAuthHomeWithoutContentShowsFullScreen` were preserved
+  with their original assertions, including the empty-snapshot blocking case.
+
+Conflict resolution also adopts main's existing `SecurityNameTests`,
+`T04ProbeTests`, and M04 portions of `T04AuthTests` and `T04AuthUITests`.
+This imports main's decoded-entity/control/bidi expectations, host fallback for
+markup-only names, markup removal on mutated/decoded names and discovery/server
+names, and class-level main-actor annotations. Their upstream assertions were
+not rewritten. Main's playback and Docker integration test changes were also
+imported unchanged, in `AVFoundationMediaSessionTests`,
+`HLSCredentialQueryTests`, `MediaLoaderSecurityTests`,
+`PlaybackCoordinatorTests`, and `DockerIntegrationTests`.
+
+### Linux verification
+
+With `LD_LIBRARY_PATH=~/.local/lib/swiftcompat` and
+`source ~/.local/share/swiftly/env.sh`, `bash scripts/coverage-gate.sh` passed:
+491 tests, zero failures, seven live Jellyfin integration skips; line coverage
+91.70% (8,390/9,149), above the 80% threshold. Strict recursive `swift-format`
+lint, `check-design-system.py`, `check-string-catalogs.py`,
+`check-debug-only-strings.py`, and `ci-grep.sh` passed. English and Finnish
+catalog checks remain enabled; no UI copy was added or changed.
+
+To verify on Apple runners, run `bash scripts/macos-ci.sh iOS` and
+`bash scripts/macos-ci.sh tvOS`. Xcode/simulator execution and live Jellyfin
+integration were not performed in this Linux workspace. The M05 failures above
+and main's app test-target configuration limit the Apple coverage claim.
