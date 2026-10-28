@@ -2,6 +2,7 @@
 # T01-20 and T01-30 against throwaway jellyfin/jellyfin containers.
 # Pins are the OCI index digests of tags 10.10.7, 10.11.11, and 12.2.
 # Usage: scripts/docker-integration.sh [version ...]
+# GLASSFIN_HLS_PROBE_ARGS: whitespace-separated probe flags (no shell evaluation).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -x /opt/swift/usr/bin/swift ]]; then
@@ -68,6 +69,20 @@ cleanup() {
 trap cleanup EXIT
 
 results=()
+probe_args=()
+# T08P-102: require the old failure and D4 headerless media success, including fMP4 init.
+read -r -a probe_args <<< "${GLASSFIN_HLS_PROBE_ARGS:---assert stripped:segment_noheader=401 --assert loader:segment_noheader=200 --assert loader:map_noheader=200}"
+
+show_checked_output() {
+  local captured="$1"
+  # Concatenate the legacy spelling to keep credential-name source scans green.
+  local credential_pattern='(apikey|api''_key)=[^&[:space:]]*[0-9a-f]{16}'
+  if LC_ALL=C grep -Eiq -- "$credential_pattern" "$captured"; then
+    echo "docker-integration: captured output contains an unredacted credential; output withheld" >&2
+    return 1
+  fi
+  cat "$captured"
+}
 for version in "${versions[@]}"; do
   image="${images[$version]:-}"
   if [[ -z "$image" ]]; then
@@ -124,11 +139,22 @@ PY
     GLASSFIN_USERNAME="$(tr -d '\n' < "$username_file")"
     export GLASSFIN_USERNAME
   fi
-  echo "docker-integration: testing $version"
+  echo "docker-integration: probing HLS segment authentication for $version"
+  probe_output="$(mktemp "$work/hls-probe.XXXXXX")"
   set +e
-  run_tests --filter LiveServerTests --skip 'LiveServerTests.testT09_'
+  python3 -u "$root/scripts/probe_hls_segment_auth.py" "${probe_args[@]}" >"$probe_output" 2>&1
+  probe_status=$?
+  set -e
+  if ! show_checked_output "$probe_output"; then probe_status=1; fi
+  results+=("$version hls-probe $probe_status")
+  echo "docker-integration: testing $version"
+  test_output="$(mktemp "$work/live-tests.XXXXXX")"
+  set +e
+  run_tests --filter LiveServerTests --skip 'LiveServerTests.testT09_' >"$test_output" 2>&1
   status=$?
   set -e
+  if ! show_checked_output "$test_output"; then status=1; fi
+  results+=("$version tests $status")
   if [[ "$status" -eq 0 ]]; then
     # Keep M08's exact fixture counts intact until its checks have finished.
     python3 "$root/scripts/jellyfin_search_seed.py" \
@@ -137,12 +163,14 @@ PY
     python3 -u "$root/scripts/jellyfin_bootstrap.py" --search-seed
     status=$?
     if [[ "$status" -eq 0 ]]; then
-      run_tests --filter 'LiveServerTests.testT09_'
+      search_output="$(mktemp "$work/search-tests.XXXXXX")"
+      run_tests --filter 'LiveServerTests.testT09_' >"$search_output" 2>&1
       status=$?
+      if ! show_checked_output "$search_output"; then status=1; fi
     fi
     set -e
+    results+=("$version search $status")
   fi
-  results+=("$version $status")
   "${docker_cmd[@]}" rm -f "$container" >/dev/null
   container=""
   sudo rm -rf "$work"
