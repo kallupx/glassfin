@@ -331,11 +331,15 @@ enum AuthAssembly {
     static func make(arguments: [String]) -> AuthFlow {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
+            HomeMockControls.current = nil
             if configuration.useMockServer || configuration.resetState {
+                if arguments.contains("-uitest-home-network-controls") {
+                    HomeMockControls.current = HomeMockControls()
+                }
                 let flow = assemble(
                     backend: UITestAuthBackend(), secure: InMemorySecureStore(), settings: InMemorySettingsStore(),
                     clock: arguments.contains("-uitest-qc-expired") ? UITestExpiryClock() : SystemGlassfinClock(),
-                    path: StaticConnectivityPath(online: true))
+                    path: HomeMockControls.current?.path ?? StaticConnectivityPath(online: true))
                 if configuration.startOnHome {
                     HomeMockLaunch.seed(flow.homeApp)
                 }
