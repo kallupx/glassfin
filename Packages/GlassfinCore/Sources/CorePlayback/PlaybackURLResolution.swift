@@ -50,6 +50,7 @@ public struct PlaybackURLResolver: Sendable {
         trust: ServerTrustClass,
         mode: MediaCredentialMode = .authorizationHeader
     ) async throws(APIError) -> PlaybackResolution {
+        guard MediaURLValidation.hasNoUserInfo(start) else { return .rejected(.insecureRedirect) }
         let header: String? = mode == .authorizationHeader ? authorizationHeader : nil
         if mode == .authorizationHeader, header == nil || header?.isEmpty == true {
             return .rejected(.missingAuthorization)
@@ -87,6 +88,7 @@ public struct PlaybackURLResolver: Sendable {
                 return .rejected(.transport(status: response.status))
             }
             let absolute = Self.absolute(location, base: current)
+            guard MediaURLValidation.hasNoUserInfo(absolute) else { return .rejected(.insecureRedirect) }
             redirects += 1
             if redirects > maxRedirects {
                 log.debug("Playback redirect limit reached: \(MediaLogRedactor.redact(absolute.absoluteString))")

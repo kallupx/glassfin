@@ -161,7 +161,7 @@
 
     public enum AVPlayerLogForwarder {
         public static func forward(item: AVPlayerItem, log: any GlassfinLog) {
-            let errors = item.errorLog()?.events.map(\.uri) ?? []
+            let errors = item.errorLog()?.events.flatMap { [$0.uri, $0.errorComment] } ?? []
             let access = item.accessLog()?.events.map(\.uri) ?? []
             PlayerLogSink.record(errors + access, log: log)
         }
@@ -200,6 +200,7 @@
         }
 
         public func fetch(_ request: OriginMediaRequest) async throws(APIError) -> OriginMediaResponse {
+            guard MediaURLValidation.hasNoUserInfo(request.url) else { throw .invalidURL }
             var urlRequest = URLRequest(url: request.url)
             urlRequest.httpMethod = request.method
             if let header = request.authorizationHeader {

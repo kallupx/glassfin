@@ -29,6 +29,7 @@ public enum MediaLogRedactor {
 
     private static func redactView(_ input: String) -> String {
         var text = input
+        text = redactTokenQuotes(text)
         text = redactQuery(text)
         text = redactJSON(text)
         text = redactEncodedQuery(text)
@@ -86,7 +87,9 @@ public enum MediaLogRedactor {
     }
 
     private static func redactTokenQuotes(_ text: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: "Token=\"[^\"]*\"") else { return text }
+        guard let regex = try? NSRegularExpression(pattern: "Token=\"[^\"]*\"", options: [.caseInsensitive]) else {
+            return text
+        }
         return replace(regex, in: text, template: "Token=\"<redacted>\"")
     }
 

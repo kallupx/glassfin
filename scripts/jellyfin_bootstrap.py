@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Finish the Jellyfin startup wizard and wait for one scanned movie.
+"""Finish the Jellyfin startup wizard and wait for the scanned fixture movies.
 
 Credentials come from the environment. This script never prints them or the access token.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import secrets
 import sys
 import time
 import urllib.error
@@ -23,9 +25,11 @@ def env(name: str) -> str:
     return value
 
 
-BASE = env("GLASSFIN_SERVER_URL").rstrip("/")
-USER = env("GLASSFIN_USERNAME")
-PASSWORD = env("GLASSFIN_PASSWORD")
+# Initialized by main, so helpers can be tested without credentials.
+BASE = ""
+USER = ""
+PASSWORD = ""
+MEDIA_DIR = ""
 
 
 def request(method: str, path: str, body: dict | None = None, token: str | None = None, query: dict | None = None):
@@ -99,7 +103,8 @@ def decoded(raw: bytes):
 
 def report(message: str, token: str = "") -> None:
     # Log only selected fields, never response bodies or request headers.
-    message = message.replace(PASSWORD, "[redacted]")
+    if PASSWORD:
+        message = message.replace(PASSWORD, "[redacted]")
     if token:
         message = message.replace(token, "[redacted]")
     print(f"bootstrap: {message}", file=sys.stderr, flush=True)
@@ -165,37 +170,46 @@ def wait_for_scan_ready(token: str) -> None:
     fail("scan worker did not become ready within 180s", token)
 
 
-def add_library(token: str) -> None:
-    def movies() -> dict | None:
+def add_library(token: str, name: str, collection: str) -> None:
+    path = os.path.join(MEDIA_DIR, name)
+    options = {
+        "PathInfos": [{"Path": path}], "EnableRealtimeMonitor": False,
+        "EnableInternetProviders": False, "EnableAutomaticSeriesGrouping": False,
+        "MetadataSavers": [], "DisabledSubtitleFetchers": [],
+        "TypeOptions": [{"Type": kind, "MetadataFetchers": [], "ImageFetchers": []}
+                        for kind in ("Movie", "Series", "Season", "Episode")],
+    }
+
+    def library() -> dict | None:
         status, folders = virtual_folders(token)
         if status != 200:
             fail(f"GET /Library/VirtualFolders HTTP {status}", token)
-        return next((folder for folder in folders if folder.get("Name") == "Movies"), None)
+        return next((folder for folder in folders if folder.get("Name") == name), None)
 
-    folder = movies()
+    folder = library()
     # Both creation forms exist in 10.10, 10.11 and 12. Verify persisted paths
     # after each attempt, even on 2xx or an error after a partial creation.
-    for body, paths in [(None, {"paths": "/media"}),
-                        ({"LibraryOptions": {"PathInfos": [{"Path": "/media"}]}}, {})]:
+    for body, paths in [({"LibraryOptions": options}, {"paths": path}),
+                        ({"LibraryOptions": options}, {})]:
         if folder is not None:
             break
         status, _ = request(
             "POST", "/Library/VirtualFolders", body=body, token=token,
-            query={"name": "Movies", "collectionType": "movies", "refreshLibrary": "false", **paths},
+            query={"name": name, "collectionType": collection, "refreshLibrary": "false", **paths},
         )
         report(f"POST /Library/VirtualFolders HTTP {status}", token)
-        folder = movies()
-    if folder is not None and "/media" not in (folder.get("Locations") or []):
+        folder = library()
+    if folder is not None and path not in (folder.get("Locations") or []):
         status, _ = request(
             "POST", "/Library/VirtualFolders/Paths", token=token,
-            body={"Name": "Movies", "Path": "/media", "PathInfo": {"Path": "/media"}},
+            body={"Name": name, "Path": path, "PathInfo": {"Path": path}},
             query={"refreshLibrary": "false"},
         )
         report(f"POST /Library/VirtualFolders/Paths HTTP {status}", token)
-        folder = movies()
-    if folder is None or "/media" not in (folder.get("Locations") or []):
-        fail("Movies library does not contain /media", token)
-    report("verified Movies library path /media", token)
+        folder = library()
+    if folder is None or path not in (folder.get("Locations") or []):
+        fail(f"{name} library does not contain {path}", token)
+    report(f"verified {name} library path {path}", token)
 
 
 def refresh_library(token: str) -> bool:
@@ -211,43 +225,99 @@ def refresh_library(token: str) -> bool:
     return False
 
 
-def wait_for_movie(token: str) -> None:
+def require_success(status: int, action: str) -> None:
+    if status not in (200, 204):
+        print(f"bootstrap: {action} HTTP {status}", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def configure_server(token: str) -> None:
+    status, raw = request("GET", "/System/Configuration", token=token)
+    require_success(status, "get configuration")
+    config = json.loads(raw)
+    # Preserve all other settings, including MinResumePct=5 and MaxResumePct=90.
+    config["MinResumeDurationSeconds"] = 0
+    config["QuickConnectAvailable"] = True
+    status, _ = request("POST", "/System/Configuration", config, token=token)
+    require_success(status, "save configuration")
+
+
+def create_test_user(token: str) -> None:
+    username = os.environ.get("GLASSFIN_TEST_USERNAME", "glassfin-viewer")
+    password = os.environ.get("GLASSFIN_TEST_PASSWORD") or secrets.token_hex(24)
+    status, raw = request("POST", "/Users/New", {"Name": username, "Password": password}, token=token)
+    require_success(status, "create test user")
+    user = json.loads(raw)
+    user_id = user["Id"]
+    policy = user.get("Policy") or {}
+    policy.update({"IsAdministrator": False, "EnableAllFolders": True, "EnableMediaPlayback": True})
+    status, _ = request("POST", f"/Users/{user_id}/Policy", policy, token=token)
+    require_success(status, "set test user policy")
+    # Callers can supply the credentials in env, or receive generated credentials in a private file.
+    credentials_file = os.environ.get("GLASSFIN_TEST_CREDENTIALS_FILE")
+    if credentials_file:
+        fd = os.open(credentials_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump({"username": username, "password": password}, handle)
+
+
+def wait_for_scan(token: str) -> None:
+    expected_movies = int(os.environ.get("GLASSFIN_SEED_ITEM_COUNT", "6"))
+    expected_episodes = int(os.environ.get("GLASSFIN_SEED_EPISODE_COUNT", "4"))
     refresh_library(token)
     deadline = time.monotonic() + 240
     next_scan = time.monotonic() + 15
     status = 0
+    item_status = 0
     while time.monotonic() < deadline:
-        status, raw = request(
-            "GET",
-            "/Items",
-            token=token,
-            query={"Recursive": "true", "IncludeItemTypes": "Movie", "Limit": "5"},
-        )
+        ready = True
+        counts = []
+        for kind, expected in [("Movie", expected_movies), ("Series", 1), ("Season", 2), ("Episode", expected_episodes)]:
+            status, raw = request("GET", "/Items", token=token, query={
+                "Recursive": "true", "IncludeItemTypes": kind, "Limit": "100",
+                "Fields": "MediaStreams,Path",
+            })
+            item_status = status
+            result = decoded(raw) if status == 200 else None
+            result = result if isinstance(result, dict) else {}
+            items = result.get("Items") or []
+            count = result.get("TotalRecordCount") or 0
+            counts.append(count)
+            ready = ready and count >= expected
+            if kind in ("Movie", "Episode"):
+                # Counts appear before ffprobe finishes on some server versions.
+                ready = ready and len(items) >= expected and all(
+                    item.get("RunTimeTicks", 0) > 0 and any(
+                        stream.get("Type") == "Video" and stream.get("Codec")
+                        for stream in item.get("MediaStreams", [])
+                    ) for item in items
+                )
+        status, tasks = scheduled_tasks(token)
         if status == 200:
-            items = decoded(raw)
-            count = (items.get("TotalRecordCount") or 0) if isinstance(items, dict) else 0
-            if count >= 1:
-                print("bootstrap: movie is in the library")
-                return
+            ready = ready and not any(task.get("Key") == "RefreshLibrary" and
+                                     task.get("State") in ("Running", "Cancelling") for task in tasks)
+        else:
+            ready = False
+        if ready:
+            print(f"bootstrap: scan complete ({counts[0]} movies, {counts[1]} series, {counts[2]} seasons, {counts[3]} episodes)")
+            return
         if time.monotonic() >= next_scan:
-            task_status, tasks = scheduled_tasks(token)
-            task = scan_task(tasks) if task_status == 200 else None
-            # 12.2's refresh controller logs exceptions but still returns 204.
-            # Start an idle worker directly if refresh did not discover the movie.
+            task = scan_task(tasks) if status == 200 else None
+            # 12.2 can silently ignore refresh; start the idle worker directly.
             if task and task.get("State") == "Idle":
                 task_id = urllib.parse.quote(str(task["Id"]), safe="")
                 started, _ = request("POST", f"/ScheduledTasks/Running/{task_id}", token=token)
                 report(f"start RefreshLibrary task HTTP {started}", token)
             next_scan = time.monotonic() + 30
-        time.sleep(3)
-    fail(f"library scan found no movie within 240s; GET /Items HTTP {status}", token)
+        time.sleep(2)
+    fail(f"library scan did not finish with all probed movies and episodes within 240s; GET /Items HTTP {item_status}; GET /ScheduledTasks HTTP {status}", token)
 
 
 def publish_username(name: str) -> None:
     path = os.environ.get("GLASSFIN_USERNAME_FILE", "")
     if not path:
-        print("bootstrap: GLASSFIN_USERNAME_FILE is unset", file=sys.stderr)
-        raise SystemExit(2)
+        return
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(name + "\n")
     print(f"bootstrap: using username {name}")
@@ -292,6 +362,16 @@ def startup_user() -> str:
 
 
 def main() -> None:
+    global BASE, USER, PASSWORD, MEDIA_DIR
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--server-url", default=os.environ.get("GLASSFIN_SERVER_URL"))
+    parser.add_argument("--media-dir", default=os.environ.get("GLASSFIN_SERVER_MEDIA_DIR", "/media"),
+                        help="media directory as seen by the server (not the caller)")
+    args = parser.parse_args()
+    BASE = (args.server_url or env("GLASSFIN_SERVER_URL")).rstrip("/")
+    MEDIA_DIR = args.media_dir
+    USER = env("GLASSFIN_USERNAME")
+    PASSWORD = env("GLASSFIN_PASSWORD")
     info = public_info()
     username = USER
     if not info.get("StartupWizardCompleted"):
@@ -303,8 +383,11 @@ def main() -> None:
     publish_username(username)
     token = authenticate(username)
     wait_for_scan_ready(token)
-    add_library(token)
-    wait_for_movie(token)
+    configure_server(token)
+    create_test_user(token)
+    add_library(token, "Movies", "movies")
+    add_library(token, "Shows", "tvshows")
+    wait_for_scan(token)
 
 
 if __name__ == "__main__":

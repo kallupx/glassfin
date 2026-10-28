@@ -82,6 +82,8 @@ public struct BaseItemDTO: Decodable, Sendable {
     public var Trickplay: [String: [String: TrickplayInfoDTO]]?
     public var Chapters: [ChapterDTO]?
     public var CollectionType: String?
+    public var MediaStreams: [MediaStreamDTO]?
+    public var MediaSources: [MediaSourceDTO]?
 }
 
 public struct QueryResultDTO: Decodable, Sendable {
@@ -95,10 +97,12 @@ public struct MediaStreamDTO: Decodable, Sendable {
     public var DisplayTitle: String?
     public var Language: String?
     public var Codec: String?
+    public var IsDefault: Bool?
 }
 
 public struct MediaSourceDTO: Decodable, Sendable {
     public var Id: String?
+    public var Container: String?
     public var SupportsDirectPlay: Bool?
     public var SupportsDirectStream: Bool?
     public var SupportsTranscoding: Bool?
@@ -106,7 +110,7 @@ public struct MediaSourceDTO: Decodable, Sendable {
     public var DirectStreamUrl: String?
     public var TranscodingSubProtocol: String?
     public var MediaStreams: [MediaStreamDTO]?
-    public var TranscodeReasons: [String]?
+    public var DefaultVideoStreamIndex: Int?
 }
 
 public struct PlaybackInfoResponseDTO: Decodable, Sendable {
