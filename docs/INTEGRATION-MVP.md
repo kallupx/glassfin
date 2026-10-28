@@ -61,6 +61,22 @@ restored.
 | `Apps/Shared/Sources/DesignSystem/Copy.swift` | M07 cases and #42 cases overlap; track and feature resources overlap. | Keep all distinct cases and resource mappings. |
 | `Apps/Shared/Sources/PlaybackView.swift` | Track menus/subtitle overlay and the companion/feature overlay modify the same view and native adapter. | Supply both companion and menus, render both overlays, update menus and companion state, and retain #42 lifecycle callbacks pending #51 integration. |
 
+### 5. Player wiring (#51)
+
+| File | Conflict | Resolution |
+| --- | --- | --- |
+| `Apps/Shared/Sources/PlaybackView.swift` | #51 replaces the player presentation/error/dismissal API while #42 owns companion/gestures and #44 owns track menus/subtitles (four conflict blocks). | Keep #51's `PlaybackView(coordinator:onClose:)`, `playback.root`, `playback.error`, mock close control and iOS close control. Derive the optional AVPlayer from the coordinator's abstract engine so mock engines remain supported. Initialize the companion from the same coordinator, retain both feature/subtitle overlays and native track menus, and keep gesture/contextual-action updates. Route native dismissal and Menu through #51's close callback, which awaits Stopped and user-data updates before removing presentation. Shut down companion work on disappearance. |
+| `Packages/GlassfinCore/Sources/CorePlayback/PlaybackAPI.swift` | #44's audio parameter overlaps #51's explicit audio/subtitle request parameters (two blocks). | Keep both parameters and encoded fields, with exactly one `AudioStreamIndex` declaration. Default subtitles remain disabled unless selected explicitly. |
+| `Packages/GlassfinCore/Sources/CorePlayback/PlaybackCoordinator.swift` | #51 adds request/focus/stop callbacks to an older PoC coordinator while current code has full negotiation/tracks and the companion (three blocks). | Union state, preserve #44 configuration/capabilities/clock and full negotiation, append #51's stop callback, retain awaited dismissal and local-state updates. Apply explicit request track choices after default selection and pass both choices through the PoC or full negotiation path. |
+
+Semantic conflict: `PlaybackInfoBody.AudioStreamIndex` was duplicated by the
+automatic merge. Keep one declaration. Adapt the companion's default next-episode
+callback to the request-based start API so the presentation's return-focus ID
+survives, and report companion completion through #51's existing stop callback
+so next-episode handoff also commits the local played state. The view uses the
+existing catalog-backed error view rather than retaining two independent close
+paths. No test file or assertion is edited for this merge.
+
 ## Current validation and findings
 
 Pending the refreshed combined Linux suite and GitHub Actions. Apple builds and

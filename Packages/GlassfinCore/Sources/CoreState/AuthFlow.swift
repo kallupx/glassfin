@@ -1,5 +1,6 @@
 import CoreModels
 import CoreNetworking
+import CorePlayback
 import Foundation
 import Observation
 
@@ -88,6 +89,35 @@ public final class AuthFlow: ViewContentProviding {
     }
     public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
+
+    #if canImport(AVFoundation) && canImport(Security)
+        /// Credentials and origin trust are assembled inside the core, before any media request.
+        public func makePlaybackCoordinator() throws(APIError) -> PlaybackCoordinator {
+            guard case .signedIn(let session) = app.phase,
+                let token = loadToken(serverID: session.server.id, userID: session.userID)
+            else { throw .unauthorized }
+            let pin = try pins.certificatePin(for: session.server.id, url: session.server.url)
+            let deviceID: String
+            do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
+                throw .headerRejected
+            }
+            let identity = ClientIdentity(deviceName: "Apple TV", deviceID: deviceID, version: "0.1.0", token: token)
+            let trust: ServerTrustClass
+            if let pin {
+                trust = .pinnedSelfSigned(fingerprintSHA256: pin.sha256)
+            } else {
+                trust = session.server.url.scheme?.lowercased() == "https" ? .publiclyTrusted : .cleartext
+            }
+            let provider = AuthPlaybackSession(
+                serverURL: session.server.url, userID: session.userID, identity: identity, trust: trust,
+                apiClient: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
+                app: app)
+            let origin = URLSessionOriginClient(trust: trust)
+            return PlaybackCoordinator(
+                session: provider, engine: AVPlayerEngine(origin: origin), origin: origin,
+                onStopped: { [app] in await app.recordPlaybackStop($0) })
+        }
+    #endif
     /// The M04 Home tab renders cached sections until the Home feature screen is installed.
     public var hasContent: Bool {
         guard let cachedHome else { return false }
