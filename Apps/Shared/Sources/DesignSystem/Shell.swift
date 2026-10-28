@@ -17,7 +17,17 @@ struct LibraryTabShell: View {
     }
 
     private var plan: LibraryTabPlan {
-        LibraryTabModel.plan(libraries: libraries)
+        #if os(iOS)
+            // Home, Search, and Settings leave two slots in the compact tab bar.
+            // Reserve one for Libraries so native More cannot make the search-role tab unreachable.
+            if sizeClass == .compact && libraries.count > 2 {
+                return LibraryTabPlan(
+                    inline: Array(libraries.prefix(1)),
+                    overflow: Array(libraries.dropFirst())
+                )
+            }
+        #endif
+        return LibraryTabModel.plan(libraries: libraries)
     }
 
     var body: some View {
