@@ -126,6 +126,10 @@ public final class PlaybackCoordinator {
                 itemID: try ItemID.require(itemID).value, mediaSourceID: try ItemID.require(sourceID).value,
                 playSessionID: playSessionID, method: decision == .directPlay ? .directPlay : .directStream
             )
+            // Q8P-13: a pinned self-signed server never attempts remux; keep its own message first.
+            if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
+                throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
+            }
             // Preserve the server's raw query before the video-copy builder strips credentials.
             let playlistCredentials: ServerHLSCredentialQuery?
             if delivery == .serverHLS, let transcodingURL = source.TranscodingUrl,
@@ -143,9 +147,6 @@ public final class PlaybackCoordinator {
             if case .directStream = decision, playlistCredentials == nil {
                 log.warning("Remux rejected: server playlist credential query is missing")
                 throw AppError.playback(.couldNotPlay)
-            }
-            if delivery == .serverHLS, case .pinnedSelfSigned = session.trust {
-                throw PlaybackFailure.hlsSegmentsBypassPinnedTrust
             }
             let header = try session.identity.authorizationHeader()
             let result = try await PlaybackPreparation(client: origin, log: log).prepare(

@@ -142,6 +142,15 @@ final class PlaybackCoordinatorTests: XCTestCase {
                         container: "mkv", audio: audio, direct: false, transcodingURL: transcodingURL), log: sink)
                 rig.session.trust = trust
                 await rig.coordinator.play(itemID: pocItemID, choice: .startOver)
+                if case .pinnedSelfSigned = trust {
+                    // Q8P-13 keeps precedence: pinned servers never attempt remux and keep their own message.
+                    XCTAssertEqual(rig.coordinator.failure, .hlsSegmentsBypassPinnedTrust)
+                    XCTAssertEqual(rig.coordinator.state, .failed(localizedKey: "playback.selfSignedRemuxBlocked"))
+                    let pinnedRequests = await rig.origin.requests
+                    XCTAssertTrue(pinnedRequests.isEmpty, "No playlist or segment request may be sent")
+                    XCTAssertTrue(rig.engine.loadAttempts.isEmpty)
+                    continue
+                }
                 XCTAssertEqual(rig.coordinator.appError, .playback(.couldNotPlay))
                 XCTAssertEqual(
                     AppErrorMessage.messageKey(for: try XCTUnwrap(rig.coordinator.appError)),
