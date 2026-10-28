@@ -91,7 +91,7 @@ final class T06MetadataTests: XCTestCase {
         let literal = "<b>x</b>&amp;<script>x</script>**x**[x](https://example.invalid)"
         let source = "\u{202e}\u{200f}\u{0000}" + literal + "\u{0007}"
         XCTAssertEqual(MetadataPolicy.clean(source, limit: MetadataPolicy.nameMax), literal)
-        XCTAssertEqual(MetadataSanitizer.plainText(source), literal)
+        XCTAssertEqual(MetadataSanitizer.displayText(source, limit: .max), literal)
     }
 
     // T06-73: canonical spec/TESTPLAN-M06.md.
