@@ -140,3 +140,34 @@ The latest coverage run reports 91.89% (10,843 / 11,800 lines), above the
 and removing only the new missing-pin method makes `PinFailureTests.swift`
 identical to main's version. `git diff --check` passes. The final head is
 verified by the normal pull-request CI workflow targeting main.
+
+## Refresh after PR #51 merged
+
+Merge `origin/main` at `589c5cf` with merge commit `30b581f`. Git resolves
+the merge without conflicts. The automatic merges in `ItemDetailScreen.swift`
+and `LibraryDebugHost.swift` preserve the M07 known-kind concurrent loading
+and technical metadata follow-ups alongside M08 playback wiring.
+
+`PlaybackPresentationHost.swift`, `PlaybackView.swift`, and
+`PlaybackCoordinator.swift` remain byte-identical to main. There is one
+`playback.root` accessibility container, the destination guards startup
+before creating its coordinator, and the detail screen retains
+`detail.startOver` focus return and its persistent start-over action.
+
+### Test/assertion changes
+
+No test file is manually edited, and no existing assertion, expectation,
+timeout, skip condition, or test target changes. All 88 pre-merge test and
+fixture files remain byte-identical to `b3d7b29`. These four test files are
+inherited byte-for-byte from main:
+
+- `Apps/Shared/Tests/Logic/UITestStateResetTests.swift`
+- `Apps/Shared/UITests/T08PlaybackWiringUITests.swift`
+- `Packages/GlassfinCore/Tests/CoreStateTests/T08PlaybackWiringTests.swift`
+- `scripts/ci/test_jellyfin_e2e.py`
+
+Linux validation on Swift 6.4.1: `swift test` in `Packages/GlassfinCore`
+passes with 694 total tests, 684 passed, 10 existing live-integration skips,
+and zero failures. Strict recursive `swift-format`, CI source/catalog checks,
+unit-test target checks, and `git diff --check` pass. Apple builds and tests
+run only in GitHub Actions. No real Jellyfin server is used.
