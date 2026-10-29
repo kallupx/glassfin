@@ -26,6 +26,18 @@ struct HomeRootView: View {
                     ProgressView().accessibilityIdentifier("home.loading")
                 }
             }
+            .safeAreaInset(edge: .top) {
+                if flow.homeApp.isServerStarting {
+                    HStack(spacing: SpacingToken.m) {
+                        Text(verbatim: AppErrorMessage.localized(AppErrorMessage.serverStartingKey))
+                        Button(AuthCopy.localized(.tryAgain)) { Task { await flow.homeApp.retryNow() } }
+                            .buttonStyle(.glassProminent)
+                            .accessibilityIdentifier("serverStarting.retry")
+                    }
+                    .padding(SpacingToken.m)
+                    .accessibilityIdentifier("serverStarting.state")
+                }
+            }
             #if DEBUG
                 .modifier(HomeAccessibilityOverrides())
             #endif

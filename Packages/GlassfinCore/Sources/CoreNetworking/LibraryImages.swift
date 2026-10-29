@@ -101,7 +101,7 @@ final class BoundedResponseDownload: NSObject, URLSessionDataDelegate, @unchecke
         completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
     ) {
         if let http = response as? HTTPURLResponse, http.statusCode >= 400,
-            let failure = HTTPStatusMapper.failure(for: http.statusCode)
+            let failure = HTTPStatusMapper.apiFailure(for: http.statusCode)
         {
             completionHandler(.cancel)
             finish(.failure(failure))
