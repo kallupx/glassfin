@@ -45,15 +45,16 @@ The app reports an audio-only transcode as `DirectStream` (see `PlaybackStreamSe
 ## Running
 
 The tests are tvOS only and skip with a clear reason when the live-server variables are missing, so the
-default `test-tvos` job is unaffected. They need the native macOS Jellyfin server from TPOC-02, seeded by
-`scripts/jellyfin_bootstrap.py`, and a clean simulator (TPOC-04: erase the simulator; `-uitest-reset`
-cannot be used because it also enables the mock server).
+default `test-tvos` job is unaffected. With `GLASSFIN_POC_REQUIRED=1` they fail instead of skipping. They
+need the native macOS Jellyfin server from TPOC-02, seeded by `scripts/jellyfin_bootstrap.py` (in CI,
+`scripts/ci/jellyfin-e2e.py bootstrap`), and a clean simulator (TPOC-04: erase the simulator).
 
 | Variable (prefix with `TEST_RUNNER_` for xcodebuild) | Source |
 | --- | --- |
 | `GLASSFIN_POC_SERVER_URL` | `GLASSFIN_SERVER_URL`, for example `http://127.0.0.1:8096` |
 | `GLASSFIN_POC_USERNAME`, `GLASSFIN_POC_PASSWORD` | The non-admin test user (`GLASSFIN_TEST_CREDENTIALS_FILE`) |
 | `GLASSFIN_POC_ADMIN_USERNAME`, `GLASSFIN_POC_ADMIN_PASSWORD` | `GLASSFIN_USERNAME`, `GLASSFIN_PASSWORD` |
+| `GLASSFIN_POC_REQUIRED` | Optional. `1` turns a missing or invalid configuration into a failure (set by `jellyfin-e2e`) |
 
 ```sh
 xcrun simctl erase "$SIMULATOR_UDID"
@@ -69,25 +70,35 @@ xcodebuild test -project Glassfin.xcodeproj -scheme Glassfin-tvOS \
 Passwords come only from the environment (TPOC-79). Screenshots are taken only on playback screens, never on
 the credentials form, and the admin client never puts a token in a URL (TPOC-80, 03-security S5).
 
-## What is still needed outside test code
+## Prerequisites in main and remaining risks
 
-These tests cannot pass on this branch alone. They will fail with a specific message at the first missing
-piece. Each item needs app or CI changes, which this PR deliberately does not make:
+The app prerequisites have landed in main: the M07 library grid and detail screen (#23) provide
+`library.item.<id>`, `detail.root` and `detail.play`, and the M08 wiring (#51) presents `PlaybackView`
+(`playback.root`, with `playback.error` for failures) from `detail.play`. The placeholder check in
+`startPlayback` (`detail.playback.pending`, `library.playback.pending`, `home.playback`) is kept only as a
+regression guard: it fails the journey if Play ever opens a placeholder again.
 
-1. **M07 library grid and detail (#23).** The journey uses `library.item.<id>`, `detail.root` and
-   `detail.play`, which land with `feat/m07-library-detail`.
-2. **M08 player adapter.** Detail Play and Home Play still open placeholders (`detail.playback.pending`,
-   `home.playback`, `TODO(M08)` in `HomeRootView.swift`). `PlaybackView` must be presented from `detail.play`
-   (and from Home) for any player journey to run.
-3. **Live-server reset without mocks.** `-uitest-reset` also turns on the mock server
-   (`LaunchConfiguration.swift`, `HomeMockLaunch`). The tests rely on a simulator erase; a reset-only flag
-   would let one simulator run journeys back to back.
-4. **CI job.** No workflow job starts the native macOS Jellyfin server, runs the bootstrap and passes the
-   `TEST_RUNNER_GLASSFIN_POC_*` variables to the tvOS UI tests. Until one exists these tests skip in CI.
-   The `jellyfin-e2e` job (#50) now provides this. It must also set `TEST_RUNNER_GLASSFIN_POC_REQUIRED=1`:
-   with that flag a missing or invalid configuration fails the journey instead of skipping it, so the job
-   cannot pass green with zero executed journeys.
-5. **Optional identifiers.** Assertions use server state plus the absence of alerts. A `playback.root`
-   identifier and a `playback.error` element carrying the catalog key would make failures easier to read.
-6. **Risk: ATS in the test runner.** The runner calls `http://127.0.0.1:8096` directly. If ATS blocks it,
-   the UI test target needs `NSAllowsLocalNetworking` in its generated Info.plist (project.yml change).
+1. **Live-server reset.** `-uitest-reset` in main is now reset-only and no longer enables the mock server
+   (`UITestStateResetTests`). The journeys still rely on a simulator erase (TPOC-04), which the
+   `jellyfin-e2e` job does before the run. Switching to `-uitest-reset` would let one simulator run journeys
+   back to back; that is optional.
+2. **CI job.** The `jellyfin-e2e` job (#50, `scripts/ci/jellyfin-e2e.py test`) starts the native macOS
+   Jellyfin server, runs the bootstrap and passes the `TEST_RUNNER_GLASSFIN_POC_*` variables to
+   `xcodebuild test-without-building`. It also sets `TEST_RUNNER_GLASSFIN_POC_REQUIRED=1`, so a missing or
+   invalid configuration fails each journey instead of skipping it, and the job cannot pass green with zero
+   executed journeys. The job runs on `workflow_dispatch` and on pull requests with the `full-ci` label.
+3. **Risk: ATS in the test runner.** The runner calls `http://127.0.0.1:8096` directly. The app targets
+   allow local networking, but if ATS blocks the UI test runner, its generated Info.plist needs
+   `NSAllowsLocalNetworking` (project.yml change).
+
+## Test and CI changes
+
+- `launchSignedIn` waits up to the same 20 s for whichever of `home.root` and the Welcome connect button
+  appears first, instead of waiting the full 20 s for `home.root` on the Welcome screen. The assertion that
+  one of them appears is unchanged.
+- `scripts/ci/jellyfin-e2e.py` sets `TEST_RUNNER_GLASSFIN_POC_REQUIRED=1` for the acceptance run (xcodebuild
+  strips the prefix, so the test reads `GLASSFIN_POC_REQUIRED`). The five `TEST_RUNNER_GLASSFIN_POC_*`
+  configuration variables were already passed through `runner-env.json`. A new test in
+  `scripts/ci/test_jellyfin_e2e.py` checks that the run receives all five variables and the required flag
+  through the environment only, never on the command line.
+- No assertion is removed or weakened.

@@ -238,6 +238,9 @@ def run_tests(root: Path) -> None:
         subprocess.run(command + ["build-for-testing"], cwd=REPO, stdout=log, stderr=subprocess.STDOUT, check=True)
         environment = os.environ.copy()
         environment.update(json.loads((root / "runner-env.json").read_text()))
+        # xcodebuild forwards TEST_RUNNER_* to the test runner without the prefix. With the flag the
+        # journeys fail instead of skipping, so this job cannot pass with zero executed journeys.
+        environment["TEST_RUNNER_GLASSFIN_POC_REQUIRED"] = "1"
         # No result bundle is published. Disable screenshots/diagnostics that could capture sign-in fields.
         result = subprocess.run(command + ["test-without-building", "-only-testing:Glassfin-tvOSUITests/TPOCPlaybackAcceptanceUITests",
                                  "-disable-concurrent-destination-testing", "-collect-test-diagnostics", "never"],

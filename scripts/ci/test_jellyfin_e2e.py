@@ -88,6 +88,39 @@ class NativeJellyfinTests(unittest.TestCase):
             self.assertEqual(result["acceptance"], "unavailable")
             self.assertEqual(result["testsRun"], 0)
 
+    def test_acceptance_run_requires_journeys_and_passes_config_only_through_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            acceptance = root / "Apps/Shared/UITests/TPOCPlaybackAcceptanceUITests.swift"
+            acceptance.parent.mkdir(parents=True)
+            acceptance.write_text("// suite")
+            secret = "viewer-password-sentinel"
+            runner = {
+                "TEST_RUNNER_GLASSFIN_POC_SERVER_URL": e2e.BASE,
+                "TEST_RUNNER_GLASSFIN_POC_USERNAME": "viewer",
+                "TEST_RUNNER_GLASSFIN_POC_PASSWORD": secret,
+                "TEST_RUNNER_GLASSFIN_POC_ADMIN_USERNAME": "admin",
+                "TEST_RUNNER_GLASSFIN_POC_ADMIN_PASSWORD": "admin-password-sentinel",
+            }
+            (root / "runner-env.json").write_text(json.dumps(runner))
+            devices = json.dumps({"devices": {"com.apple.CoreSimulator.SimRuntime.tvOS-26-0": [{"udid": "TV-1"}]}})
+            with patch.object(e2e, "REPO", root), \
+                 patch.object(e2e.shutil, "which", return_value="/usr/local/bin/xcodegen"), \
+                 patch.object(e2e.subprocess, "check_output", return_value=devices), \
+                 patch.object(e2e.subprocess, "run", return_value=unittest.mock.Mock(returncode=0)) as run:
+                e2e.run_tests(root)
+            calls = [call for call in run.call_args_list if "test-without-building" in call.args[0]]
+            self.assertEqual(len(calls), 1)
+            argv, environment = calls[0].args[0], calls[0].kwargs["env"]
+            self.assertIn("-only-testing:Glassfin-tvOSUITests/TPOCPlaybackAcceptanceUITests", argv)
+            self.assertEqual(environment["TEST_RUNNER_GLASSFIN_POC_REQUIRED"], "1")
+            for key, value in runner.items():
+                self.assertEqual(environment[key], value)
+            for value in runner.values():
+                if value != e2e.BASE:
+                    self.assertFalse(any(value in argument for argument in argv))
+            self.assertEqual(json.loads((root / "tests.json").read_text())["acceptance"], "passed")
+
     def test_cleanup_deletes_private_results_and_scans_every_uploaded_file(self):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)

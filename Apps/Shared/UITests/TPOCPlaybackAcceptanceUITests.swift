@@ -98,7 +98,7 @@ import XCTest
             return try await PoCLiveServer.connect(configuration)
         }
 
-        /// Launches without any `-uitest-*` flag (they switch the app to the mock server) and signs in
+        /// Launches without any `-uitest-*` flag (the mock flags switch the app to the mock server) and signs in
         /// with the non-admin test user through the real UI (TPOC-07 path), unless already signed in.
         private func launchSignedIn(_ configuration: PoCLiveServerConfiguration) -> XCUIApplication {
             let app = XCUIApplication()
@@ -106,8 +106,13 @@ import XCTest
             app.launch()
             let home = element("home.root", in: app)
             let connect = element(WelcomeCopy.Key.connect.rawValue, in: app)
-            let appeared = home.waitForExistence(timeout: 20) || connect.exists
-            XCTAssertTrue(appeared, "The app shows Welcome or Home after launch")
+            // Wait up to 20 s in total for whichever screen appears first, instead of the full 20 s for Home
+            // when the app shows Welcome. Each slice returns as soon as Home exists; Welcome is polled per slice.
+            let deadline = Date().addingTimeInterval(20)
+            while !home.exists && !connect.exists && Date() < deadline {
+                _ = home.waitForExistence(timeout: 0.5)
+            }
+            XCTAssertTrue(home.exists || connect.exists, "The app shows Welcome or Home after launch")
             if home.exists { return app }
 
             activate(connect, in: app)
@@ -129,21 +134,22 @@ import XCTest
         }
 
         /// Movies tab → grid item → detail → Play (TPOC-13 path). The library grid and detail identifiers come
-        /// from M07 (#23); the player presentation comes from the M08 adapter.
+        /// from M07 (#23) and the player presentation from the M08 wiring (#51), both in main. The placeholder
+        /// check below is only a regression guard against Play opening a placeholder again.
         private func startPlayback(of movie: PoCSeedMovie, in app: XCUIApplication) {
             activate(element("design.tab.library.\(movie.libraryID)", in: app), in: app)
             let item = element("library.item.\(movie.id)", in: app)
             XCTAssertTrue(
                 item.waitForExistence(timeout: 20),
-                "Movies grid item library.item.<id> is missing; needs the M07 library grid (#23)")
+                "Movies grid item library.item.<id> is missing (M07 library grid, #23)")
             activate(item, in: app)
             let play = element("detail.play", in: app)
             XCTAssertTrue(
-                play.waitForExistence(timeout: 15), "detail.play is missing; needs the M07 detail screen (#23)")
+                play.waitForExistence(timeout: 15), "detail.play is missing (M07 detail screen, #23)")
             activate(play, in: app)
             for placeholder in ["detail.playback.pending", "library.playback.pending", "home.playback"]
             where element(placeholder, in: app).waitForExistence(timeout: 2) {
-                XCTFail("Play opened the placeholder '\(placeholder)': the M08 player adapter is not wired (TODO(M08))")
+                XCTFail("Regression: Play opened the placeholder '\(placeholder)' (M08 wiring, #51)")
             }
         }
 
