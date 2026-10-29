@@ -1,0 +1,18 @@
+{
+  "1": [
+    "T06HomeUITests",
+    "T09SearchUITests",
+    "DevicePerformanceTests"
+  ],
+  "2": [
+    "T09SearchMVPTests",
+    "T04AuthUITests",
+    "WelcomeSmokeTests"
+  ],
+  "3": [
+    "T07LibraryUITests",
+    "DesignSystemFocusTests",
+    "T08PlaybackWiringUITests",
+    "T10SettingsUITests"
+  ]
+}
