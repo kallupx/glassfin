@@ -4,6 +4,7 @@
     import CoreNetworking
     import Foundation
     import Observation
+    import os
 
     @MainActor
     @Observable
@@ -197,7 +198,9 @@
             log.error(diagnostic.description)
             // This summary contains only allowlisted domains and numeric codes. Public
             // visibility lets simulator e2e logs retain it without enabling private logs.
-            GlassfinLogger(category: "playback").infoPublic(diagnostic.description)
+            // Error-level messages persist for collection after the test app exits.
+            let publicLog = Logger(subsystem: "org.glassfin.app", category: "playback")
+            publicLog.error("\(diagnostic.description, privacy: .public)")
             forwardLogs()
             let status401 = player?.currentItem?.errorLog()?.events.contains { $0.errorStatusCode == 401 } == true
             let error = mediaSession?.lastFailure ?? (status401 ? .unauthorized : .network)
