@@ -85,3 +85,25 @@ metrics, existing assertions, and acceptance thresholds remain intact. Clock,
 CPU, and memory measurements include this synchronization overhead and remain
 UI automation trends rather than raw focus latency or device acceptance proof.
 No production focus behavior changes are required.
+
+## M08/main merge synchronization
+
+The kit merges main `589c5cf` (PR #51) with a merge commit. No test file or
+assertion is edited during conflict resolution. The two M08 wiring test files
+are inherited byte for byte from main; the existing performance tests remain
+unchanged. Main's `docs/TEST-CHANGES-M08-WIRING.md` describes those additions.
+
+`PlaybackView.swift` retains the MainActor AVKit delegate and deferred dismissal
+through the shared host while preserving first-frame observation and seek
+measurement. `PlaybackCoordinator.swift` retains request/track options, Stopped
+sequencing, and return focus while measuring both playback entry points. The
+shared destination remains the sole `playback.root` accessibility container,
+starts playback once, and preserves `detail.startOver` focus restoration.
+
+The device runbook now uses the connected Home/detail/episode playback routes
+for Docker trials. No physical-device or server playback result is claimed.
+
+Merge validation: Linux `swift test --package-path Packages/GlassfinCore` passes
+687 tests (10 skipped, zero failures). Source/catalog, debug-only string,
+unit-test target, and full Swift formatting checks pass. Apple validation runs
+only in GitHub Actions.
