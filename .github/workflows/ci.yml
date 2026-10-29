@@ -376,6 +376,10 @@ jobs:
       - name: Run tvOS F3 and F4 acceptance tests when available
         timeout-minutes: 30
         run: python3 scripts/ci/jellyfin-e2e.py test
+      - name: Collect public playback failure codes
+        if: always()
+        timeout-minutes: 1
+        run: python3 scripts/ci/collect-playback-diagnostics.py
       - name: Always stop server, remove private state and check logs for leaks
         id: cleanup
         if: always()

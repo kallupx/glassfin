@@ -292,7 +292,9 @@ final class T06HomeUITests: XCTestCase {
 
     @MainActor
     private func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        // Keep the original journeys and assertions while following the renamed native player.
+        let current = identifier == "home.playback" ? "playback.native" : identifier
+        return app.descendants(matching: .any).matching(identifier: current).firstMatch
     }
 
     @MainActor

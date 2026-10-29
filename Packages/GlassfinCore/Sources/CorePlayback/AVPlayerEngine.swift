@@ -4,6 +4,7 @@
     import CoreNetworking
     import Foundation
     import Observation
+    import os
 
     @MainActor
     @Observable
@@ -84,9 +85,16 @@
             observe(item, name: AVPlayerItem.didPlayToEndTimeNotification, run: currentRun) { engine in
                 engine.continuation?.yield(.ended)
             }
-            observe(item, name: AVPlayerItem.failedToPlayToEndTimeNotification, run: currentRun) { engine in
-                engine.recordFailure()
-            }
+            notifications.append(
+                NotificationCenter.default.addObserver(
+                    forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: item, queue: .main
+                ) { [weak self] notification in
+                    let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? NSError
+                    Task { @MainActor [weak self] in
+                        guard let self, self.run == currentRun else { return }
+                        self.recordFailure(error: error)
+                    }
+                })
             observe(item, name: AVPlayerItem.timeJumpedNotification, run: currentRun) { engine in
                 if engine.ready && !engine.seeking { engine.continuation?.yield(.seeked) }
             }
@@ -185,7 +193,14 @@
             continuation?.yield(.trackChanged(kind: kind, id: id))
         }
 
-        private func recordFailure() {
+        private func recordFailure(error itemError: NSError? = nil) {
+            let diagnostic = PlayerFailureDiagnostic(error: itemError ?? player?.currentItem?.error as NSError?)
+            log.error(diagnostic.description)
+            // This summary contains only allowlisted domains and numeric codes. Public
+            // visibility lets simulator e2e logs retain it without enabling private logs.
+            // Error-level messages persist for collection after the test app exits.
+            let publicLog = Logger(subsystem: "org.glassfin.app", category: "playback")
+            publicLog.error("\(diagnostic.description, privacy: .public)")
             forwardLogs()
             let status401 = player?.currentItem?.errorLog()?.events.contains { $0.errorStatusCode == 401 } == true
             let error = mediaSession?.lastFailure ?? (status401 ? .unauthorized : .network)

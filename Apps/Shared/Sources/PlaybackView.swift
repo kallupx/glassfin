@@ -30,9 +30,9 @@
                         trackMenuItems: PlaybackTrackMenus.items(playback: coordinator),
                         playback: coordinator, onClose: onClose
                     )
-                    // Keep Home's media-surface identifier on its own accessibility container.
+                    // Distinguish the active player from the retired Home placeholder.
                     .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("home.playback")
+                    .accessibilityIdentifier("playback.native")
                     .accessibilityValue(String(startTicks))
                     PlaybackSubtitleOverlay(playback: coordinator)
                     if coordinator.state == .loading || coordinator.state == .buffering { ProgressView() }

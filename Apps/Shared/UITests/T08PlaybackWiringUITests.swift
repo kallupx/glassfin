@@ -100,6 +100,8 @@ final class T08PlaybackWiringUITests: XCTestCase {
 
     @MainActor
     private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: id).firstMatch
+        // Keep the original journeys and assertions while following the renamed native player.
+        let current = id == "home.playback" ? "playback.native" : id
+        return app.descendants(matching: .any).matching(identifier: current).firstMatch
     }
 }
