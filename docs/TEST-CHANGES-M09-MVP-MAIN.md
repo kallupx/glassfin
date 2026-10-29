@@ -246,3 +246,67 @@ failing temporary probes described above, not a remaining regression. SwiftLint
 image-pipeline, design-system and catalog checks pass. Current `origin/main`
 at `c87d897` is already an ancestor, so no additional merge is needed.
 The Linux coverage gate passes at 91.79% (10776/11740 lines; minimum 80%).
+
+## Run 40815991154: tvOS timeout and misleading restarted-suite totals
+
+Download the complete workflow log and both platform artifacts for head `7c5d043`.
+iOS passes in 31m18s. tvOS reaches the 40-minute job deadline before xcodebuild
+finishes writing its result bundle; its artifact contains the test log but no
+readable xcresult export. The final `Selected tests` success at 04:50:13 UTC
+covers only the last Welcome test after a runner restart. It does not establish
+that the earlier UI tests passed.
+
+The tvOS timeline on 2026-10-29 UTC is:
+
+| Phase | Observed time |
+| --- | --- |
+| Job setup, Release build/scan, macOS package build/tests, app test build | 04:10:06–04:17:10 (7m04s) |
+| App logic and snapshot tests | 04:17:10–04:17:38 (28s) |
+| Design-system UI tests | 04:17:42–04:20:18 (2m36s) |
+| T04 auth UI tests, including restarts | 04:20:18–04:32:08 (11m50s) |
+| T06 Home UI tests | 04:32:08–04:36:45 (4m37s) |
+| T07 Library UI tests | 04:36:45–04:39:44 (2m59s) |
+| T09 Search MVP UI tests | 04:39:44–04:44:34 (4m50s) |
+| Earlier T09 Search UI tests | 04:44:34–04:45:54 (1m20s) |
+| T10 settings UI tests, including restarts | 04:45:54–04:50:09 (4m15s) |
+| Final Welcome test | 04:50:09–04:50:13 (4s) |
+
+Eight T04 methods and all three T10 methods fail while setting up authentication.
+The shared helper tries 64 geometry-based remote moves to focus the native
+editor's Done button. The accessibility hierarchy exposes the keyboard as a
+single focus group, so those moves cycle without reaching Done. Callers then
+try another 64 moves to reach Continue behind the still-open keyboard, followed
+by missing-screen assertions and snapshot errors. Ten runner restarts continue
+with the next selected test; they do not retry an already successful suite.
+No retry/repetition option or extra xcodebuild test invocation is configured.
+
+Search MVP's 17 methods run once, taking 9–43 seconds each. T09-41's full
+24-card focus traversal takes 43 seconds and retains all its coverage. T09-03
+also fails once because the native accessibility value now appends the system
+instruction `, Press \u{FFFC} to change keyboards`, rather than the previously
+observed dictation instruction. Its later exact `previouss` editing assertion
+passes. This is another presentation instruction, not corrupted retained text.
+
+### Test/assertion changes
+
+- Submit the fullscreen tvOS editor using native Return instead of trying to
+  focus Done with the form navigation algorithm. If Return advances to another
+  credentials field, send Menu only while the keyboard remains visible. Retain
+  the five-second keyboard-disappearance check and failure.
+- Shared activation and keyboard setup first check existence before polling.
+  Existing elements avoid XCTest's one-second initial polling interval. Missing
+  elements retain the same timeout and failure; no wait bound is reduced.
+- T09-03/T09-12 retained-query checks append `s` through the focused native field,
+  assert exact `previouss`/`stars`, delete that one character, and assert exact
+  `previous`/`star`. Native editing exposes the actual value without its changing
+  accessibility instruction. This replaces the optional dictation-suffix
+  comparison with exact plain-text equality and adds an exact editing assertion;
+  it accepts no suffix, substring or prefix. The tests' subsequent existing
+  `previouss`/`stars` checks remain, as do all result, recents and focus checks.
+- No assertion is deleted or weakened, and no test is removed, disabled or newly
+  skipped. All 24 T09-41 card assertions remain. Production source, core tests,
+  snapshot tests, the 180-second per-test allowance, and the 40-minute tvOS job
+  deadline are unchanged.
+
+Latest `origin/main` at `589c5cf` is already an ancestor, so no merge is needed.
+Apple validation of this follow-up runs in CI; this workspace is Linux.

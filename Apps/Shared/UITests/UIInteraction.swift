@@ -6,7 +6,7 @@ import XCTest
 func activate(
     _ element: XCUIElement, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line
 ) -> Bool {
-    guard element.waitForExistence(timeout: 10) else {
+    guard element.exists || element.waitForExistence(timeout: 10) else {
         XCTFail("Element '\(element.identifier)' did not appear before activation", file: file, line: line)
         return false
     }
@@ -32,7 +32,7 @@ func typeText(
         guard dismissKeyboard(in: app, for: element, file: file, line: line) else { return false }
         guard activate(element, in: app, file: file, line: line) else { return false }
         let keyboard = app.keyboards.firstMatch
-        guard keyboard.waitForExistence(timeout: 5) else {
+        guard keyboard.exists || keyboard.waitForExistence(timeout: 5) else {
             XCTFail("Keyboard did not appear for element '\(element.identifier)'", file: file, line: line)
             return false
         }
@@ -53,13 +53,12 @@ func typeText(
     ) -> Bool {
         let keyboard = app.keyboards.firstMatch
         guard keyboard.exists else { return true }
-        // The fullscreen editor can consume Menu without closing (CI run 40808182108).
-        // Commit through its native Done button when available, preserving the text.
-        let done = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "done")).firstMatch
-        if done.exists {
-            guard activate(done, in: app, file: file, line: line) else { return false }
-        } else {
-            // Only send Menu while a keyboard exists, so it cannot navigate back from the form.
+        // tvOS exposes the keyboard as one focus group, so its Done button cannot
+        // be reached with the form's geometry-based focus helper. Submit natively.
+        app.typeText("\n")
+        if !keyboard.waitForNonExistence(timeout: 1) {
+            // A credentials editor can advance to the next field on Return.
+            // Only send Menu while the keyboard remains, to stay on the form.
             XCUIRemote.shared.press(.menu)
         }
         guard keyboard.waitForNonExistence(timeout: 5) else {

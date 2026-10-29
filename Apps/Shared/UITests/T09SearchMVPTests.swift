@@ -351,17 +351,15 @@ final class T09SearchMVPTests: XCTestCase {
     private func assertSearchText(
         _ text: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line
     ) {
-        let value = app.searchFields.firstMatch.value as? String
+        let field = app.searchFields.firstMatch
         #if os(tvOS)
-            // After native tab/recent selection, tvOS can append its dictation instruction
-            // even while the inline keyboard has focus. Compare the entire AX value;
-            // accepting a query prefix would hide unwanted characters in the actual text.
-            let dictationHint = ", Hold \u{FFFC} to dictate"
-            let expected = value?.hasSuffix(dictationHint) == true ? text + dictationHint : text
-            XCTAssertEqual(value, expected, file: file, line: line)
-        #else
-            XCTAssertEqual(value, text, file: file, line: line)
+            // Native selection can append changing keyboard instructions to the AX
+            // value. Editing exposes the actual text without accepting any suffix.
+            field.typeText("s")
+            XCTAssertEqual(field.value as? String, text + "s", file: file, line: line)
+            field.typeText(XCUIKeyboardKey.delete.rawValue)
         #endif
+        XCTAssertEqual(field.value as? String, text, file: file, line: line)
     }
 
     @MainActor
