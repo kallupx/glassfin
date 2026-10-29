@@ -195,3 +195,54 @@ swift-format and all lint-job repository scripts pass. Two temporary
 negative probes (removed after execution) confirmed that a missing clock
 sleep and a cancelled clock wait both record failures promptly: two failures
 in 0.034 seconds with a 30 ms deadline for the missing-sleep case.
+
+## Run 40808182108: native editor dismissal and iOS job budget
+
+Inspect both downloaded platform artifacts and the workflow job conclusions before
+editing. The two dictation assertions above belong to run 40795729762, attempt 2.
+In run 40808182108 at `3b40b47`, all 17 tvOS M09 MVP UI tests pass, including
+T09-03 and T09-12 and their subsequent exact `previouss`/`stars` input assertions.
+The existing optional, exact system dictation suffix comparison is retained.
+
+The only failing tvOS method is
+`T04AuthUITests.testT04_25_privateHTTPShowsCleartextCancelFirst`. Its first failure
+is that the native fullscreen keyboard remains after one Menu press. The exported
+hierarchy still contains the editor, its entered address, and the native `done`
+button. The later Continue-focus, missing cleartext dialog and missing Accept
+failures all follow from that open editor; the form never receives Continue.
+
+The iOS package tests pass. The iOS app log records no failed assertion before
+the job is cancelled at its 40-minute limit. It stops 126 seconds into T09-41,
+still advancing through the 24-card row. Release compilation builds both arm64
+and x86_64 for a generic simulator destination; the job also builds/runs the core
+package and app tests. That combined workload exhausts the job budget. The
+short horizontal drags and open keyboard make the exhaustive card traversal
+unnecessarily expensive. There is no completed iOS xcresult export for this
+interrupted test run, so no claim is made about the unexecuted assertions.
+
+### Test/assertion changes
+
+- `UIInteraction.dismissKeyboard` activates the native fullscreen editor's Done
+  button with remote focus/Select when present. Menu remains the fallback for
+  editors without that button. The five-second keyboard-disappearance check and
+  failure remain, as do all auth assertions and expected values.
+- iOS T09-41 submits through the native Search key before scrolling and adds an
+  assertion that the keyboard disappears within five seconds. Each drag covers
+  80% rather than 40% of the row width. Every one of the 24 card hit-target and
+  exact-label assertions, the bounded eight-attempt loop per card, and the
+  no-See-more assertion remain. tvOS traversal is unchanged.
+- The Release scan builds only the architecture for the simulator used by the
+  tests. Both platforms still scan a Release app executable for test markers.
+  The iOS job limit is 60 minutes for the complete workload; tvOS stays at 40
+  minutes, and both XCTest invocations keep their 180-second per-test allowance.
+- No assertion is removed or relaxed. No test is deleted, disabled or newly
+  skipped. No production source or core test changes are needed in this follow-up.
+
+Both incremental and clean Linux `swift test` runs pass all 689 tests (679 passed,
+10 existing opt-in skips). `WaitTimeoutProbeTests` is absent from the source,
+generated discovery and both runs; the earlier failure was from the intentionally
+failing temporary probes described above, not a remaining regression. SwiftLint
+0.65.1, strict recursive swift-format, all lint-job repository scripts, M09,
+image-pipeline, design-system and catalog checks pass. Current `origin/main`
+at `c87d897` is already an ancestor, so no additional merge is needed.
+The Linux coverage gate passes at 91.79% (10776/11740 lines; minimum 80%).

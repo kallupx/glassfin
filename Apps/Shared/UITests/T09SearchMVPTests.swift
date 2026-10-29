@@ -146,15 +146,21 @@ final class T09SearchMVPTests: XCTestCase {
             XCUIRemote.shared.press(.right)
             XCTAssertTrue(card(String(format: "%032x", 24), in: app).hasFocus)
         #else
+            // Submit without clearing the query so the keyboard cannot cover the row's gestures.
+            let keyboard = app.keyboards.firstMatch
+            if keyboard.exists {
+                keyboard.buttons["Search"].tap()
+                XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5))
+            }
             let row = element("search.row.Movie", in: app)
             for index in 1...24 {
                 let item = card(String(format: "%032x", index), in: app)
                 for _ in 0..<8 {
                     if item.exists && item.isHittable { break }
-                    row.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+                    row.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
                         .press(
                             forDuration: 0.05,
-                            thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)))
+                            thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)))
                 }
                 XCTAssertTrue(item.isHittable)
                 XCTAssertEqual(item.label, "Result \(index)")

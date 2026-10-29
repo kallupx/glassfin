@@ -53,9 +53,15 @@ func typeText(
     ) -> Bool {
         let keyboard = app.keyboards.firstMatch
         guard keyboard.exists else { return true }
-        // Menu closes the system editor, preserving the entered text. Only send it
-        // while the keyboard is present, so it cannot invoke the form's back action.
-        XCUIRemote.shared.press(.menu)
+        // The fullscreen editor can consume Menu without closing (CI run 40808182108).
+        // Commit through its native Done button when available, preserving the text.
+        let done = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "done")).firstMatch
+        if done.exists {
+            guard activate(done, in: app, file: file, line: line) else { return false }
+        } else {
+            // Only send Menu while a keyboard exists, so it cannot navigate back from the form.
+            XCUIRemote.shared.press(.menu)
+        }
         guard keyboard.waitForNonExistence(timeout: 5) else {
             XCTFail("Keyboard did not close for element '\(element.identifier)'", file: file, line: line)
             return false
