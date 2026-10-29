@@ -1,7 +1,8 @@
 # Performance measurement test additions
 
-No existing test file or assertion is changed. No baseline or acceptance threshold
-is weakened. New test files:
+No test file or assertion inherited from main is changed. All existing assertions
+in this kit's new test files are preserved. No baseline or acceptance threshold is
+weakened. New test files:
 
 - `Apps/Shared/UITests/DevicePerformanceTests.swift`: P1 mock Home launch (launch,
   clock, signpost metrics), P3/P11 tvOS focus/browse (clock, app CPU, app memory,
@@ -63,3 +64,24 @@ so the PR uses ordinary tvOS/iOS CI without `full-ci`. The queued opt-in job was
 cancelled before any step ran. Regular tvOS runs the identical suite as the
 optional duplicate full-ui job; no tests, assertions, selectors, or workflow
 conditions are changed by this kit to exclude test coverage.
+
+The tvOS failure in CI run `40784493490` is confined to the new
+`DevicePerformanceTests.testP3_P11_mockTwoThousandItemGrid` benchmark. The
+`gh run view --log-failed` output ends during the Release build; the uploaded
+`tvos-results/app-test.log` and exported xcresult identify the sole failure as
+the focused-card existence assertion at the original line 77, during XCTest's
+unmeasured warm-up traversal. The screen recording shows Movie 1 regaining focus
+shortly after that immediate query, before another remote press. The three
+measured traversals and every other test passed. This is an asynchronous
+scroll/focus synchronization defect in the new benchmark, not evidence of a
+main-branch infrastructure timeout.
+
+The benchmark now captures the starting card's identity and waits up to ten
+seconds for that same card to exist and regain focus after all twelve Down and
+twelve Up presses. A new assertion requires the wait to complete; the original
+focused-card assertion remains unchanged. No extra remote presses or focus
+assignment can conceal lost focus. The fixture count, three measured iterations,
+metrics, existing assertions, and acceptance thresholds remain intact. Clock,
+CPU, and memory measurements include this synchronization overhead and remain
+UI automation trends rather than raw focus latency or device acceptance proof.
+No production focus behavior changes are required.

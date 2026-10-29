@@ -63,6 +63,7 @@ final class DevicePerformanceTests: XCTestCase {
                 XCUIRemote.shared.press(.down)
             }
             XCTAssertTrue(focusedCard.exists)
+            let startingCard = app.buttons[focusedCard.identifier]
             let options = XCTMeasureOptions()
             options.iterationCount = 3
             measure(
@@ -74,6 +75,10 @@ final class DevicePerformanceTests: XCTestCase {
             ) {
                 for _ in 0..<12 { XCUIRemote.shared.press(.down) }
                 for _ in 0..<12 { XCUIRemote.shared.press(.up) }
+                // Lazy scrolling can finish after the last remote press returns.
+                let restored = XCTNSPredicateExpectation(
+                    predicate: NSPredicate(format: "exists == true AND hasFocus == true"), object: startingCard)
+                XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 10), .completed)
                 XCTAssertTrue(focusedCard.exists)
             }
             app.terminate()
