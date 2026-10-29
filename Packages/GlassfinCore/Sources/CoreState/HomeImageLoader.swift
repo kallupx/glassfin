@@ -22,10 +22,15 @@ public struct HomeImageLoader: HomeImageLoading {
 
     public func data(for resource: JellyfinImageResource) async throws -> Data {
         try Task.checkCancellation()
-        if let data = await disk.data(for: resource.cacheKey) {
+        let cacheInterval = DevicePerformance.begin(.posterCache)
+        let cached = await disk.data(for: resource.cacheKey)
+        cacheInterval?.end(completed: cached != nil)
+        if let data = cached {
             try ImageDataPolicy.validate(data)
             return data
         }
+        let networkInterval = DevicePerformance.begin(.posterNetwork)
+        defer { networkInterval?.end(completed: false) }
         let data: Data
         do {
             data = try await client.send(resource.request())
@@ -35,6 +40,7 @@ public struct HomeImageLoader: HomeImageLoading {
         try Task.checkCancellation()
         try ImageDataPolicy.validate(data)
         await disk.store(key: resource.cacheKey, data: data)
+        networkInterval?.end()
         return data
     }
 }
@@ -54,6 +60,8 @@ public enum HomeImageDecoder {
         /// Thumbnail creation runs on a worker executor, before SwiftUI sees an image.
         public static func downsample(_ data: Data, width: Int, height: Int) async throws -> CGImage {
             let child = Task.detached(priority: .utility) {
+                let interval = DevicePerformance.begin(.imageDecode)
+                defer { interval?.end(completed: false) }
                 try Task.checkCancellation()
                 try ImageDataPolicy.validate(data)
                 let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
@@ -64,6 +72,7 @@ public enum HomeImageDecoder {
                 guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
                     throw ImageDataError.invalidImage
                 }
+                interval?.end()
                 return thumbnail
             }
             return try await withTaskCancellationHandler {

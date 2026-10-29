@@ -45,16 +45,16 @@ and finishing playback may advance focus. The canonical file is unchanged.
 | T07-29 | Partial L: `testT07_29_storeRefreshAndReloadPreserveEpisodeFocusAndSeason` checks shared-store projection. Full grid/home propagation requires M06 UI integration. |
 | T07-30 | Not automated: Overview sheet opening, dismissal and focus need Apple UI coverage. |
 | T07-31 | Not automated: cast portraits, initials and focus need Apple snapshots/UI (Q7-16). |
-| T07-32 | Partial L: T07-35 covers HDR10 resolution; default-stream/HDR variants need more fixtures (Q7-22). |
-| T07-33 | Partial L: T07-35 covers DTS-HD MA 7.1; AAC/Atmos/default-stream cases need fixtures. |
-| T07-34 | Partial L: T07-35 covers a subtitle language; deduplication/no-download assertions remain. |
-| T07-35 | Partial L: `testT07_35_technicalFixtureShowsHDRDVAndLosslessAudio`; separate DV 8.1/SDR/unknown fixtures remain. |
-| T07-36 | Not automated: first-source selection needs a multiple-source fixture (Q7-06). |
+| T07-32 | L: `testT07_32_defaultVideoResolutionAndHDRLabels` checks first-default selection, 4K/1080p, HDR10/HDR10+/Dolby Vision/HLG, SDR/unknown suppression and first-video fallback (Q7-22). |
+| T07-33 | L: `testT07_33_defaultAudioCodecAndChannelLabels` checks first-default DTS-HD MA 7.1, Dolby Atmos and AAC 2.0, with first-audio fallback and all tracks retained for selection. |
+| T07-34 | L: `testT07_34_subtitleLanguagesAreStableAndDeduplicatedWithoutDownloadingFiles` checks embedded/external metadata, stable language order, deduplication and exact item/similar requests with no subtitle download. |
+| T07-35 | Partial L: `testT07_35_technicalFixtureShowsHDRDVAndLosslessAudio` is unchanged. T07-32/T07-33 add SDR, unknown-range and default-stream fixtures; a dedicated DV 8.1 fixture remains. |
+| T07-36 | L: `testT07_36_multipleMediaSourcesUseOnlyTheFirstSourcesTechRow` checks two sources with conflicting top-level streams; only the first source reaches the P0 presentation model, exactly as with one source (Q7-06). No version picker is added. |
 | T07-37 | Not automated: absence of trailer UI needs an Apple assertion (Q7-18). |
 | T07-38 | Partial K: design-system checks forbid link/openURL rendering. An ExternalUrls fixture assertion remains. |
 | T07-39 | Not automated: movie focus order needs Apple UI tests. |
 | T07-40 | Partial K: design-system checks enforce glass placement. Visual budget requires snapshots. |
-| T07-41 | Not automated: parallel item/seasons start needs a gated service test. |
+| T07-41 | L: `testT07_41_openingSeriesStartsItemAndSeasonsConcurrently` gates both requests before releasing either, checks GET paths and query items including enableUserData=true, then verifies loaded detail/seasons. |
 | T07-42 | L: T07-43 asserts seasonId, enableUserData and Overview,PrimaryImageAspectRatio fields, following the merged module spec. |
 | T07-43 | L: `testT07_43_fiveSeasonsFetchAndShowOnlyTheSelectedSeason` verifies no all-season episode request, series-scoped Next Up discovery, and replacement of the displayed season. `testT07_43_singleSeasonKeepsPickerVisibleAndItsEpisodesSelected` and `testT07_43_noSeasonsHidesPicker` enforce the Q7-25 follow-up. A: `testT07_43_singleSeasonPickerStaysVisible` checks visibility and Down/Up focus with one season. |
 | T07-44 | L: `testT07_44_switchingSeasonCancelsPreviousRequestAndReusesCachedRows` uses a suspended request, proves cancellation, and verifies a completed season is reused without another request. `testT07_44_twoSeasonsReplaceEpisodesAndKeepFocusInTheSelectedSeason` checks the two-second S2E1 fixture, season-scoped requests, row replacement, cache reuse and picker/episode focus. A: `testT07_44_twoSeasonPickerReplacesEpisodesAndKeepsFocus`. |
@@ -92,7 +92,7 @@ and finishing playback may advance focus. The canonical file is unchanged.
 | T07-76 | Not automated: grid/movie snapshot matrix requires Apple SDK/artifacts. |
 | T07-77 | Partial L: `T07MetadataTests` covers literal markup, controls/bidi, graphemes and shared limits; T07-25 covers protocol values. The limit-1/limit/limit+1 matrix covers multi-scalar emoji and combining sequences, plus ServerInfo/PublicUser limits and 15 taglines/40 genres. Layout snapshots require Apple SDK. |
 | T07-78 | L: `T07ImageTests` and `T07SecurityStateTests` cover header-only auth, SHA-256 tuple keys, cache filenames and byte limits. Streaming regression tracked by T07-81. |
-| T07-79 | Not automated: special-character genre URL round-trip needs an explicit assertion. |
+| T07-79 | L: `testT07_79_specialCharacterGenresAreEncodedAndRoundTripWithoutChangingThePath` captures real HTTP URL requests for &, =, #, /, Unicode and spaces, checks query round-trips, the base path, sort/parent parameters and absence of a fragment (S6.5). |
 | T07-80 | L: `testT07_80_thumbnailOptionsUseDisplayedPixelsAndImmediateTransformedThumbnailOnly` tests the actual dictionary consumed by the decoder; on Apple it also checks the SDK constant keys. A: `testT07_80_artworkIsDownsampledToDisplayedPixels` checks real thumbnail dimensions. K: `scripts/check-image-pipeline.py` forbids AsyncImage, encoded-data UIImage/NSImage constructors and full ImageIO bitmap decoding; included in ci-grep.sh. |
 | T07-81 | L: `testT07_81_missingContentLengthStreamIsCancelledAtTheCap` and `testT07_81_lyingContentLengthStreamIsCancelledAtTheCap` exercise the real URLSession delegate with paced 64 KB chunks and absent/false 1 MB headers. They assert cancellation at the 20 MB boundary, before EOF; T07-78 asserts failed data is not cached. Visual fallback/focus requires Apple UI execution. |
 | T07-82 | Not automated: decompression-bomb memory/no-crash and fallback need Apple ImageIO/device tests. |
@@ -124,10 +124,10 @@ The DEBUG scenarios `series-single-season` and `series-two-seasons` exercise the
 same service/view-model path as the app. The picker uses the existing en/fi
 catalog entries and appears for every series with at least one season.
 
-There are 61 authored M07 tests: 47 Linux tests and 14 Apple ImageIO/UI tests.
+There are 79 authored M07-ID tests: 65 Linux tests and 14 Apple ImageIO/UI tests.
 Linux executed IDs T07-01, T07-05–T07-07, T07-09, T07-11, T07-13, T07-21,
-T07-25, T07-27–T07-29, T07-35, T07-43–T07-45, T07-48, T07-50–T07-52,
-T07-63–T07-64, T07-67–T07-68, T07-71, T07-77–T07-78, and T07-80–T07-81.
+T07-25, T07-27–T07-29, T07-32–T07-36, T07-41, T07-43–T07-45, T07-48, T07-50–T07-52,
+T07-63–T07-64, T07-67–T07-68, T07-71, T07-77–T07-81.
 Supporting assertions cover T07-26, T07-42, T07-49 and T07-54 as described above.
 Apple-only tests use IDs T07-19, T07-43–T07-44, T07-46, T07-48–T07-53, T07-63 and T07-80;
 they were not executed on Linux. Every remaining ID has a not-automated or
@@ -182,8 +182,8 @@ is 91.71% (7,581/8,266), above the 80% threshold. The 12 new lifecycle tests pas
 Strict swift-format, design-system, en/fi String Catalog, DEBUG-string and CI grep
 checks also passed. All ten inherited bootstrap unit tests passed.
 
-There are now 73 authored M07-ID tests: 59 Linux and 14 Apple tests; the four new
-Home-ID tests and one identity-only extra are listed separately above.
+At the v2 merge there were 73 authored M07-ID tests: 59 Linux and 14 Apple tests;
+the four new Home-ID tests and one identity-only extra are listed separately above.
 
 No Apple UI/snapshot execution is claimed. Xcode and Docker are unavailable in
 this environment. The merge imports v2's existing project.yml lines verbatim;
@@ -450,3 +450,61 @@ Run `bash scripts/macos-ci.sh tvOS` for tvOS. Linux cannot execute SwiftUI or
 Apple simulator tests, so the iOS layout fix still needs simulator confirmation.
 Live Jellyfin integration remains unexecuted. Keeping main's project file also
 means M05's hosted logic and snapshot targets remain outside the app schemes.
+
+## PoC follow-up unit tests
+
+Six new Linux XCTest methods automate T07-32, T07-33, T07-34, T07-36,
+T07-41 and T07-79. The current total is 79 authored M07-ID tests: 65 Linux
+and 14 Apple tests. The executed-ID summary above includes these six IDs.
+
+| ID | Package test file and function |
+| --- | --- |
+| T07-32 | `Tests/CoreModelsTests/T07TechnicalRowTests.swift`: `testT07_32_defaultVideoResolutionAndHDRLabels` |
+| T07-33 | `Tests/CoreModelsTests/T07TechnicalRowTests.swift`: `testT07_33_defaultAudioCodecAndChannelLabels` |
+| T07-34 | `Tests/CoreStateTests/T07PoCFollowupTests.swift`: `testT07_34_subtitleLanguagesAreStableAndDeduplicatedWithoutDownloadingFiles` |
+| T07-36 | `Tests/CoreModelsTests/T07TechnicalRowTests.swift`: `testT07_36_multipleMediaSourcesUseOnlyTheFirstSourcesTechRow` |
+| T07-41 | `Tests/CoreStateTests/T07PoCFollowupTests.swift`: `testT07_41_openingSeriesStartsItemAndSeasonsConcurrently` |
+| T07-79 | `Tests/CoreServicesTests/T07FilterEncodingTests.swift`: `testT07_79_specialCharacterGenresAreEncodedAndRoundTripWithoutChangingThePath` |
+
+The JSON fixtures are `Tests/Fixtures/m07-technical-items.json` and
+`Tests/Fixtures/m07-subtitles.json` at the repository root, following the
+existing fixture-loading convention. The concurrency fake suspends requests
+with continuations and uses XCTest expectations with two-second bounds; it
+releases requests even if a sequential regression fails the start assertions.
+No sleeps or dependencies are added. URLComponents legally leaves `/` inside
+query values unescaped; the URL test accepts that representation or `%2F` and
+requires an unchanged path and an exact parsed genre value in both cases.
+
+### Production bugs exposed by the tests
+
+An initial focused run failed on stream selection/labels, subtitle language
+projection, first-source precedence and sequential series loading; URL encoding
+already passed. These are the minimal production corrections:
+
+| File | Reason |
+| --- | --- |
+| `Packages/GlassfinCore/Sources/CoreModels/ItemMetadata.swift` | Preserve IsDefault and project default video/audio labels plus stable distinct subtitle languages without removing selectable tracks. |
+| `Packages/GlassfinCore/Sources/CoreModels/Mappers.swift` | Carry IsDefault and prefer the first source's streams over conflicting top-level streams (Q7-06). |
+| `Packages/GlassfinCore/Sources/CoreState/ItemDetailViewModel.swift` | Start known-series detail and seasons together through the same entry point exercised by the gated test. |
+| `Apps/Shared/Sources/Library/ItemDetailScreen.swift` | Use the tested loading entry point and technical-row projection, and carry known kinds to related-item destinations. |
+| `Apps/Shared/Sources/Library/LibraryGridView.swift` | Carry the grid item's known kind to detail so a series need not wait for item decoding before requesting seasons. |
+| `Apps/Shared/Sources/Library/LibraryDebugHost.swift` | Supply the known series kind in the existing DEBUG series scenarios. |
+
+All existing tests and assertions, including T07-35's raw technical values, are
+unchanged. No version picker is introduced. Apple UI execution is still required
+to verify rendered labels, navigation/focus and visual absence of a version picker;
+the Linux tests verify the shared presentation data and actual request construction.
+
+### Follow-up verification
+
+With Swift 6.4.1 on Linux, `swift test` and `bash scripts/coverage-gate.sh`
+pass: 499 tests, zero failures, seven existing live-server skips (492 passed).
+Line coverage is 91.78% (8,480/9,239), above the 80% threshold.
+Strict recursive swift-format and SwiftLint 0.65.1 pass, as do CI greps
+(including design-system, String Catalog and image-pipeline checks), DEBUG-string
+checks/self-test, artifact-redaction self-test, license checks/self-test and
+entitlements. The lint job's 33 Python bootstrap/HLS probe tests, shell syntax
+check and 22 Docker integration script self-test cases also pass.
+All 82 canonical coverage rows and the 65 Linux/14 Apple M07-ID method counts
+are checked against source. `git diff --check` passes. Live Jellyfin and Apple
+simulator/UI execution are not claimed.

@@ -88,7 +88,10 @@ struct HomeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.foreground() }
-            if phase == .background { model.onDisappear() }
+            if phase == .background {
+                DeviceLaunchMeasurement.cancel()
+                model.onDisappear()
+            }
         }
         .onChange(of: app.connectivity) { old, new in
             if new == .online && (old == .serverUnreachable || old == .offline) {
@@ -193,16 +196,22 @@ struct HomeView: View {
                         #if os(tvOS)
                             guard !needsDefaultFocus else { return }
                         #endif
+                        let interval = DevicePerformance.begin(.focusUpdate)
+                        defer { interval?.end() }
+                        DeviceLaunchMeasurement.homeReceivedFocus()
                         focusedItem = $0
                         focusedRowID = id
                     }, onDetail: onDetail,
-                    onPlay: { play($0) },
+                    onPlay: { play($0, rowID: id) },
                     onPlayed: { item in model.perform { await $0.setPlayed(item, played: !item.userData.played) } },
                     onFavorite: { item in model.perform { await $0.setFavorite(item) } },
                     onRemove: { item in model.perform { await $0.removeFromResume(item) } })
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.\(id)")
+            .onAppear {
+                if !(state.value ?? []).isEmpty { DeviceLaunchMeasurement.homeRowAppeared() }
+            }
         }
     }
 
@@ -231,12 +240,12 @@ struct HomeView: View {
         return false
     }
 
-    private func play(_ item: MediaItem) {
+    private func play(_ item: MediaItem, rowID: String) {
         if let key = model.playbackBlockedKey {
             playbackNoticeKey = key
             return
         }
-        onPlay(HomePlaybackRequest(item: item))
+        onPlay(HomePlaybackRequest(item: item, returnFocusID: "home.\(rowID).item.\(item.id)"))
     }
 
     private func loadBackdrop() async {
@@ -274,6 +283,7 @@ private struct HomeMediaRow: View {
     var onFavorite: (MediaItem) -> Void
     var onRemove: (MediaItem) -> Void
     @FocusState private var focus: String?
+    @Environment(\.playbackFocusReturn) private var playbackFocusReturn
     @Namespace private var rowNamespace
 
     var body: some View {
@@ -362,6 +372,12 @@ private struct HomeMediaRow: View {
             .defaultFocus(
                 $focus, receivesDefaultFocus ? rememberedID ?? items.first?.id : nil, priority: .userInitiated)
         #endif
+        .onChange(of: playbackFocusReturn) { _, value in
+            guard let value, let item = items.first(where: { "home.\(rowID).item.\($0.id)" == value.id }) else {
+                return
+            }
+            focus = item.id
+        }
         .onChange(of: focus) { _, value in
             guard let item = items.first(where: { $0.id == value }) else { return }
             #if os(tvOS)
@@ -419,13 +435,16 @@ private struct HomeCard: View {
             guard !Task.isCancelled else { return }
             placeholderImage = decodedPlaceholder.map { Image(decorative: $0, scale: 1) }
             guard let resource else { return }
+            let interval = DevicePerformance.begin(.posterReady)
             do {
                 let data = try await loader.data(for: resource)
                 let decoded = try await HomeImageDecoder.downsample(
                     data, width: resource.width, height: resource.height)
                 guard !Task.isCancelled else { return }
                 image = Image(decorative: decoded, scale: displayScale)
+                interval?.end()
             } catch {
+                interval?.end(completed: false)
                 // AsyncPoster keeps its placeholder.
             }
         }

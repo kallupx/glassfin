@@ -34,7 +34,6 @@ public final class LibrarySession {
     public func requestPlayback(_ intent: LibraryPlaybackIntent) {
         guard !app.playbackBlocked else { return }
         playbackIntent = intent
-        // TODO(Q7-08): M08 supplies the presentation closure.
         onPlayback?(intent)
     }
 

@@ -67,6 +67,8 @@ struct LibraryGridView: View {
                 focus = model.focusedID
             }
             .onChange(of: focus) { _, id in
+                let interval = DevicePerformance.begin(.focusUpdate)
+                defer { interval?.end() }
                 if let id {
                     model.focusedID = id
                     model.scrollID = id
@@ -126,7 +128,9 @@ struct LibraryGridView: View {
             ) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     if let id = ItemID(item.id) {
-                        NavigationLink(value: id) {
+                        NavigationLink {
+                            ItemDetailScreen(id: id.value, kind: item.kind, session: session)
+                        } label: {
                             LibraryMediaCardFace(
                                 item: session.actions.visible(item), focused: focus == item.id, session: session)
                         }

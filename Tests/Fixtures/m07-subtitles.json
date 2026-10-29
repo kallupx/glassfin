@@ -1,0 +1,16 @@
+{
+  "Id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "Name": "Subtitle metadata",
+  "Type": "Movie",
+  "MediaStreams": [
+    {"Index": 0, "Type": "Video", "Language": "jpn", "IsDefault": true, "Width": 1920, "Height": 1080, "VideoRangeType": "SDR"},
+    {"Index": 1, "Type": "Audio", "Language": "fra", "IsDefault": true, "Codec": "aac", "Channels": 2},
+    {"Index": 2, "Type": "Subtitle", "Language": "fin", "Codec": "srt", "IsExternal": true, "DeliveryUrl": "/Videos/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/source/Subtitles/2/Stream.srt"},
+    {"Index": 3, "Type": "Subtitle", "Language": "eng", "Codec": "pgssub"},
+    {"Index": 4, "Type": "Subtitle", "Language": "fin", "Codec": "ass"},
+    {"Index": 5, "Type": "Subtitle"},
+    {"Index": 6, "Type": "Subtitle", "Language": "eng", "Codec": "srt"},
+    {"Index": 7, "Type": "Subtitle", "Language": "swe", "Codec": "srt"},
+    {"Index": 8, "Type": "Subtitle", "Language": ""}
+  ]
+}
