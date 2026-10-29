@@ -22,7 +22,11 @@ public enum MediaAssetScheme {
         guard let encoded = clean.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed) else {
             return nil
         }
-        components.percentEncodedPath = "/" + encoded
+        // AVFoundation selects its HLS reader from the asset URL before reading the
+        // loader's content information. The encoded origin includes its query in the
+        // path, so it cannot provide a usable m3u8 extension on its own.
+        let suffix = !isKey && PlaylistSniffer.isPlaylistURL(clean) ? playlistSuffix : ""
+        components.percentEncodedPath = "/" + encoded + suffix
         return components.url
     }
 
@@ -36,10 +40,13 @@ public enum MediaAssetScheme {
         guard asset.scheme?.lowercased() == name, asset.host == host else { return nil }
         guard let components = URLComponents(url: asset, resolvingAgainstBaseURL: false) else { return nil }
         var encoded = components.percentEncodedPath
+        if encoded.hasSuffix(playlistSuffix) { encoded.removeLast(playlistSuffix.count) }
         if encoded.hasPrefix("/") { encoded.removeFirst() }
         guard let decoded = encoded.removingPercentEncoding, let origin = URL(string: decoded) else { return nil }
         guard MediaURLValidation.hasNoUserInfo(origin) else { return nil }
         guard !MediaCredentialQuery.contains(origin) else { return nil }
         return origin
     }
+
+    private static let playlistSuffix = "/playlist.m3u8"
 }

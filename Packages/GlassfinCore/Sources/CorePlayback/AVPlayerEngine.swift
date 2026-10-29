@@ -186,6 +186,11 @@
         }
 
         private func recordFailure() {
+            let diagnostic = PlayerFailureDiagnostic(error: player?.currentItem?.error as NSError?)
+            log.error(diagnostic.description)
+            // This summary contains only allowlisted domains and numeric codes. Public
+            // visibility lets simulator e2e logs retain it without enabling private logs.
+            GlassfinLogger(category: "playback").infoPublic(diagnostic.description)
             forwardLogs()
             let status401 = player?.currentItem?.errorLog()?.events.contains { $0.errorStatusCode == 401 } == true
             let error = mediaSession?.lastFailure ?? (status401 ? .unauthorized : .network)
