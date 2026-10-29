@@ -79,24 +79,28 @@ struct SearchView: View {
                                 set: { model.rememberedIDs[group.id] = $0 }),
                             onSelect: model.open)
                     }
-                    if model.hasContent, model.state.presentedError != nil {
-                        Button(action: model.retry) { Copy.text(.actionRetry) }
-                            .buttonStyle(.glass)
-                            .accessibilityIdentifier("search.retry")
-                    }
                 }
                 .padding(SpacingToken.xl)
             }
+            .accessibilityIdentifier("search.root")
+            #if os(iOS)
+                .scrollDismissesKeyboard(.interactively)
+            #endif
             .safeAreaInset(edge: .top) {
                 if let key = model.bannerKey {
                     ContainedGlass {
-                        Text(verbatim: AppErrorMessage.localized(key))
-                            .padding(SpacingToken.s)
-                            .ownGlassSurface(in: Capsule())
-                            .focusable(false)
-                            .accessibilityIdentifier("search.banner")
-                            .accessibilityValue(key)
+                        HStack(spacing: SpacingToken.m) {
+                            Text(verbatim: AppErrorMessage.localized(key))
+                                .padding(SpacingToken.s)
+                                .ownGlassSurface(in: Capsule())
+                                .focusable(false)
+                                .accessibilityIdentifier("search.banner")
+                                .accessibilityValue(key)
+                            if model.hasContent, model.state.presentedError != nil { retryAction }
+                        }
                     }
+                } else if model.hasContent, model.state.presentedError != nil {
+                    retryAction
                 }
             }
             .searchable(
@@ -105,6 +109,7 @@ struct SearchView: View {
             )
             #if os(iOS)
                 .searchFocused($searchFocused)
+                .onSubmit(of: .search) { searchFocused = false }
             #endif
             .navigationTitle(Copy.string(.tabSearch))
             .navigationDestination(item: $model.selectedItem) { item in
@@ -121,8 +126,13 @@ struct SearchView: View {
                 if old != nil && new == nil { model.retryAfterRecovery() }
             }
             .onDisappear { model.onDisappear() }
-            .accessibilityIdentifier("search.root")
         }
+    }
+
+    private var retryAction: some View {
+        Button(action: model.retry) { Copy.text(.actionRetry) }
+            .buttonStyle(.glass)
+            .accessibilityIdentifier("search.retry")
     }
 
     private var recentSearches: some View {
@@ -194,6 +204,7 @@ private struct SearchResultRow: View {
             Copy.text(title)
                 .font(.title3)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("search.header.\(group.id.rawValue)")
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: CardMetrics.spacing) {
@@ -215,6 +226,7 @@ private struct SearchResultRow: View {
                     }
                     .padding(.vertical, SpacingToken.m)
                 }
+                .accessibilityIdentifier("search.row.\(group.id.rawValue)")
                 .onAppear {
                     if let rememberedID {
                         proxy.scrollTo(rememberedID, anchor: .center)
@@ -231,11 +243,18 @@ private struct SearchResultRow: View {
                 feature.model.focusedKind = group.id
             }
         }
-        .accessibilityIdentifier("search.row.\(group.id.rawValue)")
+        .onChange(of: group.items.map(\.id)) { _, ids in
+            guard let rememberedID, !ids.contains(rememberedID) else { return }
+            let fallback = ids.first
+            self.rememberedID = fallback
+            if feature.model.focusedKind == group.id {
+                DispatchQueue.main.async { focus = fallback }
+            }
+        }
     }
 }
 
-private struct SearchResultCard: View {
+struct SearchResultCard: View {
     let feature: SearchFeature
     let item: MediaItem
     let style: CardStyle
@@ -257,15 +276,15 @@ private struct SearchResultCard: View {
             PosterFace(
                 image: image,
                 content: PosterContent(
-                    id: item.id, title: item.name,
+                    id: item.id, title: item.searchCardTitle,
                     progress: PlaybackProgress.measure(position: item.userData.playbackPosition, runtime: item.runtime),
                     isWatched: item.userData.played, unplayedCount: item.userData.unplayedCount,
                     blurHash: item.images.primaryBlurHash),
-                style: style, isFocused: focused)
+                style: style, isFocused: focused, titleHeight: CardMetrics.titleHeight * 2)
         }
         .posterButtonStyle()
         .accessibilityIdentifier("search.item.\(item.id)")
-        .accessibilityLabel(Text(verbatim: item.name))
+        .accessibilityLabel(Text(verbatim: item.searchCardTitle))
         .task(id: request?.cacheKey.sha256) {
             image = nil
             guard let request else { return }

@@ -50,23 +50,24 @@ xcodegen generate
 if [[ "$platform" == "tvOS" ]]; then
   destination="$(pick_destination tvOS "Apple TV 4K (3rd generation)")"
   scheme="Glassfin-tvOS"
-  generic="generic/platform=tvOS Simulator"
   sdk_glob='*appletvsimulator*'
 else
   destination="$(pick_destination iOS "iPhone 17")"
   scheme="Glassfin-iOS"
-  generic="generic/platform=iOS Simulator"
   sdk_glob='*iphonesimulator*'
 fi
 
 release_data="$root/DerivedData-release-$platform"
 rm -rf "$release_data"
+# Scan the Release binary for the simulator architecture used by the tests.
+# A generic destination builds both arm64 and x86_64, consuming the iOS test budget.
 xcodebuild build \
   -scheme "$scheme" \
   -configuration Release \
-  -destination "$generic" \
+  -destination "$destination" \
   -clonedSourcePackagesDirPath "$source_packages" \
   -derivedDataPath "$release_data" \
+  ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
   | tee "$artifacts/release-build.log" || status=$?
 
@@ -86,9 +87,12 @@ if [[ "$platform" == "tvOS" ]]; then
 else
   (
     cd "$root/Packages/GlassfinCore"
-    xcodebuild test \
+    NSUnbufferedIO=YES xcodebuild test \
       -scheme GlassfinCore \
       -destination "$destination" \
+      -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 180 \
+      -maximum-test-execution-time-allowance 180 \
       -clonedSourcePackagesDirPath "$source_packages" \
       -derivedDataPath "$root/DerivedData-package-$platform" \
       -resultBundlePath "$artifacts/package.xcresult" \
@@ -96,9 +100,14 @@ else
   ) | tee "$artifacts/package-test.log" || status=$?
 fi
 
-xcodebuild test \
+# Bound XCTest's automation/idle waits as well as the explicit waits in each test.
+# Unbuffered output keeps the active test visible in the streamed CI log.
+NSUnbufferedIO=YES xcodebuild test \
   -scheme "$scheme" \
   -destination "$destination" \
+  -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 180 \
+  -maximum-test-execution-time-allowance 180 \
   -clonedSourcePackagesDirPath "$source_packages" \
   -derivedDataPath "$root/DerivedData-$platform" \
   -resultBundlePath "$artifacts/app.xcresult" \

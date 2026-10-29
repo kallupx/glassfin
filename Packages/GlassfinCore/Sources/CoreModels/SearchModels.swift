@@ -52,10 +52,27 @@ public struct SearchResponse: Sendable, Equatable {
 }
 
 extension MediaItem {
+    /// Search cards include enough context to distinguish episodes and releases.
+    public var searchCardTitle: String {
+        let item = searchDisplayItem
+        if item.kind == .episode {
+            var parts = [String]()
+            if let series = item.seriesName, !series.isEmpty { parts.append(series) }
+            if let season = item.parentIndexNumber, let episode = item.indexNumber {
+                parts.append("S\(season)E\(episode)")
+            }
+            parts.append(item.name)
+            return parts.joined(separator: " · ")
+        }
+        if let year = item.productionYear { return "\(item.name) (\(year))" }
+        return item.name
+    }
+
     /// Apply again at the view-model boundary, including mock and cached input.
     public var searchDisplayItem: MediaItem {
         var result = self
         result.name = MetadataSanitizer.displayText(name, limit: MetadataPolicy.nameMax)
+        result.seriesName = seriesName.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         result.overview = overview.map { MetadataPolicy.clean($0, limit: MetadataPolicy.overviewMax) }
         result.officialRating = officialRating.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) }
         result.chapters = chapters.map {
