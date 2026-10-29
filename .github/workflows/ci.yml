@@ -28,6 +28,7 @@ jobs:
     outputs:
       macos: ${{ steps.filter.outputs.macos }}
       ios: ${{ steps.filter.outputs.ios }}
+      tvos-shards: ${{ steps.tvos-shards.outputs.matrix }}
     steps:
       - name: Install git, Python, and SwiftLint
         run: |
@@ -86,6 +87,13 @@ jobs:
         run: |
           python3 scripts/check-unit-test-targets.py --self-test
           python3 scripts/check-unit-test-targets.py
+      - name: Validate tvOS UI shards
+        id: tvos-shards
+        run: |
+          python3 scripts/check-tvos-ui-shards.py --self-test
+          python3 scripts/check-tvos-ui-shards.py
+          matrix="$(python3 scripts/check-tvos-ui-shards.py --matrix)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - name: Artifact redaction self-test
         run: python3 scripts/redact_artifacts.py --self-test
       - name: Bootstrap and HLS probe unit tests and shell syntax
@@ -116,7 +124,8 @@ jobs:
             Packages/GlassfinCore/.build
           key: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
-  test-tvos:
+  test-tvos-shards:
+    name: test-tvos (shard ${{ matrix.shard }})
     needs: lint
     # Push, including a merge commit on main, stays on lint.
     # Dependabot skips macOS until the full-ci label or workflow_dispatch.
@@ -130,7 +139,10 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'full-ci')
       )
     runs-on: xcode-27
-    timeout-minutes: 40
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.lint.outputs.tvos-shards) }}
     steps:
       - name: Swift version
         run: xcrun swift --version
@@ -155,8 +167,14 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
           key: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: ${{ runner.os }}-spm-${{ steps.spm-environment.outputs.version }}-
-      - name: Test and Release binary check
-        run: bash scripts/macos-ci.sh tvOS
+      - name: Validate tvOS UI shard coverage
+        run: python3 scripts/check-tvos-ui-shards.py
+      - name: Shut down simulators before tests
+        run: xcrun simctl shutdown all
+      - name: Run shard (Release and package checks on shard 1)
+        env:
+          TVOS_UI_SHARD: ${{ matrix.shard }}
+        run: bash scripts/macos-ci.sh tvOS "$TVOS_UI_SHARD"
       # Fork pull requests and manual runs may restore, but cannot save caches.
       - name: Save SwiftPM SourcePackages
         if: >
@@ -176,13 +194,31 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: tvos-results
+          name: tvos-results-${{ matrix.shard }}
           # xcresult bundles are not redacted. Upload the text export only.
           path: |
             artifacts/tvOS/readable/**
             artifacts/tvOS/*.log
             artifacts/tvOS/*.txt
           retention-days: 7
+
+  # Preserve the required check and the Dependabot gate's existing dependency.
+  test-tvos:
+    name: test-tvos
+    needs: [lint, test-tvos-shards]
+    if: >
+      always() && needs.lint.result == 'success' &&
+      needs.test-tvos-shards.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Require every tvOS shard to pass
+        env:
+          SHARDS_RESULT: ${{ needs.test-tvos-shards.result }}
+        run: |
+          echo "tvOS shards: $SHARDS_RESULT"
+          test "$SHARDS_RESULT" = success
 
   test-ios:
     needs: lint
