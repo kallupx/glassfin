@@ -13,6 +13,7 @@
     "T07LibraryUITests",
     "DesignSystemFocusTests",
     "T08PlaybackWiringUITests",
-    "T10SettingsUITests"
+    "T10SettingsUITests",
+    "TPOCPlaybackAcceptanceUITests"
   ]
 }
