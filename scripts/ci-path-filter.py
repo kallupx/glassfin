@@ -21,6 +21,9 @@ MACOS_PREFIXES = (
     "Tests/",
     "project.yml",
     ".github/workflows/",
+    "scripts/macos-ci.sh",
+    "scripts/check-tvos-ui-shards.py",
+    "scripts/ci/tvos-ui-shards.json",
 )
 IOS_PREFIXES = (
     "Apps/iOS/",
@@ -28,6 +31,7 @@ IOS_PREFIXES = (
     "Apps/Shared/",
     "project.yml",
     ".github/workflows/",
+    "scripts/macos-ci.sh",
 )
 
 
