@@ -6,9 +6,11 @@ contain these adjustments or PR #47's files.
 PR #47's test files and every assertion remain unchanged. No test assertion is
 weakened, deleted or edited.
 
-The generated F4 fixture is 18 seconds instead of six. The original six-second
+The generated F4 fixture is 24 seconds instead of six. The original six-second
 file could end while the UI test was still checking for retired placeholders,
-before its first `/Sessions` request. Eighteen seconds still finishes within the
+before its first `/Sessions` request. The 18-second intermediate fixture finished
+processing before AVPlayer's startup buffer was ready. Twenty-four seconds keeps
+processing active across that buffer and still finishes within the
 existing 25-second end-of-playback allowance after the session is observed.
 
 After checksummed ffmpeg installation and fixture generation, a validation-only
