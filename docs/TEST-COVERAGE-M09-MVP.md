@@ -60,7 +60,7 @@ Images are attached to xcresult and also written under `artifacts/screenshots/m0
 
 On Linux with Swift 6.4.1 and `LD_LIBRARY_PATH=/home/box/.local/lib/swiftcompat`:
 
-- After merging main at `c87d897`, `swift test --package-path Packages/GlassfinCore`: 689 total tests, 679 passed, 10 existing opt-in server skips, no failures.
+- After the watchdog restart and merging main at `c87d897`, `swift test --package-path Packages/GlassfinCore`: 689 total tests, 679 passed, 10 existing opt-in server skips, no failures.
 - `bash scripts/coverage-gate.sh`: 689 total tests, 10 skips, no failures; 91.83% line coverage (10781/11740), above 80%.
 - SwiftLint 0.65.1 and recursive strict swift-format lint passed. SwiftLint reports the environment's SourceKit restriction for its custom rule; `ci-grep.sh` separately enforces the no-print rule.
 - Design-system, catalog, image-pipeline, M09 source, debug-only-string (including self-test), unit-test-target (including self-test), entitlement, license (including self-test), artifact-redactor self-test and whitespace checks passed. Bootstrap and HLS probe suites passed (16 and 17 tests); the Docker integration script self-test passed all 22 cases without starting a server.

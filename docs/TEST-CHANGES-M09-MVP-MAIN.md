@@ -138,3 +138,8 @@ The following test files are imported verbatim from main by the merge:
 - `Packages/GlassfinCore/Tests/CoreStateTests/T07LibraryTests.swift`.
 - `Packages/GlassfinCore/Tests/CoreStateTests/T07ScreenLifecycleTests.swift`.
 - `Packages/GlassfinCore/Tests/CoreStateTests/T07SecurityStateTests.swift`.
+
+Restart validation after merging main: 689 core tests, 679 passed, 10 opt-in
+server skips, zero failures. The coverage gate passes at 91.83% (10781/11740).
+SwiftLint, recursive strict swift-format, source/catalog/security checks,
+debug-only string checks and unit-test target checks pass.
