@@ -74,7 +74,7 @@ let package = Package(
         ),
         .target(
             name: "CoreState",
-            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices", "CoreAPI"],
+            dependencies: ["CoreModels", "CoreNetworking", "GlassfinServices", "CoreAPI", "CorePlayback"],
             swiftSettings: debugSettings
         ),
         .target(name: "CorePlayback", dependencies: ["CoreModels", "CoreNetworking"], swiftSettings: debugSettings),

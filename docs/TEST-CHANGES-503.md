@@ -21,3 +21,11 @@ Only the two new test files above are changed relative to main. The new tests' t
 - String Catalog checks, source guards, `swift-format` and whitespace validation pass locally.
 - Apple builds and tests run only in GitHub Actions.
 - Automatic `Retry-After` scheduling remains deferred to P1: clamp to 5–60 seconds, at most five attempts. MVP offers manual retry only.
+
+## Merge with M08 playback wiring
+
+Merged main `589c5cf` (PR #51) with a merge commit. No test file or assertion required conflict resolution. The merge inherits `Apps/Shared/UITests/T08PlaybackWiringUITests.swift` and `Packages/GlassfinCore/Tests/CoreStateTests/T08PlaybackWiringTests.swift` byte for byte from main; the two startup test files above are unchanged from this branch.
+
+The three source conflicts retain the shared playback presentation host and add the startup banner and manual playback retry to that flow. The presentation host and detail screen match main byte for byte, preserving the single `playback.root` accessibility container, one-time startup and `detail.startOver` focus return. Manual retry retains the playback request, including start ticks and track options, and its return-focus identifier.
+
+After the merge, Linux `swift test` in `Packages/GlassfinCore` executes 696 tests: 686 passed, 10 Docker integration tests skipped and zero failures. No test filter or exclusion is used. Formatting, source guards, entitlements, debug-string, unit-test-target and String Catalog checks pass. Apple builds and tests remain in GitHub Actions only; no real Jellyfin server is used.
