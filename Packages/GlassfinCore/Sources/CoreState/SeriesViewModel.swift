@@ -6,6 +6,7 @@ import Observation
 
 public enum SeriesFocus: Sendable, Hashable {
     case play
+    case startOver
     case season(String)
     case episode(String)
 }
