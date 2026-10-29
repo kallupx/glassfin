@@ -30,12 +30,15 @@ struct LibraryArtwork: View {
             .task(id: request?.cacheKey) {
                 image = nil
                 guard let request else { return }
+                let interval = DevicePerformance.begin(.posterReady)
+                defer { interval?.end(completed: false) }
                 do {
                     let data = try await session.images.data(for: request)
                     let decoded = await LibraryArtworkDecoder.downsample(
                         data, pixels: max(request.width, request.height))
                     guard !Task.isCancelled, let decoded else { return }
                     image = Image(decorative: decoded.value, scale: scale)
+                    interval?.end()
                 } catch {
                     // Missing or malformed artwork keeps the content placeholder.
                 }

@@ -32,7 +32,7 @@
             Group {
                 if scenario.hasPrefix("series") {
                     NavigationStack {
-                        ItemDetailScreen(id: LibraryFixtureClient.series, session: session)
+                        ItemDetailScreen(id: LibraryFixtureClient.series, kind: .series, session: session)
                             .navigationDestination(for: ItemID.self) { id in
                                 ItemDetailScreen(id: id.value, session: session)
                             }
