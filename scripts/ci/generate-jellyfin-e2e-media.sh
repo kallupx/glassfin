@@ -26,9 +26,9 @@ make_media() {
 }
 # Match #47 by container/video/audio codecs. Keep F4's default audio DTS too.
 make_media "$media/Movies/Glassfin Remux (2024).mkv" 60 aac
-make_media "$media/Movies/Glassfin DTS (2024).mkv" 6 dca
+make_media "$media/Movies/Glassfin DTS (2024).mkv" 18 dca
 for episode in 01 02; do
   make_media "$media/Shows/Glassfin Generated Show/Season 01/Glassfin Generated Show S01E${episode}.mkv" 6 aac
 done
 rm "$subtitle"
-echo 'Generated F3 (60 s), F4 (6 s), and two episodes with two audio tracks and embedded subtitles.'
+echo 'Generated F3 (60 s), F4 (18 s), and two episodes with two audio tracks and embedded subtitles.'

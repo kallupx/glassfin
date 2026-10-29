@@ -337,6 +337,8 @@ jobs:
       - name: Complete wizard, generate media and verify scan
         timeout-minutes: 2
         run: python3 scripts/ci/jellyfin-e2e.py bootstrap
+      - name: Pace validation media processing for observable session metadata
+        run: python3 scripts/ci/prepare-live-validation.py
       - name: Run tvOS F3 and F4 acceptance tests when available
         timeout-minutes: 30
         run: python3 scripts/ci/jellyfin-e2e.py test
