@@ -109,6 +109,11 @@ class NativeJellyfinTests(unittest.TestCase):
                  patch.object(e2e.subprocess, "check_output", return_value=devices), \
                  patch.object(e2e.subprocess, "run", return_value=unittest.mock.Mock(returncode=0)) as run:
                 e2e.run_tests(root)
+            commands = [call.args[0] for call in run.call_args_list]
+            fixture = next(i for i, c in enumerate(commands) if c[-1].endswith("scripts/prepare-perf-fixture.sh"))
+            self.assertLess(fixture, commands.index(["xcodegen", "generate"]))
+            fixture_path = run.call_args_list[fixture].kwargs["env"]["PATH"]
+            self.assertTrue(fixture_path.startswith(str(root / "ffmpeg") + os.pathsep))
             calls = [call for call in run.call_args_list if "test-without-building" in call.args[0]]
             self.assertEqual(len(calls), 1)
             argv, environment = calls[0].args[0], calls[0].kwargs["env"]

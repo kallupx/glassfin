@@ -101,4 +101,8 @@ regression guard: it fails the journey if Play ever opens a placeholder again.
   configuration variables were already passed through `runner-env.json`. A new test in
   `scripts/ci/test_jellyfin_e2e.py` checks that the run receives all five variables and the required flag
   through the environment only, never on the command line.
+- `jellyfin-e2e.py test` now runs `scripts/prepare-perf-fixture.sh` (with the verified jellyfin-ffmpeg on
+  `PATH`) before `xcodegen generate`. Since #49, project.yml bundles `Tests/Media/Generated/PerfFixture.mp4`
+  into the unit-test targets, and the first labeled run failed in `build-for-testing` without it. The new
+  script test also checks this order.
 - No assertion is removed or weakened.

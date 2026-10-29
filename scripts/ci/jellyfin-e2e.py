@@ -221,6 +221,12 @@ def run_tests(root: Path) -> None:
         return
     if not shutil.which("xcodegen"):
         subprocess.run(["brew", "install", "xcodegen"], check=True)
+    # project.yml bundles the generated perf fixture into the unit-test targets (#49); without it
+    # build-for-testing fails. Use the SHA-256 verified jellyfin-ffmpeg from the install step.
+    fixture_environment = os.environ.copy()
+    fixture_environment["PATH"] = f"{root / 'ffmpeg'}{os.pathsep}{fixture_environment.get('PATH', '')}"
+    subprocess.run(["bash", str(REPO / "scripts/prepare-perf-fixture.sh")], cwd=REPO, env=fixture_environment,
+                   check=True)
     subprocess.run(["xcodegen", "generate"], cwd=REPO, check=True)
     devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "--json"]))
     tvs = [d for runtime, group in devices["devices"].items() if ".tvOS-" in runtime for d in group]
