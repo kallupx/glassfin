@@ -308,5 +308,24 @@ passes. This is another presentation instruction, not corrupted retained text.
   snapshot tests, the 180-second per-test allowance, and the 40-minute tvOS job
   deadline are unchanged.
 
-Latest `origin/main` at `589c5cf` is already an ancestor, so no merge is needed.
-Apple validation of this follow-up runs in CI; this workspace is Linux.
+Run [40825139032](https://github.com/kallupx/glassfin/actions/runs/40825139032)
+at `c259996` passes tvOS in 33m31s, leaving 6m29s under the unchanged job limit.
+All 85 UI methods pass, with zero failures and zero runner restarts; the complete
+xcresult export reports no failures. T04 takes 2m39s instead of 11m50s; T10 takes
+2m31s instead of 4m15s; Search MVP takes 4m52s with all 17 methods passing. The
+five additional UI methods are main's T08 playback tests in GitHub's PR merge
+tree. No earlier test method is missing from the new run.
+
+The initial local ancestry check was stale: latest `origin/main` at `290a287`
+contains three commits absent from the branch, including M08 playback wiring,
+M07 follow-up tests and the device performance kit. Merge it with `f7b7cf6`
+without conflicts. Main's tests and assertions are imported unchanged; the
+automatic merges in the metadata mapper and macOS CI script retain both sides'
+changes. Repeat Linux/lint checks and Apple CI on the merged head. Apple tests
+run in CI because this workspace is Linux.
+
+After the merge, Linux `swift test` passes all 701 tests (691 passed, 10 existing
+opt-in server skips, zero failures). The coverage gate passes at 92.12%
+(11046/11991 lines). SwiftLint 0.65.1 with SourceKit, strict recursive swift-format,
+the complete lint-job repository scripts and the merged shell scripts' syntax
+checks pass again. No imported test assertion requires an edit.
