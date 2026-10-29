@@ -30,3 +30,11 @@ SwiftLint 0.65.1 with in-process SourceKit, recursive strict swift-format, ci-gr
 Apple builds and tests run only in GitHub Actions; their final counts and CI results are recorded in PR #42.
 
 Only mocks are used locally. No real Jellyfin server or credentials are used. Physical-device performance and playback acceptance remain outside this merge validation.
+
+## Subsequent main merge and CI follow-up
+
+During CI monitoring the branch advanced to merge commit `35910ad`, importing main's HTTP 503 handling from PR #52 at `ad426ca`. Its `ServerStartingPlaybackTests.swift` and `ServerStartingTests.swift` are imported verbatim; their upstream audit is [TEST-CHANGES-503.md](TEST-CHANGES-503.md). No existing branch test or assertion is changed.
+
+The unchanged PB7 UI test caught a tvOS crash after Cancel followed by Menu. The exported crash report shows `NSKVODeallocate` during layer teardown. The production fix invalidates first-frame observation before replacing or detaching the native player and before dismantling its controller, and observes readiness only while a player is attached. First-frame instrumentation and native seek instrumentation remain active for real playback. No test changes are needed: the original PB7 dismissal and focus assertions remain the regression check.
+
+Linux validation after the additional main merge: 740 tests executed, 730 passed, 10 integration tests skipped, zero failures; coverage 91.77% (11,624 / 12,667 lines). The final CI results for the follow-up commit are recorded in PR #42.

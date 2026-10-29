@@ -126,10 +126,9 @@
 
         func makeUIViewController(context: Context) -> AVPlayerViewController {
             let controller = AVPlayerViewController()
-            controller.player = player
             controller.delegate = context.coordinator
             context.coordinator.gestures.install(on: controller.view)
-            context.coordinator.observeFirstFrame(controller)
+            context.coordinator.updatePlayer(player, on: controller)
             #if os(tvOS)
                 controller.transportBarCustomMenuItems = trackMenuItems
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
@@ -138,7 +137,7 @@
         }
 
         func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-            controller.player = player
+            context.coordinator.updatePlayer(player, on: controller)
             context.coordinator.update(controller)
             #if os(tvOS)
                 controller.transportBarCustomMenuItems = trackMenuItems
@@ -146,6 +145,8 @@
         }
 
         static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: DismissalHandler) {
+            coordinator.stopObservingFirstFrame()
+            controller.delegate = nil
             controller.player = nil
         }
 
@@ -167,12 +168,22 @@
                 gestures = PlaybackScrubGestures(playback: playback, companion: companion)
             }
 
-            func observeFirstFrame(_ controller: AVPlayerViewController) {
+            func updatePlayer(_ player: AVPlayer?, on controller: AVPlayerViewController) {
+                guard controller.player !== player else { return }
+                // AVKit forwards display readiness from its layer; detach KVO before releasing that layer.
+                stopObservingFirstFrame()
+                controller.player = player
+                guard player != nil else { return }
                 firstFrame = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) {
                     [weak self] _, change in
                     guard change.newValue == true else { return }
                     Task { @MainActor [weak self] in self?.playback.noteFirstFrameReady() }
                 }
+            }
+
+            func stopObservingFirstFrame() {
+                firstFrame?.invalidate()
+                firstFrame = nil
             }
 
             func update(_ controller: AVPlayerViewController) {
