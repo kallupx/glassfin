@@ -6,6 +6,7 @@ typealias PlaybackAction = @MainActor (PlaybackRequest, String) -> Void
 struct PlaybackFocusReturn: Equatable {
     let id: String
     let sequence: UUID
+    let stop: PlaybackStop?
 }
 
 extension EnvironmentValues {
@@ -19,7 +20,7 @@ struct PlaybackPresentationHost<Content: View>: View {
     var librarySession: LibrarySession? = nil
     @ViewBuilder var content: (@escaping PlaybackAction) -> Content
     @State private var presentation: Presentation?
-    @State private var pendingReturn: String?
+    @State private var pendingReturn: PlaybackFocusReturn?
     @State private var focusReturn: PlaybackFocusReturn?
 
     var body: some View {
@@ -30,7 +31,7 @@ struct PlaybackPresentationHost<Content: View>: View {
                 item: $presentation,
                 onDismiss: {
                     if let pendingReturn {
-                        focusReturn = PlaybackFocusReturn(id: pendingReturn, sequence: UUID())
+                        focusReturn = pendingReturn
                     }
                     pendingReturn = nil
                 },
@@ -38,7 +39,7 @@ struct PlaybackPresentationHost<Content: View>: View {
                     PlaybackDestination(
                         request: value.request, returnFocusID: value.returnFocusID, makeCoordinator: makeCoordinator
                     ) { focusID, stop in
-                        pendingReturn = focusID
+                        pendingReturn = PlaybackFocusReturn(id: focusID, sequence: UUID(), stop: stop)
                         if let stop { librarySession?.playbackDidEnd(itemID: stop.itemID, finished: stop.finished) }
                         presentation = nil
                     }
@@ -63,13 +64,15 @@ private struct PlaybackDestination: View {
     let makeCoordinator: @MainActor () throws -> PlaybackCoordinator
     let onClose: (String, PlaybackStop?) -> Void
     @State private var coordinator: PlaybackCoordinator?
+    @State private var companion: PlaybackCompanion?
     @State private var failed = false
     @State private var closing = false
 
     var body: some View {
         ZStack {
-            if let coordinator {
-                PlaybackView(coordinator: coordinator, startTicks: request.startTicks, onClose: close)
+            if let coordinator, let companion {
+                PlaybackView(
+                    coordinator: coordinator, companion: companion, startTicks: request.startTicks, onClose: close)
             } else if failed {
                 PlaybackErrorView(messageKey: PlaybackCopy.couldNotPlayKey, onClose: close)
             } else {
@@ -83,6 +86,8 @@ private struct PlaybackDestination: View {
             guard coordinator == nil, !failed, !closing else { return }
             do {
                 let value = try makeCoordinator()
+                companion = value.makeCompanion(
+                    settings: .load(from: UserDefaultsSettingsStore(defaults: .standard)))
                 coordinator = value
                 await value.play(request, returnFocusID: returnFocusID)
             } catch {
@@ -93,7 +98,10 @@ private struct PlaybackDestination: View {
             .onExitCommand { close() }
         #endif
         .onDisappear {
-            if let coordinator { Task { await coordinator.stop() } }
+            Task {
+                await companion?.shutdown()
+                await coordinator?.stop()
+            }
         }
     }
 
@@ -101,8 +109,10 @@ private struct PlaybackDestination: View {
         guard !closing else { return }
         closing = true
         Task {
+            let nextFocusID = companion?.returnFocusItemID.map { "series.episode.\($0)" }
+            await companion?.shutdown()
             let focusID = await coordinator?.dismiss() ?? returnFocusID
-            onClose(focusID, coordinator?.lastStop)
+            onClose(nextFocusID ?? focusID, coordinator?.lastStop)
         }
     }
 }

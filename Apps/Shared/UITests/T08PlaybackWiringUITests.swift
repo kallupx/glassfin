@@ -45,6 +45,37 @@ final class T08PlaybackWiringUITests: XCTestCase {
             assertFocused(episode)
         }
 
+        /// PB7: Cancel keeps playback open; Menu returns focus to the next episode, not the played card.
+        @MainActor
+        func testPB7_cancelThenMenuReturnsFocusToNextEpisodeCard() async {
+            let app = launch("series-playback-next")
+            let play = element(app, "detail.play")
+            assertFocused(play)
+            XCUIRemote.shared.press(.down)
+            assertFocused(element(app, "series.season.000000000000000000000000000007d2"))
+            XCUIRemote.shared.press(.down)
+            let current = element(app, "series.episode.000000000000000000000000000075fd")
+            assertFocused(current)
+            XCUIRemote.shared.press(.select)
+            let root = element(app, "playback.root")
+            XCTAssertTrue(root.waitForExistence(timeout: 10))
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "playback.root").count, 1)
+            XCTAssertTrue(element(app, "playback.next.card").waitForExistence(timeout: 10))
+            assertFocused(element(app, "playback.next.play"))
+            XCUIRemote.shared.press(.right)
+            let cancel = element(app, "playback.next.cancel")
+            assertFocused(cancel)
+            XCUIRemote.shared.press(.select)
+            XCTAssertTrue(element(app, "playback.next.card").waitForNonExistence(timeout: 10))
+            XCTAssertTrue(root.exists)
+            XCUIRemote.shared.press(.menu)
+            XCTAssertTrue(root.waitForNonExistence(timeout: 10))
+            XCTAssertTrue(element(app, "detail.root").exists)
+            assertFocused(element(app, "series.episode.000000000000000000000000000075fe"))
+            XCTAssertFalse(current.hasFocus)
+            XCTAssertFalse(play.hasFocus)
+        }
+
         @MainActor
         func testHomePlayPauseStartsPlayerAndMenuRestoresCard() async {
             let app = XCUIApplication()

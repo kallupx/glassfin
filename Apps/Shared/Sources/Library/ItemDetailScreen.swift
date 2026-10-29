@@ -95,15 +95,20 @@ struct ItemDetailScreen: View {
                 await model.refreshFromStore()
                 await series.refreshFromStore()
                 await session.actions.refreshFromStore()
+                if isSeries, value.id.hasPrefix("series.episode."), let stop = value.stop {
+                    await series.returnedFromPlayback(itemID: stop.itemID, finished: stop.finished)
+                }
                 if value.id == "detail.play" { focus = .play }
                 if value.id == "detail.startOver" { focus = .startOver }
                 if value.id.hasPrefix("series.episode.") {
-                    focus = .episode(String(value.id.dropFirst("series.episode.".count)))
+                    let id = String(value.id.dropFirst("series.episode.".count))
+                    series.focusEpisode(id)
+                    focus = .episode(id)
                 }
             }
         }
         .onChange(of: session.playbackReturn) { _, result in
-            if let result, isSeries {
+            if let result, isSeries, startPlayback == nil {
                 Task { await series.returnedFromPlayback(itemID: result.itemID, finished: result.finished) }
             }
         }
