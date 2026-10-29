@@ -21,6 +21,8 @@ public final class PlaybackCoordinator {
         failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
     }
     public let engine: any PlaybackEngine
+    public private(set) var returnFocusID: String?
+    public private(set) var lastStop: PlaybackStop?
     public private(set) var tracks: [PlaybackTrack] = []
     public private(set) var selection = PlaybackTrackSelection()
     public private(set) var subtitleCues: [SubtitleCue] = []
@@ -54,7 +56,7 @@ public final class PlaybackCoordinator {
     public func makeCompanion(
         settings: PlaybackFeatureSettings = .init(),
         playNext: (@MainActor (String) async -> Void)? = nil,
-        completed: @escaping @MainActor (String, Duration) async -> Void = { _, _ in }
+        completed: (@MainActor (String, Duration) async -> Void)? = nil
     ) -> PlaybackCompanion {
         PlaybackCompanion(
             client: session.apiClient, userID: session.userID, settings: settings,
@@ -65,9 +67,14 @@ public final class PlaybackCoordinator {
                 guard let self else { return }
                 await stop()
                 await expireSession(run: generation)
-            }, completed: completed)
+            },
+            completed: completed ?? { [weak self] id, position in
+                await self?.onStopped?(PlaybackStop(itemID: id, position: position, finished: true))
+            })
     }
 
+    private let onStopped: (@MainActor (PlaybackStop) async -> Void)?
+    private var request: PlaybackRequest?
     private let session: any PlaybackSessionProviding
     private let origin: any MediaOriginClient
     private let api: PlaybackAPI
@@ -83,13 +90,15 @@ public final class PlaybackCoordinator {
     private var engineLoaded = false
     private var startPosition: Duration = .zero
     private var retryTask: Task<Void, Never>?
+    private var stoppingTask: Task<APIError?, Never>?
 
     public init(
         session: any PlaybackSessionProviding, engine: any PlaybackEngine, origin: any MediaOriginClient,
         timer: any PlaybackProgressScheduling = PlaybackProgressTimer(),
         maxBitrate: Int? = nil, log: any GlassfinLog = SilentLog(),
         configuration: PlaybackConfiguration? = nil,
-        clock: any GlassfinClock = SystemGlassfinClock()
+        clock: any GlassfinClock = SystemGlassfinClock(),
+        onStopped: (@MainActor (PlaybackStop) async -> Void)? = nil
     ) {
         self.session = session
         self.engine = engine
@@ -106,10 +115,34 @@ public final class PlaybackCoordinator {
         self.log = PlaybackLog(sink: log)
         self.api = PlaybackAPI(client: session.apiClient)
         self.reporter = PlaybackReporter(client: session.apiClient, log: log)
+        self.onStopped = onStopped
+    }
+
+    public func play(_ request: PlaybackRequest, returnFocusID: String) async {
+        await stop()
+        self.request = request
+        self.returnFocusID = returnFocusID
+        lastStop = nil
+        await start(itemID: request.itemID.value, choice: .resumeAt(ticks: request.startTicks))
+    }
+
+    /// Stopped and the local user-data update complete before presentation can close.
+    @discardableResult
+    public func dismiss() async -> String? {
+        await stop()
+        _ = await stoppingTask?.value
+        return returnFocusID
     }
 
     public func play(itemID: String, choice: PlaybackStartChoice = .resume) async {
         await stop()
+        request = nil
+        returnFocusID = nil
+        lastStop = nil
+        await start(itemID: itemID, choice: choice)
+    }
+
+    private func start(itemID: String, choice: PlaybackStartChoice) async {
         generation += 1
         let run = generation
         failure = nil
@@ -153,6 +186,8 @@ public final class PlaybackCoordinator {
                     convertASS: configuration.convertASS)
                 selection = PlaybackTrackSelection.defaults(tracks: tracks, user: user)
             }
+            if let audio = request?.audioStreamIndex { selection.audio = audio }
+            if let subtitle = request?.subtitleStreamIndex { selection.subtitle = subtitle }
             let ticks: Int64
             switch choice {
             case .resume: ticks = item.UserData?.PlaybackPositionTicks ?? 0
@@ -631,11 +666,23 @@ public final class PlaybackCoordinator {
         engineLoaded = false
         engine.stop()
         started = false
+        guard let stopped else {
+            state = terminal
+            return nil
+        }
+        let result = PlaybackStop(itemID: stopped.itemID, position: position, finished: terminal == .ended)
+        lastStop = result
+        let terminalRun = generation
+        let task = Task { [onStopped, reporter, paused] in
+            await onStopped?(result)
+            return await reporter.send(
+                "/Stopped", context: stopped, position: position, paused: paused, canSeek: canSeek, failed: failed)
+        }
+        stoppingTask = task
         state = terminal
-        guard let stopped else { return nil }
-        return await reporter.send(
-            "/Stopped", context: stopped, position: position, paused: paused, canSeek: canSeek, failed: failed
-        )
+        let error = await task.value
+        if generation == terminalRun { stoppingTask = nil }
+        return error
     }
 
     private func fail(_ reason: PlaybackFailure) async {

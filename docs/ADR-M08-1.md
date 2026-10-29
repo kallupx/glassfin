@@ -61,12 +61,20 @@ Cancellation suppresses further prompts for that item and records the next item
 for focus restoration. Handoff awaits Stopped, sends the played-state request,
 updates the shared UserDataStore, and starts the next item from zero.
 
-`PlaybackView` requires the app's shared UserDataStore and a return-focus callback.
-The existing M07/Home detail and playback routes on main are placeholders; their
-future host must pass these dependencies. `makeCompanion(playNext:)` / the view's
-`playNext` callback is the integration point for carrying selected audio/subtitle
-languages to the next episode. The merged playback adapter retains the native
-track menus and subtitle overlay from the track-selection implementation on main.
+`PlaybackPresentationHost` now owns the coordinator and companion for one presentation.
+Its destination keeps the single `playback.root` accessibility container and starts
+playback once. The coordinator's shared `onStopped` callback updates UserDataStore
+for both ordinary dismissal and autoplay completion. Cancel supplies the next
+item's episode-card focus identifier; dismissal awaits shutdown and Stopped before
+publishing that focus return. Detail applies the stop update and the final focus
+in one task so competing return handlers cannot overwrite the next-card focus.
+The From beginning action remains mounted and retains its `detail.startOver`
+return identity from the M08 wiring on main.
+
+`makeCompanion(playNext:)` remains the integration point for carrying selected
+audio/subtitle languages to the next episode. The default handoff currently
+re-evaluates the user's defaults; preserving a manual language override across
+autoplay remains a limit. Native track menus and the subtitle overlay are retained.
 
 ## Defaults and questions for spec review
 

@@ -1,0 +1,136 @@
+import XCTest
+
+final class T08PlaybackWiringUITests: XCTestCase {
+    @MainActor
+    func testDetailPlayOpensPlayerAndReturnsToDetail() async {
+        let app = launch()
+        let play = element(app, "detail.play")
+        XCTAssertTrue(activate(play, in: app))
+        XCTAssertTrue(element(app, "playback.root").waitForExistence(timeout: 10))
+        closePlayer(app)
+        XCTAssertTrue(element(app, "playback.root").waitForNonExistence(timeout: 10))
+        XCTAssertTrue(element(app, "detail.root").exists)
+        #if os(tvOS)
+            assertFocused(play)
+        #endif
+    }
+
+    @MainActor
+    func testFromBeginningReturnsFocusToItsButton() async {
+        let app = launch()
+        let startOver = element(app, "detail.startOver")
+        XCTAssertTrue(activate(startOver, in: app))
+        XCTAssertTrue(element(app, "playback.root").waitForExistence(timeout: 10))
+        closePlayer(app)
+        XCTAssertTrue(element(app, "playback.root").waitForNonExistence(timeout: 10))
+        #if os(tvOS)
+            assertFocused(startOver)
+        #endif
+    }
+
+    #if os(tvOS)
+        @MainActor
+        func testEpisodeSelectStartsPlayerAndMenuRestoresEpisode() async {
+            let app = launch()
+            assertFocused(element(app, "detail.play"))
+            XCUIRemote.shared.press(.down)
+            assertFocused(element(app, "series.season.000000000000000000000000000007d2"))
+            XCUIRemote.shared.press(.down)
+            let episode = element(app, "series.episode.000000000000000000000000000075fd")
+            assertFocused(episode)
+            XCUIRemote.shared.press(.select)
+            XCTAssertTrue(element(app, "playback.root").waitForExistence(timeout: 10))
+            XCUIRemote.shared.press(.menu)
+            XCTAssertTrue(element(app, "playback.root").waitForNonExistence(timeout: 10))
+            assertFocused(episode)
+        }
+
+        /// PB7: Cancel keeps playback open; Menu returns focus to the next episode, not the played card.
+        @MainActor
+        func testPB7_cancelThenMenuReturnsFocusToNextEpisodeCard() async {
+            let app = launch("series-playback-next")
+            let play = element(app, "detail.play")
+            assertFocused(play)
+            XCUIRemote.shared.press(.down)
+            assertFocused(element(app, "series.season.000000000000000000000000000007d2"))
+            XCUIRemote.shared.press(.down)
+            let current = element(app, "series.episode.000000000000000000000000000075fd")
+            assertFocused(current)
+            XCUIRemote.shared.press(.select)
+            let root = element(app, "playback.root")
+            XCTAssertTrue(root.waitForExistence(timeout: 10))
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "playback.root").count, 1)
+            XCTAssertTrue(element(app, "playback.next.card").waitForExistence(timeout: 10))
+            assertFocused(element(app, "playback.next.play"))
+            XCUIRemote.shared.press(.right)
+            let cancel = element(app, "playback.next.cancel")
+            assertFocused(cancel)
+            XCUIRemote.shared.press(.select)
+            XCTAssertTrue(element(app, "playback.next.card").waitForNonExistence(timeout: 10))
+            XCTAssertTrue(root.exists)
+            XCUIRemote.shared.press(.menu)
+            XCTAssertTrue(root.waitForNonExistence(timeout: 10))
+            XCTAssertTrue(element(app, "detail.root").exists)
+            assertFocused(element(app, "series.episode.000000000000000000000000000075fe"))
+            XCTAssertFalse(current.hasFocus)
+            XCTAssertFalse(play.hasFocus)
+        }
+
+        @MainActor
+        func testHomePlayPauseStartsPlayerAndMenuRestoresCard() async {
+            let app = XCUIApplication()
+            app.launchArguments = ["-uitest-mock-server", "-uitest-reset", "-uitest-home", "-AppleLanguages", "(en)"]
+            app.launch()
+            let card = element(app, "home.resume.item.00000000000000000000000000000001")
+            assertFocused(card)
+            XCUIRemote.shared.press(.playPause)
+            XCTAssertTrue(element(app, "playback.root").waitForExistence(timeout: 10))
+            XCTAssertEqual(element(app, "home.playback").value as? String, "1200000000")
+            XCUIRemote.shared.press(.menu)
+            XCTAssertTrue(element(app, "playback.root").waitForNonExistence(timeout: 10))
+            assertFocused(card)
+        }
+
+        @MainActor
+        private func assertFocused(_ element: XCUIElement) {
+            XCTAssertTrue(element.waitForExistence(timeout: 10))
+            let expectation = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "hasFocus == true"), object: element)
+            XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 10), .completed)
+        }
+    #endif
+
+    @MainActor
+    func testStartupFailureShowsLocalizedError() async {
+        let app = launch("series-playback-error")
+        XCTAssertTrue(activate(element(app, "detail.play"), in: app))
+        XCTAssertTrue(element(app, "playback.root").waitForExistence(timeout: 10))
+        XCTAssertTrue(element(app, "playback.error").waitForExistence(timeout: 10))
+        XCTAssertEqual(element(app, "playback.error").label, "This file could not be played")
+        closePlayer(app)
+        XCTAssertTrue(element(app, "playback.root").waitForNonExistence(timeout: 10))
+        XCTAssertTrue(element(app, "detail.root").exists)
+    }
+
+    @MainActor
+    private func launch(_ scenario: String = "series-playback") -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-library", scenario, "-AppleLanguages", "(en)"]
+        app.launch()
+        return app
+    }
+
+    @MainActor
+    private func closePlayer(_ app: XCUIApplication) {
+        #if os(tvOS)
+            XCUIRemote.shared.press(.menu)
+        #else
+            activate(element(app, "playback.close"), in: app)
+        #endif
+    }
+
+    @MainActor
+    private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: id).firstMatch
+    }
+}

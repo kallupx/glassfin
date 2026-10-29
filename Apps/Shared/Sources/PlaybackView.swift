@@ -4,52 +4,58 @@
     import SwiftUI
     import UIKit
 
-    /// M07 can present this view after calling `coordinator.play(itemID:choice:)`.
     struct PlaybackView: View {
         let coordinator: PlaybackCoordinator
-        let engine: AVPlayerEngine
-        let onReturnFocus: (String) -> Void
-        @State private var companion: PlaybackCompanion
+        let companion: PlaybackCompanion
+        let startTicks: Int64
+        let onClose: @MainActor () -> Void
         @State private var clockStart = ContinuousClock.now
-        @Environment(\.dismiss) private var dismiss
-
-        init(
-            coordinator: PlaybackCoordinator, engine: AVPlayerEngine, userDataStore: UserDataStore,
-            playNext: (@MainActor (String) async -> Void)? = nil,
-            onReturnFocus: @escaping (String) -> Void
-        ) {
-            self.coordinator = coordinator
-            self.engine = engine
-            self.onReturnFocus = onReturnFocus
-            _companion = State(
-                initialValue: coordinator.makeCompanion(
-                    settings: .load(from: UserDefaultsSettingsStore(defaults: .standard)),
-                    playNext: playNext,
-                    completed: { id, position in
-                        await userDataStore.recordPlayback(id: id, position: position, played: true, log: SilentLog())
-                    }))
-        }
 
         var body: some View {
             ZStack {
-                NativePlaybackView(
-                    player: engine.player, coordinator: coordinator, companion: companion,
-                    trackMenuItems: PlaybackTrackMenus.items(playback: coordinator))
-                PlaybackSubtitleOverlay(playback: coordinator)
-                PlaybackFeatureOverlay(
-                    companion: companion, itemID: coordinator.currentItemID,
-                    mediaSourceID: coordinator.currentMediaSourceID)
-                if coordinator.state == .loading || coordinator.state == .buffering {
-                    ProgressView()
+                ContentPaint.scrim
+                if let key = failureKey {
+                    PlaybackErrorView(messageKey: key, onClose: onClose)
+                } else {
+                    NativePlaybackView(
+                        player: (coordinator.engine as? AVPlayerEngine)?.player,
+                        coordinator: coordinator, companion: companion,
+                        trackMenuItems: PlaybackTrackMenus.items(playback: coordinator), onClose: onClose
+                    )
+                    // Keep Home's media-surface identifier on its own accessibility container.
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("home.playback")
+                    .accessibilityValue(String(startTicks))
+                    PlaybackSubtitleOverlay(playback: coordinator)
+                    PlaybackFeatureOverlay(
+                        companion: companion, itemID: coordinator.currentItemID,
+                        mediaSourceID: coordinator.currentMediaSourceID)
+                    if coordinator.state == .loading || coordinator.state == .buffering { ProgressView() }
+                    #if DEBUG
+                        if coordinator.engine is MockPlaybackEngine {
+                            Button(PlaybackCopy.message(for: PlaybackCopy.okKey), action: onClose)
+                                .accessibilityIdentifier("home.playback.close")
+                        }
+                    #endif
+                    #if os(iOS)
+                        VStack {
+                            HStack {
+                                Button(PlaybackCopy.message(for: PlaybackCopy.okKey), action: onClose)
+                                    .accessibilityIdentifier("playback.close")
+                                Spacer()
+                            }
+                            Spacer()
+                        }.padding()
+                    #endif
                 }
             }
             .ignoresSafeArea()
-            .task(id: coordinator.currentItemID) {
-                if let id = coordinator.currentItemID, let source = coordinator.currentMediaSourceID {
-                    await companion.load(itemID: id, mediaSourceID: source)
-                }
+            .task(id: coordinator.currentItemID ?? coordinator.lastStop?.itemID) {
+                guard let id = coordinator.currentItemID, let source = coordinator.currentMediaSourceID else { return }
+                await companion.load(itemID: id, mediaSourceID: source)
                 let clock = ContinuousClock()
                 while !Task.isCancelled {
+                    let engine = coordinator.engine
                     let endedWithPrompt = coordinator.state == .ended && companion.countdownSeconds != nil
                     await companion.update(
                         position: endedWithPrompt ? (companion.runtime ?? engine.position) : engine.position,
@@ -58,41 +64,22 @@
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
                 }
             }
-            .alert(
-                PlaybackCopy.message(for: failureKey ?? PlaybackCopy.couldNotPlayKey),
-                isPresented: Binding(
-                    get: { failureKey != nil },
-                    set: { if !$0 { dismiss() } }
-                )
-            ) {
-                // keyboardShortcut is unavailable on tvOS; the Siri Remote select
-                // button already activates the focused alert action there.
-                #if os(tvOS)
-                    Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
-                #else
-                    Button(PlaybackCopy.message(for: PlaybackCopy.okKey)) { dismiss() }
-                        .keyboardShortcut(.defaultAction)
-                #endif
-            }
             .onChange(of: coordinator.state) { _, state in
-                if (state == .ended && companion.countdownSeconds == nil) || state == .sessionExpired { dismiss() }
+                if (state == .ended && companion.countdownSeconds == nil && !companion.advancing)
+                    || state == .sessionExpired
+                {
+                    onClose()
+                }
             }
             #if os(tvOS)
                 .onExitCommand {
                     if companion.scrubPosition != nil {
                         Task { await companion.endScrubbing(commit: false) }
                     } else {
-                        dismiss()
+                        onClose()
                     }
                 }
             #endif
-            .onDisappear {
-                if let id = companion.returnFocusItemID { onReturnFocus(id) }
-                Task {
-                    await companion.shutdown()
-                    await coordinator.stop()
-                }
-            }
         }
 
         private var failureKey: String? {
@@ -101,13 +88,31 @@
         }
     }
 
+    struct PlaybackErrorView: View {
+        let messageKey: String
+        let onClose: @MainActor () -> Void
+
+        var body: some View {
+            VStack(spacing: SpacingToken.l) {
+                Text(verbatim: PlaybackCopy.message(for: messageKey))
+                    .accessibilityIdentifier("playback.error")
+                Button(PlaybackCopy.message(for: PlaybackCopy.okKey), action: onClose)
+                    .buttonStyle(.glassProminent)
+                    .accessibilityIdentifier("playback.close")
+            }
+        }
+    }
+
     private struct NativePlaybackView: UIViewControllerRepresentable {
         let player: AVPlayer?
         let coordinator: PlaybackCoordinator
         let companion: PlaybackCompanion
         let trackMenuItems: [UIMenuElement]
+        let onClose: @MainActor () -> Void
 
-        func makeCoordinator() -> DismissalHandler { DismissalHandler(playback: coordinator, companion: companion) }
+        func makeCoordinator() -> DismissalHandler {
+            DismissalHandler(playback: coordinator, companion: companion, onClose: onClose)
+        }
 
         func makeUIViewController(context: Context) -> AVPlayerViewController {
             let controller = AVPlayerViewController()
@@ -116,8 +121,6 @@
             context.coordinator.gestures.install(on: controller.view)
             #if os(tvOS)
                 controller.transportBarCustomMenuItems = trackMenuItems
-            #endif
-            #if os(tvOS)
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
             #endif
             return controller
@@ -133,19 +136,19 @@
 
         static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: DismissalHandler) {
             controller.player = nil
-            Task { await coordinator.playback.stop() }
         }
 
         @MainActor
-        final class DismissalHandler: NSObject, AVPlayerViewControllerDelegate {
-            let playback: PlaybackCoordinator
+        final class DismissalHandler: NSObject, @MainActor AVPlayerViewControllerDelegate {
+            let onClose: @MainActor () -> Void
             let companion: PlaybackCompanion
             let gestures: PlaybackScrubGestures
             private var skipEnd: Int64?
             private var skipKind: SegmentKind?
 
-            init(playback: PlaybackCoordinator, companion: PlaybackCompanion) {
-                self.playback = playback
+            init(playback: PlaybackCoordinator, companion: PlaybackCompanion, onClose: @escaping @MainActor () -> Void)
+            {
+                self.onClose = onClose
                 self.companion = companion
                 gestures = PlaybackScrubGestures(playback: playback, companion: companion)
             }
@@ -189,8 +192,13 @@
                     }
                 }
 
-                func playerViewControllerWillDismiss(_ playerViewController: AVPlayerViewController) {
-                    Task { await playback.stop() }
+                func playerViewControllerShouldDismiss(_ playerViewController: AVPlayerViewController) -> Bool {
+                    if companion.scrubPosition != nil {
+                        Task { await companion.endScrubbing(commit: false) }
+                    } else {
+                        onClose()
+                    }
+                    return false
                 }
             #endif
         }

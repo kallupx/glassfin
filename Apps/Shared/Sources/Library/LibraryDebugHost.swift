@@ -13,6 +13,23 @@
         }
 
         var body: some View {
+            if scenario.hasPrefix("series-playback") {
+                PlaybackPresentationHost(
+                    makeCoordinator: makePlaybackCoordinator, librarySession: session
+                ) { _ in browser }
+            } else {
+                browser
+            }
+        }
+
+        private func makePlaybackCoordinator() -> PlaybackCoordinator {
+            MockPlaybackFactory.makeCoordinator(
+                cannotPlay: scenario == "series-playback-error",
+                nextEpisodePrompt: scenario == "series-playback-next",
+                onStopped: { await session.app.recordPlaybackStop($0) })
+        }
+
+        private var browser: some View {
             Group {
                 if scenario.hasPrefix("series") {
                     NavigationStack {
