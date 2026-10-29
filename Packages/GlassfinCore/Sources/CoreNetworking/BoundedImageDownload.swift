@@ -55,7 +55,7 @@ final class BoundedImageDownload: NSObject, URLSessionDataDelegate, @unchecked S
         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
         // Preserve HTTP error precedence, especially authenticated 401. Error bodies are unnecessary.
-        if let http = response as? HTTPURLResponse, let failure = HTTPStatusMapper.failure(for: http.statusCode) {
+        if let http = response as? HTTPURLResponse, let failure = HTTPStatusMapper.apiFailure(for: http.statusCode) {
             let rejection = redirects.consumeRejection(for: dataTask.taskIdentifier)
             completionHandler(.cancel)
             finish(.failure(rejection.map(APIError.redirectRejected) ?? failure))

@@ -12,7 +12,11 @@ import Foundation
 /// Fetches `/System/Info/Public` for one candidate. The leaf is recorded for the
 /// certificate screen. This type does not write a pin.
 public struct URLSessionPublicInfoClient: ServerCandidateClient {
-    public init() {}
+    private var transport: (any RequestTransport)?
+
+    public init() { transport = nil }
+
+    init(transport: any RequestTransport) { self.transport = transport }
 
     public func fetchPublicInfo(url: URL, timeout: Duration, certificatePin: OriginCertificatePin? = nil) async
         -> ServerCandidateResult
@@ -30,7 +34,15 @@ public struct URLSessionPublicInfoClient: ServerCandidateClient {
         let session = URLSession(configuration: configuration, delegate: capture, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         do {
-            let (data, response) = try await session.data(for: request, delegate: capture)
+            let data: Data
+            let response: URLResponse
+            if let transport {
+                (data, response, _) = try await transport.data(for: request, maximumBytes: nil)
+            } else {
+                (data, response) = try await session.data(for: request, delegate: capture)
+            }
+            // A startup response may be HTML. Neither its body nor its headers supply UI copy.
+            if (response as? HTTPURLResponse)?.statusCode == 503 { return .serverStarting }
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 return .notJellyfin
             }

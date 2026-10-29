@@ -49,6 +49,7 @@ actor PlaybackReporter {
                     let apiError = (error as? APIError) ?? .network
                     let transient: Bool
                     switch apiError {
+                    case .serverStarting: transient = false
                     case .network, .timeout: transient = true
                     case .server(let status): transient = status >= 500
                     default: transient = false

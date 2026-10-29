@@ -16,9 +16,10 @@ public enum PlaybackStartChoice: Sendable, Equatable {
 public final class PlaybackCoordinator {
     public private(set) var state: PlaybackState = .idle
     public private(set) var failure: PlaybackFailure?
-    /// App-level error for the generic playback failure, sharing the UI's catalog key.
+    /// App-level failure, sharing the UI's catalog keys.
     public var appError: AppError? {
-        failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
+        if state == .failed(localizedKey: AppErrorMessage.serverStartingKey) { return .serverStarting }
+        return failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
     }
     public let engine: any PlaybackEngine
     public private(set) var returnFocusID: String?
@@ -93,6 +94,17 @@ public final class PlaybackCoordinator {
     @ObservationIgnored private var firstFrameInterval: DevicePerformance.Interval?
     @ObservationIgnored private var lifetimeInterval: DevicePerformance.Interval?
     private var stoppingTask: Task<APIError?, Never>?
+    private var lastRequest: (itemID: String, choice: PlaybackStartChoice)?
+
+    public func retryServerStarting() async {
+        guard appError == .serverStarting, let lastRequest else { return }
+        if let request, let returnFocusID {
+            // Keep the presentation's start position, track options and return focus on retry.
+            await play(request, returnFocusID: returnFocusID)
+        } else {
+            await play(itemID: lastRequest.itemID, choice: lastRequest.choice)
+        }
+    }
 
     public init(
         session: any PlaybackSessionProviding, engine: any PlaybackEngine, origin: any MediaOriginClient,
@@ -149,6 +161,7 @@ public final class PlaybackCoordinator {
     }
 
     private func start(itemID: String, choice: PlaybackStartChoice) async {
+        lastRequest = (itemID, choice)
         generation += 1
         let run = generation
         failure = nil
@@ -337,6 +350,7 @@ public final class PlaybackCoordinator {
                 guard case .resourceLoader(let value) = plan.primary else { throw PlaybackFailure.couldNotPlay }
                 carrier = value
             case .rejected(.transport(status: 401)): throw APIError.unauthorized
+            case .rejected(.transport(status: 503)): throw APIError.serverStarting
             case .rejected(.insecureRedirect): throw PlaybackFailure.insecureRedirect
             case .rejected: throw PlaybackFailure.couldNotPlay
             }
@@ -383,6 +397,8 @@ public final class PlaybackCoordinator {
             } else {
                 await expireSession(run: run)
             }
+        } else if error as? APIError == .serverStarting {
+            await serverStarting()
         } else {
             let reason = (error as? PlaybackFailure) ?? .couldNotPlay
             if reason == .couldNotPlay || (reason == .insecureRedirect && context?.method == .directPlay) {
@@ -649,6 +665,8 @@ public final class PlaybackCoordinator {
             let error = await finish(state: .ended, failed: false)
             if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
         case .failed(.unauthorized): await mediaUnauthorized()
+        case .failed(.serverStarting): await serverStarting()
+        case .failed(.server(status: 503)): await serverStarting()
         case .failed(.cancelled): break
         case .failed: await attemptFailed(run: run, fromEngineEvent: true)
         }
@@ -667,9 +685,19 @@ public final class PlaybackCoordinator {
 
     private func report(_ event: String) async -> APIError? {
         guard let context else { return nil }
-        return await reporter.send(
+        let run = generation
+        let error = await reporter.send(
             event, context: context, position: engine.position, paused: paused, canSeek: engine.canSeek
         )
+        if error == .serverStarting, generation == run { await serverStarting() }
+        return error
+    }
+
+    private func serverStarting() async {
+        let terminalRun = generation + 1
+        _ = await finish(state: .failed(localizedKey: AppErrorMessage.serverStartingKey), failed: false)
+        guard generation == terminalRun else { return }
+        failure = nil
     }
 
     @discardableResult
@@ -736,6 +764,9 @@ public final class PlaybackCoordinator {
         guard generation == run else { return }
         switch decision {
         case .logOut: await expireSession(run: run)
+        case .serverStarting:
+            failure = nil
+            state = .failed(localizedKey: AppErrorMessage.serverStartingKey)
         case .playbackError:
             failure = .couldNotPlay
             state = .failed(localizedKey: PlaybackCopy.couldNotPlayKey)

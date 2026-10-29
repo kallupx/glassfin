@@ -38,10 +38,12 @@ public enum QuickConnectSecurity {
 public enum QuickConnectPoll: Sendable, Equatable {
     case pending
     case authenticated
+    case serverStarting
 }
 
 public enum QuickConnectOutcome: Sendable, Equatable {
     case authenticated
+    case serverStarting
     case expired
     case cancelled
 }
@@ -76,6 +78,7 @@ public struct QuickConnectMonitor: Sendable {
             let state = await poll(secret.reveal())
             if Task.isCancelled { return .cancelled }
             if state == .authenticated { return .authenticated }
+            if state == .serverStarting { return .serverStarting }
             let remaining = timeout - (clock.now() - start)
             if remaining <= .zero { return .expired }
             do {

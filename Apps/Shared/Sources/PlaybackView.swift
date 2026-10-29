@@ -14,7 +14,17 @@
         var body: some View {
             ZStack {
                 ContentPaint.scrim
-                if let key = failureKey {
+                if failureKey == AppErrorMessage.serverStartingKey {
+                    VStack(spacing: SpacingToken.m) {
+                        ErrorStateView(
+                            messageOverride: AppErrorMessage.userFacing(.serverStarting),
+                            failure: .server(status: 503), attempts: 0,
+                            onRetry: { Task { await coordinator.retryServerStarting() } }, onSwitchServer: {})
+                        Button(AuthCopy.localized(.back), action: onClose)
+                            .accessibilityIdentifier("playback.close")
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let key = failureKey {
                     PlaybackErrorView(messageKey: key, onClose: onClose)
                 } else {
                     NativePlaybackView(

@@ -180,7 +180,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             let (data, response, taskIdentifier) = try await transport.data(
                 for: urlRequest, maximumBytes: request.maximumResponseBytes)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
-            if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
+            if let failure = HTTPStatusMapper.apiFailure(for: http.statusCode) {
                 if case .redirectRejected = failure {
                     let reason =
                         taskIdentifier.flatMap { redirectDelegate.consumeRejection(for: $0) }
