@@ -221,6 +221,12 @@ def run_tests(root: Path) -> None:
         return
     if not shutil.which("xcodegen"):
         subprocess.run(["brew", "install", "xcodegen"], check=True)
+    # project.yml bundles the generated perf fixture into the unit-test targets (#49); without it
+    # build-for-testing fails. Use the SHA-256 verified jellyfin-ffmpeg from the install step.
+    fixture_environment = os.environ.copy()
+    fixture_environment["PATH"] = f"{root / 'ffmpeg'}{os.pathsep}{fixture_environment.get('PATH', '')}"
+    subprocess.run(["bash", str(REPO / "scripts/prepare-perf-fixture.sh")], cwd=REPO, env=fixture_environment,
+                   check=True)
     subprocess.run(["xcodegen", "generate"], cwd=REPO, check=True)
     devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "--json"]))
     tvs = [d for runtime, group in devices["devices"].items() if ".tvOS-" in runtime for d in group]
@@ -238,6 +244,9 @@ def run_tests(root: Path) -> None:
         subprocess.run(command + ["build-for-testing"], cwd=REPO, stdout=log, stderr=subprocess.STDOUT, check=True)
         environment = os.environ.copy()
         environment.update(json.loads((root / "runner-env.json").read_text()))
+        # xcodebuild forwards TEST_RUNNER_* to the test runner without the prefix. With the flag the
+        # journeys fail instead of skipping, so this job cannot pass with zero executed journeys.
+        environment["TEST_RUNNER_GLASSFIN_POC_REQUIRED"] = "1"
         # No result bundle is published. Disable screenshots/diagnostics that could capture sign-in fields.
         result = subprocess.run(command + ["test-without-building", "-only-testing:Glassfin-tvOSUITests/TPOCPlaybackAcceptanceUITests",
                                  "-disable-concurrent-destination-testing", "-collect-test-diagnostics", "never"],
