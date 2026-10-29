@@ -54,7 +54,7 @@ struct LibraryTabShell: View {
                 settingsTab
             }
         }
-        .modifier(PlatformTabChrome())
+        .modifier(PlatformTabChrome(isSearching: (selection ?? $localSelection).wrappedValue == "search"))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("design.shell.root")
     }
@@ -164,11 +164,13 @@ struct LibraryTabShell: View {
 }
 
 private struct PlatformTabChrome: ViewModifier {
+    var isSearching: Bool
+
     func body(content: Content) -> some View {
         #if os(iOS)
             content
                 .tabViewStyle(.sidebarAdaptable)
-                .modifier(PhoneTabBarMinimize())
+                .modifier(PhoneTabBarMinimize(isSearching: isSearching))
         #else
             content
         #endif
@@ -177,12 +179,14 @@ private struct PlatformTabChrome: ViewModifier {
 
 #if os(iOS)
     private struct PhoneTabBarMinimize: ViewModifier {
+        var isSearching: Bool
         @Environment(\.horizontalSizeClass) private var sizeClass
 
         @ViewBuilder
         func body(content: Content) -> some View {
             if sizeClass == .compact {
-                content.tabBarMinimizeBehavior(.onScrollDown)
+                // Keep the other tabs reachable while editing or scrolling search results.
+                content.tabBarMinimizeBehavior(isSearching ? .never : .onScrollDown)
             } else {
                 content.tabBarMinimizeBehavior(.automatic)
             }

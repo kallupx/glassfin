@@ -155,7 +155,6 @@ final class SuspendingClock: GlassfinClock, @unchecked Sendable {
     private var current: Duration = .zero
     private var recorded: [Duration] = []
     private var waiters: [Waiter] = []
-    private var sleepObservers: [CheckedContinuation<Void, Never>] = []
 
     deinit {
         let pending = takeWaiters()
@@ -182,19 +181,17 @@ final class SuspendingClock: GlassfinClock, @unchecked Sendable {
         return recorded
     }
 
-    func waitForSleeps(_ count: Int) async {
-        while true {
-            if sleeps().count >= count { return }
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                lock.lock()
-                if recorded.count >= count {
-                    lock.unlock()
-                    continuation.resume()
-                    return
-                }
-                sleepObservers.append(continuation)
-                lock.unlock()
+    func waitForSleeps(
+        _ count: Int, timeout: Duration = .seconds(3),
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while sleeps().count < count {
+            guard !Task.isCancelled, ContinuousClock.now < deadline else {
+                XCTFail("Clock did not record \(count) sleeps before timeout or cancellation", file: file, line: line)
+                return
             }
+            try? await Task.sleep(for: .milliseconds(5))
         }
     }
 
@@ -219,13 +216,8 @@ final class SuspendingClock: GlassfinClock, @unchecked Sendable {
         lock.lock()
         recorded.append(duration)
         waiters.append(Waiter(id: id, continuation: continuation))
-        let observers = sleepObservers
-        sleepObservers.removeAll()
         let cancelled = Task.isCancelled
         lock.unlock()
-        for observer in observers {
-            observer.resume()
-        }
         if cancelled {
             finish(id, .failure(CancellationError()))
         }

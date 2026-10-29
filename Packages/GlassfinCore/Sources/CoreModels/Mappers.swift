@@ -61,6 +61,7 @@ public enum DTOMapper {
             name: MetadataSanitizer.displayText(dto.Name ?? "", limit: MetadataPolicy.nameMax),
             overview: dto.Overview.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.overviewMax) },
             seriesID: dto.SeriesId,
+            seriesName: dto.SeriesName.map { MetadataSanitizer.displayText($0, limit: MetadataPolicy.nameMax) },
             seasonID: dto.SeasonId,
             indexNumber: dto.IndexNumber,
             parentIndexNumber: dto.ParentIndexNumber,
