@@ -76,7 +76,7 @@ import Foundation
                         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     }
                 }
-                if let status = response.statusCode, let failure = HTTPStatusMapper.failure(for: status) {
+                if let status = response.statusCode, let failure = HTTPStatusMapper.apiFailure(for: status) {
                     throw failure
                 }
                 return response.data
@@ -84,7 +84,7 @@ import Foundation
                 throw error
             } catch let error as Get.APIError {
                 if case .unacceptableStatusCode(let status) = error {
-                    throw HTTPStatusMapper.failure(for: status) ?? CoreModels.APIError.server(status: status)
+                    throw HTTPStatusMapper.apiFailure(for: status) ?? CoreModels.APIError.server(status: status)
                 }
                 throw CoreModels.APIError.network
             } catch let error as URLError {

@@ -24,6 +24,9 @@ public enum APIError: Error, Sendable, Equatable {
     case unauthorized
     case forbidden
     case notFound
+    /// HTTP 503 from a Jellyfin API response. Carries no server body or header text.
+    case serverStarting
+    /// An unclassified HTTP failure. API responses classify 503 as `serverStarting`.
     case server(status: Int)
     case timeout
     case network
@@ -53,6 +56,11 @@ public enum LogoutPolicy {
 }
 
 public enum HTTPStatusMapper {
+    /// API startup is distinct from the generic HTTP/media status contract below.
+    public static func apiFailure(for status: Int) -> APIError? {
+        status == 503 ? .serverStarting : failure(for: status)
+    }
+
     public static func failure(for status: Int) -> APIError? {
         switch status {
         case 200..<300:

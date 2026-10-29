@@ -37,8 +37,10 @@ public enum PlaybackError: Error, Sendable, Equatable {
 public enum AppError: Error, Sendable, Equatable {
     /// The device has no network path.
     case offline
-    /// DNS failure, connection refused, timeout, or a gateway 502/503/504.
+    /// DNS failure, connection refused, timeout, or a gateway 502/504.
     case serverUnreachable
+    /// HTTP 503 from any API call. Retry is manual; the session and token are retained.
+    case serverStarting
     /// Self-signed or changed certificate.
     case tlsUntrusted(CertificateInfo)
     /// HTTP 401 on an authenticated request. Ends the session once.
@@ -111,8 +113,11 @@ public enum AppErrorMapping {
             return .forbidden
         case .notFound:
             return .notFound
+        case .serverStarting:
+            return .serverStarting
         case .server(let status):
-            // The behavior table treats 502/503/504 as "server down", not as a generic 5xx row.
+            // Unclassified gateway errors retain the generic connectivity policy.
+            // HTTP API responses classify 503 before reaching this branch.
             if status == 502 || status == 503 || status == 504 {
                 return deviceOffline ? .offline : .serverUnreachable
             }
@@ -141,7 +146,7 @@ public enum AppErrorMapping {
 
     public static func isConnectivity(_ error: AppError) -> Bool {
         switch error {
-        case .offline, .serverUnreachable:
+        case .offline, .serverUnreachable, .serverStarting:
             return true
         default:
             return false
@@ -153,6 +158,7 @@ public enum AppErrorMapping {
 public enum AppErrorMessage {
     public static let offlineKey = "No network connection"
     public static let serverDownKey = "Can't reach the server"
+    public static let serverStartingKey = "Server is starting"
     public static let retryKey = "Try again"
     public static let changeServerKey = "Change server"
     public static let sessionExpiredKey = "Session expired, please sign in again"
@@ -254,6 +260,8 @@ public enum AppErrorMessage {
             return offlineKey
         case .serverUnreachable:
             return serverDownKey
+        case .serverStarting:
+            return serverStartingKey
         case .tlsUntrusted:
             return tlsUntrustedKey
         case .unauthorized:
@@ -299,6 +307,8 @@ public enum AppErrorMessage {
             return "offline"
         case .serverUnreachable:
             return "serverUnreachable"
+        case .serverStarting:
+            return "serverStarting status=503"
         case .tlsUntrusted(let info):
             return "tlsUntrusted fingerprint=\(info.fingerprintSHA256) subject=\(info.subject)"
         case .unauthorized:
