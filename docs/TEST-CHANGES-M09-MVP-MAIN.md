@@ -143,3 +143,55 @@ Restart validation after merging main: 689 core tests, 679 passed, 10 opt-in
 server skips, zero failures. The coverage gate passes at 91.83% (10781/11740).
 SwiftLint, recursive strict swift-format, source/catalog/security checks,
 debug-only string checks and unit-test target checks pass.
+
+## Run 40795729762, attempt 2: native tvOS field values
+
+The downloaded `tvos-results/app-test.log` and readable xcresult export
+identify two assertion failures, not a hang. All 80 UI tests completed in
+1524.268 seconds, ending at 02:15:29 UTC on 2026-10-29. T09-03 read
+`previous, Hold \u{FFFC} to dictate`; T09-12 read
+`star, Hold \u{FFFC} to dictate`. Returning focus to the keyboard did not
+remove the native accessibility instruction. Both tests reached their final
+assertions; the remaining 78 UI tests passed. The entire job finished with
+`failure`, not a timeout, after approximately 38 minutes.
+
+The same `xcode-27` runner class passed tvOS on PRs #51 (run 40788831426,
+36m43s), #42 (40776213907, 31m23s), and #32 (40776036687, 33m11s).
+Current main is already an ancestor of this branch at `c87d897`. Raw
+xcresult bundles are intentionally excluded from CI uploads; the JSON,
+JUnit and failed-test exports are included and were inspected.
+
+### Test/assertion changes
+
+T09-03 and T09-12 now compare the complete native accessibility value with
+the exact expected query, optionally followed by precisely
+`, Hold \u{FFFC} to dictate` on tvOS. The helper does not strip arbitrary
+text or accept substring/prefix matches. Wrong, missing, extra or reordered
+query characters still fail equality. The iOS comparison is unchanged.
+Both tvOS cases additionally type `s` after checking the retained query
+and assert the exact raw field values `previouss` and `stars`. These checks
+prove that the actual retained input is still editable and contains no
+dictation instruction. All existing result, recent, focus, banner and
+keyboard assertions remain in place. No test is disabled or newly skipped.
+
+All explicit M09 UI waits already had finite timeouts, and remote focus
+loops have finite attempt counts. Enable XCTest timeouts in both app and
+iOS package invocations in `scripts/macos-ci.sh`, with a default and
+maximum allowance of 180 seconds per test. This also bounds native
+automation/idle waits. Enable unbuffered test output to expose the active
+test in streamed logs. The existing 40-minute job deadline is unchanged.
+See Apple's [execution time allowance documentation](https://developer.apple.com/documentation/xctest/xctestcase/executiontimeallowance).
+
+The M09 core tests also used `SuspendingClock.waitForSleeps`, whose
+continuation could previously wait forever if an expected sleep never
+arrived. Replace that observer wait with a cancellation-aware poll and a
+three-second deadline that records an XCTest failure at the caller.
+Existing callers and assertions are unchanged, including those in older
+core suites. This latent hang was not the cause of the recorded CI failure.
+
+Local validation: 689 Linux package tests, 679 passed and 10 opt-in server
+skips, with zero failures; coverage 91.78% (10775/11740). SwiftLint, strict
+swift-format and all lint-job repository scripts pass. Two temporary
+negative probes (removed after execution) confirmed that a missing clock
+sleep and a cancelled clock wait both record failures promptly: two failures
+in 0.034 seconds with a 30 ms deadline for the missing-sleep case.

@@ -41,8 +41,12 @@ final class T09SearchMVPTests: XCTestCase {
         #if os(tvOS)
             focusSearchKeyboard(in: app)
         #endif
-        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "previous")
+        assertSearchText("previous", in: app)
         XCTAssertTrue(card(movie, in: app).waitForExistence(timeout: 10))
+        #if os(tvOS)
+            enter("s", in: app)
+            XCTAssertEqual(app.searchFields.firstMatch.value as? String, "previouss")
+        #endif
     }
 
     /// T09-09: clearing the real system field removes results and restores recents.
@@ -69,7 +73,11 @@ final class T09SearchMVPTests: XCTestCase {
         XCTAssertTrue(element("search.fixture.home", in: app).waitForExistence(timeout: 10))
         openTab("Search", identifier: "design.tab.search", in: app)
         XCTAssertTrue(card(secondMovie, in: app).waitForExistence(timeout: 10))
-        XCTAssertEqual(app.searchFields.firstMatch.value as? String, "star")
+        assertSearchText("star", in: app)
+        #if os(tvOS)
+            enter("s", in: app)
+            XCTAssertEqual(app.searchFields.firstMatch.value as? String, "stars")
+        #endif
     }
 
     /// T09-31: all three rendered headers use the English catalog labels.
@@ -331,6 +339,23 @@ final class T09SearchMVPTests: XCTestCase {
     @MainActor
     private func card(_ id: String, in app: XCUIApplication) -> XCUIElement {
         app.buttons["search.item.\(id)"]
+    }
+
+    @MainActor
+    private func assertSearchText(
+        _ text: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let value = app.searchFields.firstMatch.value as? String
+        #if os(tvOS)
+            // After native tab/recent selection, tvOS can append its dictation instruction
+            // even while the inline keyboard has focus. Compare the entire AX value;
+            // accepting a query prefix would hide unwanted characters in the actual text.
+            let dictationHint = ", Hold \u{FFFC} to dictate"
+            let expected = value?.hasSuffix(dictationHint) == true ? text + dictationHint : text
+            XCTAssertEqual(value, expected, file: file, line: line)
+        #else
+            XCTAssertEqual(value, text, file: file, line: line)
+        #endif
     }
 
     @MainActor

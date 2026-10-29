@@ -82,9 +82,12 @@ if [[ "$platform" == "tvOS" ]]; then
 else
   (
     cd "$root/Packages/GlassfinCore"
-    xcodebuild test \
+    NSUnbufferedIO=YES xcodebuild test \
       -scheme GlassfinCore \
       -destination "$destination" \
+      -test-timeouts-enabled YES \
+      -default-test-execution-time-allowance 180 \
+      -maximum-test-execution-time-allowance 180 \
       -clonedSourcePackagesDirPath "$source_packages" \
       -derivedDataPath "$root/DerivedData-package-$platform" \
       -resultBundlePath "$artifacts/package.xcresult" \
@@ -92,9 +95,14 @@ else
   ) | tee "$artifacts/package-test.log" || status=$?
 fi
 
-xcodebuild test \
+# Bound XCTest's automation/idle waits as well as the explicit waits in each test.
+# Unbuffered output keeps the active test visible in the streamed CI log.
+NSUnbufferedIO=YES xcodebuild test \
   -scheme "$scheme" \
   -destination "$destination" \
+  -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 180 \
+  -maximum-test-execution-time-allowance 180 \
   -clonedSourcePackagesDirPath "$source_packages" \
   -derivedDataPath "$root/DerivedData-$platform" \
   -resultBundlePath "$artifacts/app.xcresult" \
