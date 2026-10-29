@@ -602,6 +602,8 @@ public final class AppState {
     private func handle(_ event: ServerEvent) async {
         switch event {
         case .userDataChanged(let items):
+            let deviceInterval = DevicePerformance.begin(.remoteApply)
+            defer { deviceInterval?.end(completed: !Task.isCancelled) }
             let interval = signposter.begin(.remoteUserData)
             for item in items {
                 await userData.applyRemote(item, log: log)

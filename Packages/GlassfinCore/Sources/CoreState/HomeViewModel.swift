@@ -143,6 +143,8 @@ public final class HomeViewModel: ViewContentProviding {
 
     /// Discover libraries concurrently with the two personal rows.
     public func load() async {
+        let deviceInterval = DevicePerformance.begin(.homeLoad)
+        defer { deviceInterval?.end(completed: false) }
         let interval = signposter.begin(.homeSectionsLoaded)
         defer { signposter.end(interval) }
         restoreSnapshot()
@@ -152,6 +154,15 @@ public final class HomeViewModel: ViewContentProviding {
         await reloadLatest()
         await personal
         saveSnapshot()
+        if !Task.isCancelled,
+            case .loaded = resume, case .loaded = nextUp, case .loaded = libraries,
+            latestRows.allSatisfy({
+                if case .loaded = $0.state { return true }
+                return false
+            })
+        {
+            deviceInterval?.end()
+        }
     }
 
     public func start(libraryIDs: [String], coldStart: Bool = false) {
@@ -309,6 +320,8 @@ public final class HomeViewModel: ViewContentProviding {
     }
 
     public func refreshFromStore() async {
+        let deviceInterval = DevicePerformance.begin(.watchedProjection)
+        defer { deviceInterval?.end(completed: !Task.isCancelled) }
         let interval = signposter.begin(.watchedStateHome)
         defer { signposter.end(interval) }
         if let items = resume.value {

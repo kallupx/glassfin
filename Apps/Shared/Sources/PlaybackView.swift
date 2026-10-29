@@ -119,6 +119,7 @@
             controller.player = player
             controller.delegate = context.coordinator
             context.coordinator.gestures.install(on: controller.view)
+            context.coordinator.observeFirstFrame(controller)
             #if os(tvOS)
                 controller.transportBarCustomMenuItems = trackMenuItems
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
@@ -140,17 +141,28 @@
 
         @MainActor
         final class DismissalHandler: NSObject, @MainActor AVPlayerViewControllerDelegate {
+            let playback: PlaybackCoordinator
             let onClose: @MainActor () -> Void
             let companion: PlaybackCompanion
             let gestures: PlaybackScrubGestures
             private var skipEnd: Int64?
             private var skipKind: SegmentKind?
+            private var firstFrame: NSKeyValueObservation?
 
             init(playback: PlaybackCoordinator, companion: PlaybackCompanion, onClose: @escaping @MainActor () -> Void)
             {
+                self.playback = playback
                 self.onClose = onClose
                 self.companion = companion
                 gestures = PlaybackScrubGestures(playback: playback, companion: companion)
+            }
+
+            func observeFirstFrame(_ controller: AVPlayerViewController) {
+                firstFrame = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) {
+                    [weak self] _, change in
+                    guard change.newValue == true else { return }
+                    Task { @MainActor [weak self] in self?.playback.noteFirstFrameReady() }
+                }
             }
 
             func update(_ controller: AVPlayerViewController) {
@@ -190,6 +202,17 @@
                     Task { @MainActor [weak self] in
                         self?.companion.transportVisible = visible
                     }
+                }
+
+                nonisolated func playerViewController(
+                    _ playerViewController: AVPlayerViewController,
+                    timeToSeekAfterUserNavigatedFrom oldTime: CMTime, to targetTime: CMTime
+                ) -> CMTime {
+                    let interval = DevicePerformance.begin(.playbackSeek)
+                    Task { @MainActor [weak self] in
+                        (self?.playback.engine as? AVPlayerEngine)?.beginSeekMeasurement(interval)
+                    }
+                    return targetTime
                 }
 
                 func playerViewControllerShouldDismiss(_ playerViewController: AVPlayerViewController) -> Bool {

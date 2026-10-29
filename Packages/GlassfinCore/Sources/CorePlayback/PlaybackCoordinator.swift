@@ -90,6 +90,8 @@ public final class PlaybackCoordinator {
     private var engineLoaded = false
     private var startPosition: Duration = .zero
     private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var firstFrameInterval: DevicePerformance.Interval?
+    @ObservationIgnored private var lifetimeInterval: DevicePerformance.Interval?
     private var stoppingTask: Task<APIError?, Never>?
 
     public init(
@@ -119,7 +121,9 @@ public final class PlaybackCoordinator {
     }
 
     public func play(_ request: PlaybackRequest, returnFocusID: String) async {
+        let firstFrame = DevicePerformance.begin(.playbackFirstFrame)
         await stop()
+        firstFrameInterval = firstFrame
         self.request = request
         self.returnFocusID = returnFocusID
         lastStop = nil
@@ -135,7 +139,9 @@ public final class PlaybackCoordinator {
     }
 
     public func play(itemID: String, choice: PlaybackStartChoice = .resume) async {
+        let firstFrame = DevicePerformance.begin(.playbackFirstFrame)
         await stop()
+        firstFrameInterval = firstFrame
         request = nil
         returnFocusID = nil
         lastStop = nil
@@ -282,6 +288,11 @@ public final class PlaybackCoordinator {
                     MetadataSanitizer.displayText(MediaLogRedactor.redact($0), limit: 200)
                 }
             }
+            if method != .directPlay {
+                firstFrameInterval?.end(completed: false)
+                firstFrameInterval = DevicePerformance.begin(
+                    method == .transcode ? .playbackTranscodeFirstFrame : .playbackDirectStreamFirstFrame)
+            }
             context = PlaybackReportContext(
                 itemID: try ItemID.require(itemID).value, mediaSourceID: try ItemID.require(sourceID).value,
                 playSessionID: playSessionID, method: method,
@@ -345,6 +356,7 @@ public final class PlaybackCoordinator {
                     await self.handle(event, run: run)
                 }
             }
+            lifetimeInterval = DevicePerformance.begin(.playbackLifetime)
             try await engine.load(carrier, startAt: start)
             guard await continueStartup(run) else { return }
             engineLoaded = true
@@ -441,6 +453,8 @@ public final class PlaybackCoordinator {
         guard id == nil || track != nil else { return }
         if kind == .audio && track == nil { return }
         if (kind == .audio ? selection.audio : selection.subtitle ?? -1) == (id ?? -1) { return }
+        let trackInterval = DevicePerformance.begin(.playbackTrackApply)
+        defer { trackInterval?.end(completed: false) }
         let run = generation
         let oldSubtitle = tracks.first { $0.kind == .subtitle && $0.id == selection.subtitle }
         let mustReload =
@@ -474,6 +488,7 @@ public final class PlaybackCoordinator {
             context?.audioStreamIndex = selection.audio
             context?.subtitleStreamIndex = selection.subtitle
             if kind == .subtitle && track?.delivery != .externalVTT { subtitleCues = [] }
+            trackInterval?.end()
             await progress()
             return
         }
@@ -493,6 +508,7 @@ public final class PlaybackCoordinator {
         await startAttempt(
             itemID: oldContext.itemID, start: position, run: nextRun,
             previousSessionID: oldContext.playSessionID)
+        if isCurrent(nextRun), engineLoaded, context != nil { trackInterval?.end() }
     }
 
     public func setASSConversion(_ enabled: Bool) async {
@@ -545,6 +561,14 @@ public final class PlaybackCoordinator {
         let terminalRun = generation + 1
         let error = await finish(state: .idle, failed: false)
         if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
+    }
+
+    /// Called only by the presentation surface when its first video frame is ready for display.
+    /// AVPlayerItem.readyToPlay and timeControlStatus.playing are not first-frame signals.
+    public func noteFirstFrameReady() {
+        guard context != nil else { return }
+        firstFrameInterval?.end()
+        firstFrameInterval = nil
     }
 
     public func pause() { engine.pause() }
@@ -650,6 +674,10 @@ public final class PlaybackCoordinator {
 
     @discardableResult
     private func finish(state terminal: PlaybackState, failed: Bool) async -> APIError? {
+        firstFrameInterval?.end(completed: false)
+        firstFrameInterval = nil
+        lifetimeInterval?.end(completed: !failed)
+        lifetimeInterval = nil
         generation += 1
         firstFrameTask?.cancel()
         firstFrameTask = nil

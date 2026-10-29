@@ -6,6 +6,7 @@ struct GlassfinApp: App {
     @State private var flow: AuthFlow
 
     init() {
+        DeviceLaunchMeasurement.begin()
         let arguments = ProcessInfo.processInfo.arguments
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)

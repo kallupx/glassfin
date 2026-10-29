@@ -23,6 +23,7 @@
         var trackSelectionPeers: [PlaybackTrack] = []
         var expectedNativeAudio: AVMediaSelectionOption?
         var expectedNativeSubtitle: AVMediaSelectionOption?
+        @ObservationIgnored private var seekInterval: DevicePerformance.Interval?
 
         public init(origin: any MediaOriginClient, log: any GlassfinLog = SilentLog()) {
             self.origin = origin
@@ -71,7 +72,9 @@
                     Task { @MainActor [weak self] in
                         guard let self, self.run == currentRun, self.ready else { return }
                         switch self.player?.timeControlStatus {
-                        case .playing: self.continuation?.yield(.playing)
+                        case .playing:
+                            if !self.seeking { self.endSeekMeasurement() }
+                            self.continuation?.yield(.playing)
                         case .paused: self.continuation?.yield(.paused)
                         case .waitingToPlayAtSpecifiedRate: self.continuation?.yield(.buffering)
                         default: break
@@ -114,11 +117,24 @@
         public func seek(to position: Duration) async {
             guard let player else { return }
             let currentRun = run
+            beginSeekMeasurement()
             seeking = true
             await player.seek(to: Self.time(position), toleranceBefore: .zero, toleranceAfter: .zero)
             guard run == currentRun else { return }
             seeking = false
+            if player.timeControlStatus == .playing { endSeekMeasurement() }
             continuation?.yield(.seeked)
+        }
+
+        /// AVKit calls this at scrub confirmation, before it performs its own seek.
+        public func beginSeekMeasurement(_ interval: DevicePerformance.Interval? = nil) {
+            seekInterval?.end(completed: false)
+            seekInterval = interval ?? DevicePerformance.begin(.playbackSeek)
+        }
+
+        private func endSeekMeasurement() {
+            seekInterval?.end()
+            seekInterval = nil
         }
 
         public func stop() {
@@ -184,6 +200,8 @@
             trackSelectionPeers = []
             expectedNativeAudio = nil
             expectedNativeSubtitle = nil
+            seekInterval?.end(completed: false)
+            seekInterval = nil
             observations.removeAll()
             for observer in notifications { NotificationCenter.default.removeObserver(observer) }
             notifications.removeAll()

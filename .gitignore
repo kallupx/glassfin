@@ -11,3 +11,4 @@ artifacts/
 *.pyc
 .DS_Store
 Package.resolved.bak
+Tests/Media/Generated/
