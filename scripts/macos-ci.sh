@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# tvOS or iOS job body. Release binary scan runs in this job; it is not a separate macOS job.
+# tvOS or iOS job body. With tvOS shards, shard 1 owns Release and package checks.
 set -euo pipefail
 
 platform="${1:?tvOS or iOS}"
+shard="${2:-}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
+shard_selection=""
+if [[ -n "$shard" ]]; then
+  if [[ "$platform" != "tvOS" ]]; then
+    echo "UI sharding is supported only for tvOS" >&2
+    exit 1
+  fi
+  shard_selection="$(python3 scripts/check-tvos-ui-shards.py --shard "$shard")"
+fi
 source_packages="$root/SourcePackages"
 artifacts="$root/artifacts/$platform"
 mkdir -p "$artifacts/screenshots"
@@ -57,53 +66,65 @@ else
   sdk_glob='*iphonesimulator*'
 fi
 
-release_data="$root/DerivedData-release-$platform"
-rm -rf "$release_data"
-# Scan the Release binary for the simulator architecture used by the tests.
-# A generic destination builds both arm64 and x86_64, consuming the iOS test budget.
-xcodebuild build \
-  -scheme "$scheme" \
-  -configuration Release \
-  -destination "$destination" \
-  -clonedSourcePackagesDirPath "$source_packages" \
-  -derivedDataPath "$release_data" \
-  ONLY_ACTIVE_ARCH=YES \
-  CODE_SIGNING_ALLOWED=NO \
-  | tee "$artifacts/release-build.log" || status=$?
+if [[ -z "$shard" || "$shard" == "1" ]]; then
+  release_data="$root/DerivedData-release-$platform"
+  rm -rf "$release_data"
+  # Scan the Release binary for the simulator architecture used by the tests.
+  # A generic destination builds both arm64 and x86_64, consuming the iOS test budget.
+  xcodebuild build \
+    -scheme "$scheme" \
+    -configuration Release \
+    -destination "$destination" \
+    -clonedSourcePackagesDirPath "$source_packages" \
+    -derivedDataPath "$release_data" \
+    ONLY_ACTIVE_ARCH=YES \
+    CODE_SIGNING_ALLOWED=NO \
+    | tee "$artifacts/release-build.log" || status=$?
 
-app="$(find "$release_data/Build/Products" -path "$sdk_glob" -name 'Glassfin.app' -type d | head -1 || true)"
-if [[ -z "$app" ]]; then
-  echo "Release app was not produced" >&2
-  status=1
-else
-  bash "$root/scripts/check-release-binary.sh" "$app" | tee "$artifacts/release-binary.txt" || status=$?
+  app="$(find "$release_data/Build/Products" -path "$sdk_glob" -name 'Glassfin.app' -type d | head -1 || true)"
+  if [[ -z "$app" ]]; then
+    echo "Release app was not produced" >&2
+    status=1
+  else
+    bash "$root/scripts/check-release-binary.sh" "$app" | tee "$artifacts/release-binary.txt" || status=$?
+  fi
+
+  if [[ "$platform" == "tvOS" ]]; then
+    (
+      cd "$root/Packages/GlassfinCore"
+      swift test
+    ) | tee "$artifacts/swift-test.log" || status=$?
+  else
+    (
+      cd "$root/Packages/GlassfinCore"
+      NSUnbufferedIO=YES xcodebuild test \
+        -scheme GlassfinCore \
+        -destination "$destination" \
+        -test-timeouts-enabled YES \
+        -default-test-execution-time-allowance 180 \
+        -maximum-test-execution-time-allowance 180 \
+        -clonedSourcePackagesDirPath "$source_packages" \
+        -derivedDataPath "$root/DerivedData-package-$platform" \
+        -resultBundlePath "$artifacts/package.xcresult" \
+        CODE_SIGNING_ALLOWED=NO
+    ) | tee "$artifacts/package-test.log" || status=$?
+  fi
 fi
 
+app_test_args=(-scheme "$scheme")
 if [[ "$platform" == "tvOS" ]]; then
-  (
-    cd "$root/Packages/GlassfinCore"
-    swift test
-  ) | tee "$artifacts/swift-test.log" || status=$?
-else
-  (
-    cd "$root/Packages/GlassfinCore"
-    NSUnbufferedIO=YES xcodebuild test \
-      -scheme GlassfinCore \
-      -destination "$destination" \
-      -test-timeouts-enabled YES \
-      -default-test-execution-time-allowance 180 \
-      -maximum-test-execution-time-allowance 180 \
-      -clonedSourcePackagesDirPath "$source_packages" \
-      -derivedDataPath "$root/DerivedData-package-$platform" \
-      -resultBundlePath "$artifacts/package.xcresult" \
-      CODE_SIGNING_ALLOWED=NO
-  ) | tee "$artifacts/package-test.log" || status=$?
+  app_test_args+=(-parallel-testing-enabled NO)
+fi
+if [[ -n "$shard" ]]; then
+  while IFS= read -r argument; do
+    app_test_args+=("$argument")
+  done <<< "$shard_selection"
 fi
 
 # Bound XCTest's automation/idle waits as well as the explicit waits in each test.
 # Unbuffered output keeps the active test visible in the streamed CI log.
 NSUnbufferedIO=YES xcodebuild test \
-  -scheme "$scheme" \
+  "${app_test_args[@]}" \
   -destination "$destination" \
   -test-timeouts-enabled YES \
   -default-test-execution-time-allowance 180 \
