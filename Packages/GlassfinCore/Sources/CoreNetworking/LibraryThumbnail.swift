@@ -27,6 +27,8 @@ public enum LibraryThumbnailOptions {
         /// Only the thumbnail is decoded, in a utility task outside the main actor.
         nonisolated public static func downsample(_ data: Data, pixels: Int) async -> DecodedLibraryImage? {
             let job = Task.detached(priority: .utility) { () -> DecodedLibraryImage? in
+                let interval = DevicePerformance.begin(.imageDecode)
+                defer { interval?.end(completed: false) }
                 guard !Task.isCancelled, data.count <= MetadataPolicy.imageMaxBytes,
                     let source = CGImageSourceCreateWithData(
                         data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
@@ -35,6 +37,7 @@ public enum LibraryThumbnailOptions {
                 guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
                     !Task.isCancelled
                 else { return nil }
+                interval?.end()
                 return DecodedLibraryImage(value: image)
             }
             return await withTaskCancellationHandler {

@@ -17,7 +17,8 @@
                 } else {
                     NativePlaybackView(
                         player: (coordinator.engine as? AVPlayerEngine)?.player,
-                        trackMenuItems: PlaybackTrackMenus.items(playback: coordinator), onClose: onClose
+                        trackMenuItems: PlaybackTrackMenus.items(playback: coordinator),
+                        playback: coordinator, onClose: onClose
                     )
                     // Keep Home's media-surface identifier on its own accessibility container.
                     .accessibilityElement(children: .contain)
@@ -76,14 +77,16 @@
     private struct NativePlaybackView: UIViewControllerRepresentable {
         let player: AVPlayer?
         let trackMenuItems: [UIMenuElement]
+        let playback: PlaybackCoordinator
         let onClose: @MainActor () -> Void
 
-        func makeCoordinator() -> DismissalHandler { DismissalHandler(onClose: onClose) }
+        func makeCoordinator() -> DismissalHandler { DismissalHandler(playback: playback, onClose: onClose) }
 
         func makeUIViewController(context: Context) -> AVPlayerViewController {
             let controller = AVPlayerViewController()
             controller.player = player
             controller.delegate = context.coordinator
+            context.coordinator.observeFirstFrame(controller)
             #if os(tvOS)
                 controller.transportBarCustomMenuItems = trackMenuItems
                 controller.appliesPreferredDisplayCriteriaAutomatically = true
@@ -104,10 +107,34 @@
 
         @MainActor
         final class DismissalHandler: NSObject, @MainActor AVPlayerViewControllerDelegate {
+            let playback: PlaybackCoordinator
             let onClose: @MainActor () -> Void
-            init(onClose: @escaping @MainActor () -> Void) { self.onClose = onClose }
+            private var firstFrame: NSKeyValueObservation?
+            init(playback: PlaybackCoordinator, onClose: @escaping @MainActor () -> Void) {
+                self.playback = playback
+                self.onClose = onClose
+            }
+
+            func observeFirstFrame(_ controller: AVPlayerViewController) {
+                firstFrame = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) {
+                    [weak self] _, change in
+                    guard change.newValue == true else { return }
+                    Task { @MainActor [weak self] in self?.playback.noteFirstFrameReady() }
+                }
+            }
 
             #if os(tvOS)
+                nonisolated func playerViewController(
+                    _ playerViewController: AVPlayerViewController,
+                    timeToSeekAfterUserNavigatedFrom oldTime: CMTime, to targetTime: CMTime
+                ) -> CMTime {
+                    let interval = DevicePerformance.begin(.playbackSeek)
+                    Task { @MainActor [weak self] in
+                        (self?.playback.engine as? AVPlayerEngine)?.beginSeekMeasurement(interval)
+                    }
+                    return targetTime
+                }
+
                 func playerViewControllerShouldDismiss(_ playerViewController: AVPlayerViewController) -> Bool {
                     onClose()
                     return false

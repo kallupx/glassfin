@@ -55,6 +55,8 @@ public enum SearchImageDecoder {
         public static func downsample(_ data: Data, maximumPixelSize: Int) async throws -> DecodedSearchImage {
             guard data.count <= MetadataPolicy.imageMaxBytes else { throw SearchImageError.oversized }
             let work = Task.detached(priority: .utility) {
+                let interval = DevicePerformance.begin(.imageDecode)
+                defer { interval?.end(completed: false) }
                 try Task.checkCancellation()
                 let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
                 guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
@@ -65,6 +67,7 @@ public enum SearchImageDecoder {
                     throw SearchImageError.invalidImage
                 }
                 try Task.checkCancellation()
+                interval?.end()
                 return DecodedSearchImage(image: image, decodedOffMainThread: isOffMainThread())
             }
             return try await withTaskCancellationHandler {
