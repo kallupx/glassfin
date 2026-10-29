@@ -7,9 +7,10 @@ struct ItemDetailScreen: View {
     let session: LibrarySession
     @State private var model: ItemDetailViewModel
     @State private var series: SeriesViewModel
-    @State private var playbackNotice = false
     @State private var playbackError: String?
     @FocusState private var focus: SeriesFocus?
+    @Environment(\.startPlayback) private var startPlayback
+    @Environment(\.playbackFocusReturn) private var playbackFocusReturn
 
     init(id: String, kind: MediaKind? = nil, session: LibrarySession) {
         self.id = id
@@ -28,7 +29,17 @@ struct ItemDetailScreen: View {
             VStack(alignment: .leading, spacing: SpacingToken.l) {
                 if let item {
                     hero(item)
-                    if isSeries { SeriesEpisodeSection(model: series, session: session, focus: $focus) }
+                    if isSeries {
+                        SeriesEpisodeSection(
+                            model: series, session: session, focus: $focus,
+                            onPlay: startPlayback == nil
+                                ? nil
+                                : { episode in
+                                    play(
+                                        startOver: false, targetOverride: episode,
+                                        focusID: "series.episode.\(episode.id)")
+                                })
+                    }
                     metadata(item)
                     if let error = model.similar.presentedError { LibraryInlineError(error: error) }
                     if let items = model.similar.value, !items.isEmpty {
@@ -56,9 +67,6 @@ struct ItemDetailScreen: View {
                     Text(verbatim: AppErrorMessage.localized(playbackError)).accessibilityIdentifier(
                         "detail.playback.error")
                 }
-                if playbackNotice {
-                    Copy.text(.detailPlaybackPending).accessibilityIdentifier("detail.playback.pending")
-                }
             }
         }
         .accessibilityIdentifier("detail.root")
@@ -77,6 +85,21 @@ struct ItemDetailScreen: View {
                 await model.refreshFromStore()
                 await series.refreshFromStore()
                 await session.actions.refreshFromStore()
+            }
+        }
+        .onChange(of: playbackFocusReturn) { _, value in
+            guard let value else { return }
+            if value.id == "detail.play" { focus = .play }
+            if value.id == "detail.startOver" { focus = .startOver }
+            Task {
+                await model.refreshFromStore()
+                await series.refreshFromStore()
+                await session.actions.refreshFromStore()
+                if value.id == "detail.play" { focus = .play }
+                if value.id == "detail.startOver" { focus = .startOver }
+                if value.id.hasPrefix("series.episode.") {
+                    focus = .episode(String(value.id.dropFirst("series.episode.".count)))
+                }
             }
         }
         .onChange(of: session.playbackReturn) { _, result in
@@ -109,7 +132,10 @@ struct ItemDetailScreen: View {
             onFavorite: { Task { await session.actions.toggleFavorite(item) } },
             onMore: { model.overviewExpanded.toggle() },
             backdropContent: AnyView(
-                LibraryArtwork(item: item, type: .backdrop, size: CGSize(width: 1920, height: 640), session: session)),
+                GeometryReader { geometry in
+                    LibraryArtwork(item: item, type: .backdrop, size: geometry.size, session: session)
+                        .clipped()
+                }),
             logoContent: item.images.logoTag == nil
                 ? nil
                 : AnyView(
@@ -188,23 +214,34 @@ struct ItemDetailScreen: View {
         .designFocusSection()
     }
 
-    private func play(startOver: Bool) {
+    private func play(startOver: Bool, targetOverride: MediaItem? = nil, focusID: String? = nil) {
         guard !session.app.playbackBlocked else {
-            playbackNotice = false
             playbackError = session.app.playbackBlockedMessageKey
             return
         }
         playbackError = nil
         let target: MediaItem?
-        if case .episode(let id) = focus {
+        if let targetOverride {
+            target = targetOverride
+        } else if case .episode(let id) = focus {
             target = series.episodes.value?.first { $0.id == id }
         } else {
             target = isSeries ? series.playTarget : item
         }
         guard let intent = model.playbackIntent(for: target, startOver: startOver) else { return }
         session.requestPlayback(intent)
-        // TODO(Q7-08): inject the M08 playback presentation closure and pass this intent.
-        playbackNotice = true
+        let origin: String
+        if let focusID {
+            origin = focusID
+        } else if case .episode(let id) = focus {
+            origin = "series.episode.\(id)"
+        } else {
+            origin = startOver ? "detail.startOver" : "detail.play"
+        }
+        startPlayback?(
+            PlaybackRequest(
+                itemID: intent.itemID, startTicks: Ticks.outboundPositionTicks(from: intent.start),
+                audioStreamIndex: intent.audioStreamIndex, subtitleStreamIndex: intent.subtitleStreamIndex), origin)
     }
 }
 
@@ -215,6 +252,7 @@ struct LibraryDetailActions: View {
     let session: LibrarySession
     var onPlay: (Bool) -> Void
     var focus: FocusState<SeriesFocus?>.Binding
+    @State private var offersStartOver = false
 
     private var hasProgress: Bool { (target?.userData.playbackPosition ?? .zero) > .zero }
     private var title: String {
@@ -240,47 +278,59 @@ struct LibraryDetailActions: View {
 
     var body: some View {
         ContainedGlass {
-            HStack(spacing: SpacingToken.s) {
-                Button {
-                    onPlay(false)
-                } label: {
-                    Text(verbatim: title)
-                }
-                .buttonStyle(.glassProminent).focused(focus, equals: .play)
-                .accessibilityIdentifier("detail.play")
-                #if DEBUG
-                    .accessibilityValue(playKey.rawValue)
-                #endif
-                if hasProgress {
-                    Button {
-                        onPlay(true)
-                    } label: {
-                        Copy.text(.detailStartOver)
-                    }
-                    .buttonStyle(.glass).accessibilityIdentifier("detail.startOver")
-                }
-                Button {
-                    Task { await session.actions.togglePlayed(item) }
-                } label: {
-                    Copy.text(item.userData.played ? .actionMarkUnplayed : .actionMarkPlayed)
-                }.buttonStyle(.glass).accessibilityIdentifier("detail.played")
-                Button {
-                    Task { await session.actions.toggleFavorite(item) }
-                } label: {
-                    Copy.text(item.userData.isFavorite ? .actionRemoveFavorite : .actionAddFavorite)
-                }.buttonStyle(.glass).accessibilityIdentifier("detail.favorite")
-                trackMenu
-                Button {
-                    model.overviewExpanded.toggle()
-                } label: {
-                    Copy.text(.actionMore)
-                }
-                .buttonStyle(.glass).accessibilityIdentifier("detail.more")
-            }
+            #if os(iOS)
+                ScrollView(.horizontal) { actions }
+            #else
+                actions
+            #endif
         }
         .designFocusSection()
         .defaultFocus(focus, Optional(.play))
         .onAppear { if focus.wrappedValue == nil { focus.wrappedValue = .play } }
+        .onChange(of: hasProgress, initial: true) { _, hasProgress in
+            // A reset to zero must not remove the action while the player owns focus.
+            if hasProgress { offersStartOver = true }
+        }
+    }
+
+    private var actions: some View {
+        HStack(spacing: SpacingToken.s) {
+            Button {
+                onPlay(false)
+            } label: {
+                Text(verbatim: title)
+            }
+            .buttonStyle(.glassProminent).focused(focus, equals: .play)
+            .accessibilityIdentifier("detail.play")
+            #if DEBUG
+                .accessibilityValue(playKey.rawValue)
+            #endif
+            if hasProgress || offersStartOver {
+                Button {
+                    onPlay(true)
+                } label: {
+                    Copy.text(.detailStartOver)
+                }
+                .buttonStyle(.glass).focused(focus, equals: .startOver).accessibilityIdentifier("detail.startOver")
+            }
+            Button {
+                Task { await session.actions.togglePlayed(item) }
+            } label: {
+                Copy.text(item.userData.played ? .actionMarkUnplayed : .actionMarkPlayed)
+            }.buttonStyle(.glass).accessibilityIdentifier("detail.played")
+            Button {
+                Task { await session.actions.toggleFavorite(item) }
+            } label: {
+                Copy.text(item.userData.isFavorite ? .actionRemoveFavorite : .actionAddFavorite)
+            }.buttonStyle(.glass).accessibilityIdentifier("detail.favorite")
+            trackMenu
+            Button {
+                model.overviewExpanded.toggle()
+            } label: {
+                Copy.text(.actionMore)
+            }
+            .buttonStyle(.glass).accessibilityIdentifier("detail.more")
+        }
     }
 
     private var trackMenu: some View {

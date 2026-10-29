@@ -196,7 +196,7 @@ struct HomeView: View {
                         focusedItem = $0
                         focusedRowID = id
                     }, onDetail: onDetail,
-                    onPlay: { play($0) },
+                    onPlay: { play($0, rowID: id) },
                     onPlayed: { item in model.perform { await $0.setPlayed(item, played: !item.userData.played) } },
                     onFavorite: { item in model.perform { await $0.setFavorite(item) } },
                     onRemove: { item in model.perform { await $0.removeFromResume(item) } })
@@ -231,12 +231,12 @@ struct HomeView: View {
         return false
     }
 
-    private func play(_ item: MediaItem) {
+    private func play(_ item: MediaItem, rowID: String) {
         if let key = model.playbackBlockedKey {
             playbackNoticeKey = key
             return
         }
-        onPlay(HomePlaybackRequest(item: item))
+        onPlay(HomePlaybackRequest(item: item, returnFocusID: "home.\(rowID).item.\(item.id)"))
     }
 
     private func loadBackdrop() async {
@@ -274,6 +274,7 @@ private struct HomeMediaRow: View {
     var onFavorite: (MediaItem) -> Void
     var onRemove: (MediaItem) -> Void
     @FocusState private var focus: String?
+    @Environment(\.playbackFocusReturn) private var playbackFocusReturn
     @Namespace private var rowNamespace
 
     var body: some View {
@@ -362,6 +363,12 @@ private struct HomeMediaRow: View {
             .defaultFocus(
                 $focus, receivesDefaultFocus ? rememberedID ?? items.first?.id : nil, priority: .userInitiated)
         #endif
+        .onChange(of: playbackFocusReturn) { _, value in
+            guard let value, let item = items.first(where: { "home.\(rowID).item.\($0.id)" == value.id }) else {
+                return
+            }
+            focus = item.id
+        }
         .onChange(of: focus) { _, value in
             guard let item = items.first(where: { $0.id == value }) else { return }
             #if os(tvOS)
