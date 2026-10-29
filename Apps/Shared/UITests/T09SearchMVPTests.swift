@@ -38,6 +38,9 @@ final class T09SearchMVPTests: XCTestCase {
         XCTAssertTrue(app.buttons["search.recent.0"].exists)
         XCTAssertFalse(card(movie, in: app).exists)
         activate(app.buttons["search.recent.0"], in: app)
+        #if os(tvOS)
+            focusSearchKeyboard(in: app)
+        #endif
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "previous")
         XCTAssertTrue(card(movie, in: app).waitForExistence(timeout: 10))
     }
@@ -338,11 +341,13 @@ final class T09SearchMVPTests: XCTestCase {
             if identifier == "design.tab.search" {
                 let keyboard = app.keyboards.firstMatch
                 if keyboard.waitForExistence(timeout: 5), !keyboard.hasFocus { XCUIRemote.shared.press(.down) }
+                focusSearchKeyboard(in: app)
             }
         #else
-            // End keyboard interaction before asking the native tab bar to switch destinations.
+            // Submit through the native keyboard so Search ends editing without clearing its query.
             if title != "Search", app.keyboards.firstMatch.exists {
-                element("search.root", in: app).swipeDown()
+                app.keyboards.buttons["Search"].tap()
+                _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 5)
             }
             activate(app.tabBars.buttons[title], in: app)
         #endif
@@ -385,6 +390,21 @@ final class T09SearchMVPTests: XCTestCase {
     }
 
     #if os(tvOS)
+        @MainActor
+        private func focusSearchKeyboard(in app: XCUIApplication) {
+            let keyboard = app.keyboards.firstMatch
+            guard keyboard.waitForExistence(timeout: 5) else {
+                XCTFail("Search keyboard did not appear before reading its field")
+                return
+            }
+            for _ in 0..<24 {
+                if keyboard.hasFocus { return }
+                XCUIRemote.shared.press(.up)
+                if keyboard.wait(for: \.hasFocus, toEqual: true, timeout: 1) { return }
+            }
+            XCTFail("Search keyboard did not receive focus before reading its field")
+        }
+
         @MainActor
         private func focusFirstMovie(in app: XCUIApplication, id: String? = nil) {
             let first = card(id ?? movie, in: app)
