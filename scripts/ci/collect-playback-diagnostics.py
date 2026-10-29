@@ -38,13 +38,17 @@ def main() -> None:
     if simulator.is_file():
         device = json.loads(simulator.read_text())
         try:
-            result = subprocess.run(
-                ["xcrun", "simctl", "spawn", device, "log", "show", "--style", "compact", "--info",
-                 "--last", "30m", "--predicate", 'subsystem == "org.glassfin.app" AND category == "playback"'],
-                capture_output=True, text=True, timeout=30, check=False)
-            available = result.returncode == 0
-            if available:
-                lines = summaries(result.stdout)
+            arguments = ["show", "--style", "compact", "--info", "--last", "30m", "--predicate",
+                         'subsystem == "org.glassfin.app" AND category == "playback"']
+            # Some simulator runtimes cannot read their historical log store. The
+            # host store also contains simulator process logs; apply the same strict
+            # summary filter to it. Never export command output or stderr verbatim.
+            for command in [["xcrun", "simctl", "spawn", device, "log"], ["/usr/bin/log"]]:
+                result = subprocess.run(command + arguments, capture_output=True, text=True, timeout=20, check=False)
+                if result.returncode == 0:
+                    available = True
+                    lines = summaries(result.stdout)
+                    break
         except (OSError, subprocess.TimeoutExpired):
             pass
     output = Path(__file__).resolve().parents[2] / "artifacts/jellyfin-e2e/playback-diagnostics.json"
