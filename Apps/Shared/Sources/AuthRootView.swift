@@ -11,6 +11,7 @@ struct AuthRootView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focused: AuthFocus?
     @State private var password = ""
+    @State private var librarySession: LibrarySession?
     @State private var selectedTab = "home"
     @State private var restoreSettingsFocus = false
 
@@ -41,10 +42,12 @@ struct AuthRootView: View {
             if phase == .background { flow.sceneBecameBackground() }
             if phase == .active { Task { await flow.sceneBecameActive() } }
         }
-        .onChange(of: flow.appPhase) { _, _ in
-            switch flow.appPhase {
+        .onChange(of: flow.appPhase) { _, phase in
+            switch phase {
             case .signedIn: break
-            default: selectedTab = "home"
+            default:
+                librarySession = nil
+                selectedTab = "home"
             }
             Task { await flow.synchronizeSession() }
         }
@@ -113,6 +116,11 @@ struct AuthRootView: View {
                 Text(verbatim: AuthCopy.localized(error))
                     .accessibilityIdentifier("address.error")
                     .accessibilityValue(error.rawValue)
+                if error == .serverStarting {
+                    Button(AuthCopy.localized(.tryAgain)) { Task { await flow.retryServerStarting() } }
+                        .accessibilityIdentifier("auth.serverStarting.retry")
+                        .focused($focused, equals: .tryAgain)
+                }
             }
             if flow.httpSkippedByPolicy {
                 Text(verbatim: AuthCopy.localized(.httpOnlyOnLocalNetwork))
@@ -292,7 +300,20 @@ struct AuthRootView: View {
     }
 
     private var home: some View {
-        HomeRootView(flow: flow, selectedTab: $selectedTab, restoreSettingsFocus: $restoreSettingsFocus)
+        HomeRootView(
+            flow: flow, librarySession: librarySession,
+            selectedTab: $selectedTab, restoreSettingsFocus: $restoreSettingsFocus
+        )
+        .task {
+            do {
+                if librarySession == nil { librarySession = try LibraryFeatureAssembly.make(flow: flow) }
+                await librarySession?.load()
+            } catch let error as APIError {
+                flow.featureApp.handle(AppErrorMapping.map(error, context: .authenticated, deviceOffline: false))
+            } catch {
+                flow.featureApp.handle(.internalInvariant)
+            }
+        }
     }
 
     private var logoutConfirm: some View {
@@ -332,7 +353,14 @@ enum AuthAssembly {
         #if DEBUG
             let configuration = LaunchConfiguration(arguments: arguments)
             HomeMockControls.current = nil
-            if configuration.useMockServer || configuration.resetState {
+            if configuration.resetState && !configuration.useMockServer {
+                do {
+                    try UITestStateReset.reset()
+                } catch {
+                    preconditionFailure("UI-test state reset failed")
+                }
+            }
+            if configuration.useMockServer {
                 if arguments.contains("-uitest-home-network-controls") {
                     HomeMockControls.current = HomeMockControls()
                 }
@@ -402,6 +430,7 @@ private struct AuthAssemblyPinger: ReachabilityPinging {
             _ = try await backend.currentUser(on: server, token: token)
             return .ok
         } catch {
+            if error == .serverStarting { return .failed(.serverStarting) }
             return .failed(error == .unauthorized ? .unauthorized : .serverUnreachable)
         }
     }

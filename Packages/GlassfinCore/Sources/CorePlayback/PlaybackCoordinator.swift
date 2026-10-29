@@ -16,11 +16,14 @@ public enum PlaybackStartChoice: Sendable, Equatable {
 public final class PlaybackCoordinator {
     public private(set) var state: PlaybackState = .idle
     public private(set) var failure: PlaybackFailure?
-    /// App-level error for the generic playback failure, sharing the UI's catalog key.
+    /// App-level failure, sharing the UI's catalog keys.
     public var appError: AppError? {
-        failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
+        if state == .failed(localizedKey: AppErrorMessage.serverStartingKey) { return .serverStarting }
+        return failure == .couldNotPlay ? .playback(.couldNotPlay) : nil
     }
     public let engine: any PlaybackEngine
+    public private(set) var returnFocusID: String?
+    public private(set) var lastStop: PlaybackStop?
     public private(set) var tracks: [PlaybackTrack] = []
     public private(set) var selection = PlaybackTrackSelection()
     public private(set) var subtitleCues: [SubtitleCue] = []
@@ -48,6 +51,8 @@ public final class PlaybackCoordinator {
     private var firstFrameTask: Task<Void, Never>?
     private let clock: any GlassfinClock
 
+    private let onStopped: (@MainActor (PlaybackStop) async -> Void)?
+    private var request: PlaybackRequest?
     private let session: any PlaybackSessionProviding
     private let origin: any MediaOriginClient
     private let api: PlaybackAPI
@@ -63,13 +68,28 @@ public final class PlaybackCoordinator {
     private var engineLoaded = false
     private var startPosition: Duration = .zero
     private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var firstFrameInterval: DevicePerformance.Interval?
+    @ObservationIgnored private var lifetimeInterval: DevicePerformance.Interval?
+    private var stoppingTask: Task<APIError?, Never>?
+    private var lastRequest: (itemID: String, choice: PlaybackStartChoice)?
+
+    public func retryServerStarting() async {
+        guard appError == .serverStarting, let lastRequest else { return }
+        if let request, let returnFocusID {
+            // Keep the presentation's start position, track options and return focus on retry.
+            await play(request, returnFocusID: returnFocusID)
+        } else {
+            await play(itemID: lastRequest.itemID, choice: lastRequest.choice)
+        }
+    }
 
     public init(
         session: any PlaybackSessionProviding, engine: any PlaybackEngine, origin: any MediaOriginClient,
         timer: any PlaybackProgressScheduling = PlaybackProgressTimer(),
         maxBitrate: Int? = nil, log: any GlassfinLog = SilentLog(),
         configuration: PlaybackConfiguration? = nil,
-        clock: any GlassfinClock = SystemGlassfinClock()
+        clock: any GlassfinClock = SystemGlassfinClock(),
+        onStopped: (@MainActor (PlaybackStop) async -> Void)? = nil
     ) {
         self.session = session
         self.engine = engine
@@ -86,10 +106,39 @@ public final class PlaybackCoordinator {
         self.log = PlaybackLog(sink: log)
         self.api = PlaybackAPI(client: session.apiClient)
         self.reporter = PlaybackReporter(client: session.apiClient, log: log)
+        self.onStopped = onStopped
+    }
+
+    public func play(_ request: PlaybackRequest, returnFocusID: String) async {
+        let firstFrame = DevicePerformance.begin(.playbackFirstFrame)
+        await stop()
+        firstFrameInterval = firstFrame
+        self.request = request
+        self.returnFocusID = returnFocusID
+        lastStop = nil
+        await start(itemID: request.itemID.value, choice: .resumeAt(ticks: request.startTicks))
+    }
+
+    /// Stopped and the local user-data update complete before presentation can close.
+    @discardableResult
+    public func dismiss() async -> String? {
+        await stop()
+        _ = await stoppingTask?.value
+        return returnFocusID
     }
 
     public func play(itemID: String, choice: PlaybackStartChoice = .resume) async {
+        let firstFrame = DevicePerformance.begin(.playbackFirstFrame)
         await stop()
+        firstFrameInterval = firstFrame
+        request = nil
+        returnFocusID = nil
+        lastStop = nil
+        await start(itemID: itemID, choice: choice)
+    }
+
+    private func start(itemID: String, choice: PlaybackStartChoice) async {
+        lastRequest = (itemID, choice)
         generation += 1
         let run = generation
         failure = nil
@@ -133,6 +182,8 @@ public final class PlaybackCoordinator {
                     convertASS: configuration.convertASS)
                 selection = PlaybackTrackSelection.defaults(tracks: tracks, user: user)
             }
+            if let audio = request?.audioStreamIndex { selection.audio = audio }
+            if let subtitle = request?.subtitleStreamIndex { selection.subtitle = subtitle }
             let ticks: Int64
             switch choice {
             case .resume: ticks = item.UserData?.PlaybackPositionTicks ?? 0
@@ -227,6 +278,11 @@ public final class PlaybackCoordinator {
                     MetadataSanitizer.displayText(MediaLogRedactor.redact($0), limit: 200)
                 }
             }
+            if method != .directPlay {
+                firstFrameInterval?.end(completed: false)
+                firstFrameInterval = DevicePerformance.begin(
+                    method == .transcode ? .playbackTranscodeFirstFrame : .playbackDirectStreamFirstFrame)
+            }
             context = PlaybackReportContext(
                 itemID: try ItemID.require(itemID).value, mediaSourceID: try ItemID.require(sourceID).value,
                 playSessionID: playSessionID, method: method,
@@ -271,6 +327,7 @@ public final class PlaybackCoordinator {
                 guard case .resourceLoader(let value) = plan.primary else { throw PlaybackFailure.couldNotPlay }
                 carrier = value
             case .rejected(.transport(status: 401)): throw APIError.unauthorized
+            case .rejected(.transport(status: 503)): throw APIError.serverStarting
             case .rejected(.insecureRedirect): throw PlaybackFailure.insecureRedirect
             case .rejected: throw PlaybackFailure.couldNotPlay
             }
@@ -290,6 +347,7 @@ public final class PlaybackCoordinator {
                     await self.handle(event, run: run)
                 }
             }
+            lifetimeInterval = DevicePerformance.begin(.playbackLifetime)
             try await engine.load(carrier, startAt: start)
             guard await continueStartup(run) else { return }
             engineLoaded = true
@@ -316,6 +374,8 @@ public final class PlaybackCoordinator {
             } else {
                 await expireSession(run: run)
             }
+        } else if error as? APIError == .serverStarting {
+            await serverStarting()
         } else {
             let reason = (error as? PlaybackFailure) ?? .couldNotPlay
             if reason == .couldNotPlay || (reason == .insecureRedirect && context?.method == .directPlay) {
@@ -386,6 +446,8 @@ public final class PlaybackCoordinator {
         guard id == nil || track != nil else { return }
         if kind == .audio && track == nil { return }
         if (kind == .audio ? selection.audio : selection.subtitle ?? -1) == (id ?? -1) { return }
+        let trackInterval = DevicePerformance.begin(.playbackTrackApply)
+        defer { trackInterval?.end(completed: false) }
         let run = generation
         let oldSubtitle = tracks.first { $0.kind == .subtitle && $0.id == selection.subtitle }
         let mustReload =
@@ -419,6 +481,7 @@ public final class PlaybackCoordinator {
             context?.audioStreamIndex = selection.audio
             context?.subtitleStreamIndex = selection.subtitle
             if kind == .subtitle && track?.delivery != .externalVTT { subtitleCues = [] }
+            trackInterval?.end()
             await progress()
             return
         }
@@ -438,6 +501,7 @@ public final class PlaybackCoordinator {
         await startAttempt(
             itemID: oldContext.itemID, start: position, run: nextRun,
             previousSessionID: oldContext.playSessionID)
+        if isCurrent(nextRun), engineLoaded, context != nil { trackInterval?.end() }
     }
 
     public func setASSConversion(_ enabled: Bool) async {
@@ -490,6 +554,14 @@ public final class PlaybackCoordinator {
         let terminalRun = generation + 1
         let error = await finish(state: .idle, failed: false)
         if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
+    }
+
+    /// Called only by the presentation surface when its first video frame is ready for display.
+    /// AVPlayerItem.readyToPlay and timeControlStatus.playing are not first-frame signals.
+    public func noteFirstFrameReady() {
+        guard context != nil else { return }
+        firstFrameInterval?.end()
+        firstFrameInterval = nil
     }
 
     public func pause() { engine.pause() }
@@ -570,6 +642,8 @@ public final class PlaybackCoordinator {
             let error = await finish(state: .ended, failed: false)
             if error == .unauthorized, generation == terminalRun { await checkCurrentUser(run: terminalRun) }
         case .failed(.unauthorized): await mediaUnauthorized()
+        case .failed(.serverStarting): await serverStarting()
+        case .failed(.server(status: 503)): await serverStarting()
         case .failed(.cancelled): break
         case .failed: await attemptFailed(run: run, fromEngineEvent: true)
         }
@@ -588,13 +662,27 @@ public final class PlaybackCoordinator {
 
     private func report(_ event: String) async -> APIError? {
         guard let context else { return nil }
-        return await reporter.send(
+        let run = generation
+        let error = await reporter.send(
             event, context: context, position: engine.position, paused: paused, canSeek: engine.canSeek
         )
+        if error == .serverStarting, generation == run { await serverStarting() }
+        return error
+    }
+
+    private func serverStarting() async {
+        let terminalRun = generation + 1
+        _ = await finish(state: .failed(localizedKey: AppErrorMessage.serverStartingKey), failed: false)
+        guard generation == terminalRun else { return }
+        failure = nil
     }
 
     @discardableResult
     private func finish(state terminal: PlaybackState, failed: Bool) async -> APIError? {
+        firstFrameInterval?.end(completed: false)
+        firstFrameInterval = nil
+        lifetimeInterval?.end(completed: !failed)
+        lifetimeInterval = nil
         generation += 1
         firstFrameTask?.cancel()
         firstFrameTask = nil
@@ -611,11 +699,23 @@ public final class PlaybackCoordinator {
         engineLoaded = false
         engine.stop()
         started = false
+        guard let stopped else {
+            state = terminal
+            return nil
+        }
+        let result = PlaybackStop(itemID: stopped.itemID, position: position, finished: terminal == .ended)
+        lastStop = result
+        let terminalRun = generation
+        let task = Task { [onStopped, reporter, paused] in
+            await onStopped?(result)
+            return await reporter.send(
+                "/Stopped", context: stopped, position: position, paused: paused, canSeek: canSeek, failed: failed)
+        }
+        stoppingTask = task
         state = terminal
-        guard let stopped else { return nil }
-        return await reporter.send(
-            "/Stopped", context: stopped, position: position, paused: paused, canSeek: canSeek, failed: failed
-        )
+        let error = await task.value
+        if generation == terminalRun { stoppingTask = nil }
+        return error
     }
 
     private func fail(_ reason: PlaybackFailure) async {
@@ -641,6 +741,9 @@ public final class PlaybackCoordinator {
         guard generation == run else { return }
         switch decision {
         case .logOut: await expireSession(run: run)
+        case .serverStarting:
+            failure = nil
+            state = .failed(localizedKey: AppErrorMessage.serverStartingKey)
         case .playbackError:
             failure = .couldNotPlay
             state = .failed(localizedKey: PlaybackCopy.couldNotPlayKey)

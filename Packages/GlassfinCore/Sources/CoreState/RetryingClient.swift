@@ -5,6 +5,9 @@ import Foundation
 public enum IdempotentRetry {
     public static func shouldRetry(_ error: APIError) -> Bool {
         switch error {
+        case .serverStarting:
+            // HTTP 503 is classified at the API response boundary. MVP retries it manually.
+            return false
         case .timeout, .network:
             return true
         case .server(let status):
@@ -62,6 +65,10 @@ public final class RequestScope: @unchecked Sendable {
         lock.lock()
         tasks[id] = { task.cancel() }
         lock.unlock()
+        Task { [weak self] in
+            _ = try? await task.value
+            self?.untrack(id)
+        }
         return id
     }
 

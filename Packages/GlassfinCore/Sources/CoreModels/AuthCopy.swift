@@ -43,6 +43,7 @@ public enum AuthCopy {
         case quickConnectExpired
         case getNewCode
         case serverUnreachable
+        case serverStarting
         case noNetworkConnection
         case settings
         case continueUnencrypted
@@ -102,6 +103,7 @@ public enum AuthCopy {
             case .quickConnectExpired: "The code expired"
             case .getNewCode: "Get a new code"
             case .serverUnreachable: AppErrorMessage.serverDownKey
+            case .serverStarting: AppErrorMessage.serverStartingKey
             case .noNetworkConnection: AppErrorMessage.offlineKey
             case .settings: "Settings"
             case .continueUnencrypted: "Continue unencrypted"

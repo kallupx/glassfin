@@ -189,8 +189,11 @@ public final class AppState {
     public var showsServerDown: Bool {
         connectivity == .serverUnreachable && currentView?.hasContent != true
     }
-    public var serverDownTitleKey: String { AppErrorMessage.serverDownKey }
-    public var serverDownTitle: String { AppErrorMessage.serverDown }
+    public var isServerStarting: Bool { bannerKey == AppErrorMessage.serverStartingKey }
+    public var serverDownTitleKey: String {
+        isServerStarting ? AppErrorMessage.serverStartingKey : AppErrorMessage.serverDownKey
+    }
+    public var serverDownTitle: String { AppErrorMessage.localized(serverDownTitleKey) }
     public var retryTitleKey: String { AppErrorMessage.retryKey }
     public var retryTitle: String { AppErrorMessage.retry }
     public var changeServerTitleKey: String { AppErrorMessage.changeServerKey }
@@ -203,7 +206,7 @@ public final class AppState {
         case .offline:
             AppErrorMessage.playbackOfflineKey
         case .serverUnreachable:
-            AppErrorMessage.playbackUnreachableKey
+            isServerStarting ? AppErrorMessage.serverStartingKey : AppErrorMessage.playbackUnreachableKey
         case .online, .degraded:
             nil
         }
@@ -397,6 +400,8 @@ public final class AppState {
             enterOffline()
         case .serverUnreachable:
             enterUnreachable()
+        case .serverStarting:
+            enterServerStarting()
         case .tlsUntrusted, .insecureRedirect:
             securityNotice = error
         case .internalInvariant:
@@ -494,6 +499,15 @@ public final class AppState {
         bannerKey = AppErrorMessage.serverDownKey
         pingArmed = true
         armPingLoop()
+    }
+
+    private func enterServerStarting() {
+        connectivity = .serverUnreachable
+        bannerKey = AppErrorMessage.serverStartingKey
+        // Retry-After scheduling belongs to P1. A 503 must not start the outage ping loop.
+        pingArmed = false
+        pingTask?.cancel()
+        pingTask = nil
     }
 
     private func recoverFromServerDown() {
@@ -602,6 +616,8 @@ public final class AppState {
     private func handle(_ event: ServerEvent) async {
         switch event {
         case .userDataChanged(let items):
+            let deviceInterval = DevicePerformance.begin(.remoteApply)
+            defer { deviceInterval?.end(completed: !Task.isCancelled) }
             let interval = signposter.begin(.remoteUserData)
             for item in items {
                 await userData.applyRemote(item, log: log)

@@ -441,6 +441,23 @@
         }
       }
     },
+    "Server is starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server is starting"
+          }
+        },
+        "fi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palvelin käynnistyy"
+          }
+        }
+      }
+    },
     "Server not found": {
       "extractionState": "manual",
       "localizations": {

@@ -94,7 +94,9 @@ jobs:
           python3 -c 'import sys; print(sys.version); assert sys.version_info >= (3, 11)'
           python3 -m unittest scripts/test_jellyfin_bootstrap.py
           python3 -m unittest scripts/test_probe_hls_segment_auth.py
+          python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           bash -n scripts/docker-integration.sh scripts/generate-playback-media.sh
+          bash -n scripts/ci/generate-jellyfin-e2e-media.sh
           bash scripts/docker-integration.sh --self-test
       - name: Linux package tests and coverage gate
         run: bash scripts/coverage-gate.sh
@@ -196,7 +198,9 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'full-ci')
       )
     runs-on: xcode-27
-    timeout-minutes: 40
+    # Release scan, package simulator tests and app UI tests exceeded 40 minutes
+    # in run 40808182108. Each XCTest still has a 180-second execution allowance.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: SwiftPM cache environment
@@ -260,7 +264,7 @@ jobs:
         )
       )
     runs-on: xcode-27
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: SwiftPM cache environment
@@ -309,6 +313,44 @@ jobs:
             artifacts/tvOS/readable/**
             artifacts/tvOS/*.log
             artifacts/tvOS/*.txt
+          retention-days: 7
+
+  jellyfin-e2e:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'full-ci'))
+    runs-on: xcode-27
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install SHA-256 verified Jellyfin and ffmpeg
+        timeout-minutes: 3
+        run: python3 scripts/ci/jellyfin-e2e.py install
+      - name: Start fresh loopback-only Jellyfin
+        timeout-minutes: 2
+        run: python3 scripts/ci/jellyfin-e2e.py start
+      - name: Complete wizard, generate media and verify scan
+        timeout-minutes: 2
+        run: python3 scripts/ci/jellyfin-e2e.py bootstrap
+      - name: Run tvOS F3 and F4 acceptance tests when available
+        timeout-minutes: 30
+        run: python3 scripts/ci/jellyfin-e2e.py test
+      - name: Always stop server, remove private state and check logs for leaks
+        id: cleanup
+        if: always()
+        timeout-minutes: 2
+        run: python3 scripts/ci/jellyfin-e2e.py cleanup
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && steps.cleanup.outputs.safe == 'true'
+        with:
+          name: jellyfin-e2e-logs
+          path: artifacts/jellyfin-e2e/*.json
+          if-no-files-found: error
           retention-days: 7
 
   # After lint succeeds, report even when macOS jobs were skipped or failed.

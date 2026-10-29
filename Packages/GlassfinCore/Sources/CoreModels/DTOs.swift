@@ -69,6 +69,7 @@ public struct BaseItemDTO: Decodable, Sendable {
     public var `Type`: String?
     public var Overview: String?
     public var SeriesId: String?
+    public var SeriesName: String?
     public var SeasonId: String?
     public var IndexNumber: Int?
     public var ParentIndexNumber: Int?
@@ -83,6 +84,10 @@ public struct BaseItemDTO: Decodable, Sendable {
     public var Trickplay: [String: [String: TrickplayInfoDTO]]?
     public var Chapters: [ChapterDTO]?
     public var CollectionType: String?
+    public var Taglines: [String]?
+    public var Genres: [String]?
+    public var People: [ItemPersonDTO]?
+    public var Studios: [ItemStudioDTO]?
     public var MediaStreams: [MediaStreamDTO]?
     public var MediaSources: [MediaSourceDTO]?
 }
@@ -98,6 +103,11 @@ public struct MediaStreamDTO: Decodable, Sendable {
     public var DisplayTitle: String?
     public var Language: String?
     public var Codec: String?
+    public var Profile: String?
+    public var Width: Int?
+    public var Height: Int?
+    public var VideoRangeType: String?
+    public var DvProfile: Int?
     public var IsDefault: Bool?
     public var IsForced: Bool?
     public var IsExternal: Bool?
@@ -171,6 +181,15 @@ public struct JSONFlag: Decodable, Sendable, Equatable {
         let container = try decoder.singleValueContainer()
         value = try container.decode(Bool.self)
     }
+}
+
+public struct ItemPersonDTO: Decodable, Sendable {
+    public var Name: String?
+    public var Role: String?
+}
+
+public struct ItemStudioDTO: Decodable, Sendable {
+    public var Name: String?
 }
 
 public struct PlaybackUserConfigurationDTO: Decodable, Sendable {

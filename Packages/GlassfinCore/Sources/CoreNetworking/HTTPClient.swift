@@ -81,7 +81,7 @@ struct URLSessionRequestTransport: RequestTransport {
             // Each bounded transfer owns a session; task identifiers are local to that session.
             let owner = RedirectSessionDelegate()
             let proxy = RedirectTaskProxy(owner: owner, certificatePin: certificatePin)
-            let result = try await BoundedResponseDownload(maximumBytes: maximumBytes, redirects: proxy)
+            let result = try await BoundedRequestDownload(maximumBytes: maximumBytes, redirects: proxy)
                 .data(for: request, configuration: session.configuration)
             if let identifier = result.2, let reason = owner.consumeRejection(for: identifier) {
                 throw APIError.redirectRejected(reason)
@@ -180,7 +180,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
             let (data, response, taskIdentifier) = try await transport.data(
                 for: urlRequest, maximumBytes: request.maximumResponseBytes)
             guard let http = response as? HTTPURLResponse else { throw APIError.network }
-            if let failure = HTTPStatusMapper.failure(for: http.statusCode) {
+            if let failure = HTTPStatusMapper.apiFailure(for: http.statusCode) {
                 if case .redirectRejected = failure {
                     let reason =
                         taskIdentifier.flatMap { redirectDelegate.consumeRejection(for: $0) }
@@ -191,6 +191,7 @@ public struct HTTPJellyfinClient: JellyfinAPIClient {
                 }
                 throw failure
             }
+            if let limit = request.maximumResponseBytes, data.count > limit { throw APIError.decoding }
             return data
         } catch let error as APIError {
             throw error

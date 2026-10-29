@@ -81,6 +81,39 @@ final class PinFailureTests: XCTestCase {
     }
 
     @MainActor
+    func testFeatureClientPropagatesPinReadFailure() throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let flow = AuthFlow(
+            app: harness.app, backend: LiveAuthBackend(secureStore: harness.secure), pins: UnreadablePins(),
+            vault: CredentialVault(secureStore: harness.secure, settings: harness.settings, accessGroup: ""),
+            clock: harness.clock)
+        XCTAssertThrowsError(try flow.makeFeatureClient()) { error in
+            XCTAssertEqual(error as? APIError, .tls)
+        }
+        guard case .signedIn = harness.app.phase else { return XCTFail("A pin read failure must keep the session") }
+    }
+
+    @MainActor
+    func testFeatureClientWithMissingPinAllowsClientCreation() throws {
+        let harness = Harness.make()
+        defer { harness.cleanup() }
+        try harness.signIn()
+        let pins = SettingsCertificatePinStore(settings: harness.settings)
+        let client = PinRequestRecorder()
+        let flow = AuthFlow(
+            app: harness.app,
+            backend: LiveAuthBackend(secureStore: harness.secure, client: client, pins: pins), pins: pins,
+            vault: CredentialVault(secureStore: harness.secure, settings: harness.settings, accessGroup: ""),
+            clock: harness.clock)
+        XCTAssertNil(try pins.fingerprint(for: Sample.serverID))
+        XCTAssertNotNil(try flow.makeFeatureClient())
+        XCTAssertTrue(client.requests.isEmpty)
+        guard case .signedIn = harness.app.phase else { return XCTFail("A missing pin must keep the session") }
+    }
+
+    @MainActor
     func testHomeFactoriesPropagatePinReadFailure() throws {
         let harness = Harness.make()
         defer { harness.cleanup() }

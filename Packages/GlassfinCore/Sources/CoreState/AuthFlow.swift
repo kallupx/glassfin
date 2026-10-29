@@ -1,5 +1,6 @@
 import CoreModels
 import CoreNetworking
+import CorePlayback
 import Foundation
 import Observation
 
@@ -7,7 +8,7 @@ import Observation
 /// Tokens and Quick Connect secrets are not published and are not logged.
 @MainActor
 @Observable
-public final class AuthFlow {
+public final class AuthFlow: ViewContentProviding {
     public private(set) var screen: AuthScreen = .welcome
     public private(set) var focus: AuthFocus = .connect
     public private(set) var inlineError: AuthCopy.Key?
@@ -64,12 +65,73 @@ public final class AuthFlow {
     }
 
     public var appPhase: AppState.Phase { app.phase }
+    /// Shared signed-in state for feature composition; authentication still owns the session.
+    public var featureApp: AppState { app }
+
+    /// Loads credentials only inside the core; the UI never receives the token.
+    public func makeFeatureClient() throws(APIError) -> any JellyfinAPIClient {
+        guard case .signedIn(let session) = app.phase,
+            let token = loadToken(serverID: session.server.id, userID: session.userID)
+        else { throw .unauthorized }
+        let pin = try pins.certificatePin(for: session.server.id, url: session.server.url)
+        let deviceID: String
+        do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
+            throw .headerRejected
+        }
+        let identity = ClientIdentity(
+            deviceName: "Apple TV", deviceID: deviceID,
+            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0",
+            token: token)
+        return SessionFeatureClient(
+            inner: RetryingAPIClient(
+                inner: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
+                clock: clock), app: app)
+    }
     public var settingsApp: AppState { app }
     public var connectivity: Connectivity { app.connectivity }
+
+    #if canImport(AVFoundation) && canImport(Security)
+        /// Credentials and origin trust are assembled inside the core, before any media request.
+        public func makePlaybackCoordinator() throws(APIError) -> PlaybackCoordinator {
+            guard case .signedIn(let session) = app.phase,
+                let token = loadToken(serverID: session.server.id, userID: session.userID)
+            else { throw .unauthorized }
+            let pin = try pins.certificatePin(for: session.server.id, url: session.server.url)
+            let deviceID: String
+            do { deviceID = try DeviceIdentityStore.loadOrCreate(secureStore: vault.secureStore, reset: false) } catch {
+                throw .headerRejected
+            }
+            let identity = ClientIdentity(deviceName: "Apple TV", deviceID: deviceID, version: "0.1.0", token: token)
+            let trust: ServerTrustClass
+            if let pin {
+                trust = .pinnedSelfSigned(fingerprintSHA256: pin.sha256)
+            } else {
+                trust = session.server.url.scheme?.lowercased() == "https" ? .publiclyTrusted : .cleartext
+            }
+            let provider = AuthPlaybackSession(
+                serverURL: session.server.url, userID: session.userID, identity: identity, trust: trust,
+                apiClient: HTTPJellyfinClient(server: session.server.url, identity: identity, certificatePin: pin),
+                app: app)
+            let origin = URLSessionOriginClient(trust: trust)
+            return PlaybackCoordinator(
+                session: provider, engine: AVPlayerEngine(origin: origin), origin: origin,
+                onStopped: { [app] in await app.recordPlaybackStop($0) })
+        }
+    #endif
+    /// The M04 Home tab renders cached sections until the Home feature screen is installed.
+    public var hasContent: Bool {
+        guard let cachedHome else { return false }
+        return [cachedHome.resume, cachedHome.nextUp, cachedHome.latest].contains { !$0.isEmpty }
+    }
+
+    public func onAppear() {
+        app.currentView = self
+    }
+
     public var homeErrorKey: AuthCopy.Key? {
-        guard cachedHome == nil else { return nil }
+        guard !hasContent else { return nil }
         switch app.connectivity {
-        case .offline, .serverUnreachable: return .serverUnreachable
+        case .offline, .serverUnreachable: return app.isServerStarting ? .serverStarting : .serverUnreachable
         case .online, .degraded: return nil
         }
     }
@@ -77,6 +139,7 @@ public final class AuthFlow {
         switch app.bannerKey {
         case AppErrorMessage.offlineKey: .noNetworkConnection
         case AppErrorMessage.serverDownKey: .serverUnreachable
+        case AppErrorMessage.serverStartingKey: .serverStarting
         default: nil
         }
     }
@@ -346,7 +409,7 @@ public final class AuthFlow {
             }
             if mapped == .cancelled { return }
             app.handle(mapped)
-            app.handle(.serverUnreachable)
+            if mapped != .serverStarting { app.handle(.serverUnreachable) }
             inlineError = nil
             screen = .home
             focus = .tryAgain
@@ -442,6 +505,19 @@ public final class AuthFlow {
         await restoreSession()
     }
 
+    public func retryServerStarting() async {
+        inlineError = nil
+        switch screen {
+        case .address:
+            submitAddress()
+        case .quickConnect:
+            // Keep the current code and secret when polling was interrupted by startup.
+            await chooseQuickConnect()
+        default:
+            if let server { await showLogin(for: server) }
+        }
+    }
+
     public func synchronizeSession() async {
         if case .needsServer = app.phase, screen == .home {
             screen = .welcome
@@ -486,6 +562,11 @@ public final class AuthFlow {
     private func apply(_ outcome: ServerProbeOutcome) async {
         if case .cancelled = outcome { return }
         switch outcome {
+        case .serverStarting:
+            // Accepted trust remains provisional until a normal, identified server response arrives.
+            inlineError = .serverStarting
+            screen = .address
+            focus = .tryAgain
         case .ready(let info):
             if let pin = acceptedPinToStore, acceptedCertificatePin?.fingerprint(for: info.url) == pin {
                 do {
@@ -578,7 +659,17 @@ public final class AuthFlow {
         server = info
         displayedName = AuthServerName.display(info.name, host: info.url.host ?? "")
         displayedVersion = ServerVersionGate.dotted(info.version)
-        quickConnectEnabled = (try? await backend.quickConnectEnabled(on: info)) ?? false
+        do {
+            quickConnectEnabled = try await backend.quickConnectEnabled(on: info)
+        } catch {
+            quickConnectEnabled = false
+            if error == .serverStarting {
+                screen = .address
+                inlineError = .serverStarting
+                focus = .tryAgain
+                return
+            }
+        }
         let savedUsers = app.preferencesSnapshot().users.filter { $0.serverID == info.id }
         publicUsers =
             includePublicUsers
@@ -643,6 +734,9 @@ public final class AuthFlow {
                     let accepted = try await backend.pollQuickConnect(on: server, secret: QuickConnectSecret(revealed))
                     return accepted ? .authenticated : .pending
                 } catch {
+                    if (error as? APIError) == .serverStarting {
+                        return .serverStarting
+                    }
                     return .pending
                 }
             }
@@ -656,6 +750,10 @@ public final class AuthFlow {
     ) async {
         isPolling = false
         switch outcome {
+        case .serverStarting:
+            pollTask = nil
+            inlineError = .serverStarting
+            focus = .tryAgain
         case .authenticated:
             do {
                 let session = try await backend.finishQuickConnect(on: server, secret: secret)
@@ -721,6 +819,7 @@ public final class AuthFlow {
             app.setCapabilitiesRetryPending(false, serverID: session.session.server.id, userID: session.session.userID)
         } catch {
             log.warning("Capabilities registration failed; one retry is pending.")
+            if error == .serverStarting { app.handle(.serverStarting) }
         }
     }
 
@@ -737,6 +836,7 @@ public final class AuthFlow {
             try await backend.postCapabilities(on: session.server, token: token)
         } catch {
             log.warning("Capabilities registration retry failed.")
+            if error == .serverStarting { app.handle(.serverStarting) }
         }
     }
 
@@ -744,6 +844,7 @@ public final class AuthFlow {
         switch error {
         case .cancelled: nil
         case .unauthorized: quickConnect ? .quickConnectUnauthorized : .invalidCredentials
+        case .serverStarting: .serverStarting
         case .server: .loginServerFailure
         default: .loginTransportFailure
         }

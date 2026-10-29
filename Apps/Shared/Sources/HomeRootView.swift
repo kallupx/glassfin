@@ -4,85 +4,121 @@ import SwiftUI
 /// The authenticated branch uses the M05 shell; each feature keeps its own navigation stack.
 struct HomeRootView: View {
     let flow: AuthFlow
+    var librarySession: LibrarySession? = nil
     @Binding var selectedTab: String
     @Binding var restoreSettingsFocus: Bool
     @State private var context: HomeContext?
     @State private var detailPath: [MediaItem] = []
-    @State private var playback: HomePlaybackRequest?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        Group {
-            if let context {
-                LibraryTabShell(
-                    libraries: (context.model.libraries.value ?? []).map { LibraryTabItem(id: $0.id, title: $0.name) },
-                    home: AnyView(home(context)), settings: AnyView(settings),
-                    search: AnyView(SearchFeatureHost(flow: flow)), selection: $selectedTab)
-            } else {
-                ProgressView().accessibilityIdentifier("home.loading")
-            }
-        }
-        #if DEBUG
-            .modifier(HomeAccessibilityOverrides())
-        #endif
-        .task {
-            guard context == nil, case .signedIn(let session) = flow.appPhase else { return }
-            context = HomeContext(flow: flow, session: session)
-            context?.connectEvents(flow: flow)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .background { context?.stopEvents() }
-            if phase == .active { context?.connectEvents(flow: flow) }
-        }
-        .onDisappear {
-            context?.stopEvents()
-            context?.model.onDisappear()
-        }
-        .fullScreenCover(item: $playback) { request in
-            // TODO(M08): replace this destination with the M08 player adapter.
-            VStack(spacing: SpacingToken.l) {
-                Text(verbatim: request.item.name).font(.title)
-                Copy.text(.homePlaybackPending)
-                Button {
-                    playback = nil
-                } label: {
-                    Text(verbatim: AuthCopy.localized(.back))
+        PlaybackPresentationHost(makeCoordinator: makePlaybackCoordinator, librarySession: librarySession) { start in
+            Group {
+                if let context {
+                    LibraryTabShell(
+                        libraries: (context.model.libraries.value ?? librarySession?.libraries.value ?? []).map {
+                            LibraryTabItem(id: $0.id, title: $0.name)
+                        },
+                        home: AnyView(home(context, start: start)), settings: AnyView(settings),
+                        libraryContent: libraryContent, overflowContent: overflowContent,
+                        search: AnyView(SearchFeatureHost(flow: flow)), selection: $selectedTab)
+                } else {
+                    ProgressView().accessibilityIdentifier("home.loading")
                 }
-                .buttonStyle(.glassProminent)
-                .accessibilityIdentifier("home.playback.close")
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("home.playback")
-            .accessibilityValue(String(Ticks.outboundPositionTicks(from: request.position)))
+            .safeAreaInset(edge: .top) {
+                if flow.homeApp.isServerStarting {
+                    HStack(spacing: SpacingToken.m) {
+                        Text(verbatim: AppErrorMessage.localized(AppErrorMessage.serverStartingKey))
+                        Button(AuthCopy.localized(.tryAgain)) { Task { await flow.homeApp.retryNow() } }
+                            .buttonStyle(.glassProminent)
+                            .accessibilityIdentifier("serverStarting.retry")
+                    }
+                    .padding(SpacingToken.m)
+                    .accessibilityIdentifier("serverStarting.state")
+                }
+            }
+            #if DEBUG
+                .modifier(HomeAccessibilityOverrides())
+            #endif
+            .task {
+                guard context == nil, case .signedIn(let session) = flow.appPhase else { return }
+                context = HomeContext(flow: flow, session: session)
+                context?.connectEvents(flow: flow)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background { context?.stopEvents() }
+                if phase == .active { context?.connectEvents(flow: flow) }
+            }
+            .onDisappear {
+                context?.stopEvents()
+                context?.model.onDisappear()
+            }
         }
     }
 
-    private func home(_ context: HomeContext) -> some View {
+    private var libraryContent: ((LibraryTabItem) -> AnyView)? {
+        guard let librarySession else { return nil }
+        return { library in
+            AnyView(
+                LibraryNavigationRoot(
+                    library: context?.model.libraries.value?.first { $0.id == library.id }
+                        ?? librarySession.libraries.value?.first { $0.id == library.id }
+                        ?? Library(id: library.id, name: library.title), session: librarySession))
+        }
+    }
+
+    private var overflowContent: (([LibraryTabItem]) -> AnyView)? {
+        guard let librarySession else { return nil }
+        return { libraries in
+            if libraries.isEmpty {
+                return AnyView(LibraryIndexStateView(session: librarySession))
+            }
+            return AnyView(
+                LibraryOverflowView(
+                    session: librarySession,
+                    libraries: libraries.map { library in
+                        context?.model.libraries.value?.first { $0.id == library.id }
+                            ?? librarySession.libraries.value?.first { $0.id == library.id }
+                            ?? Library(id: library.id, name: library.title)
+                    }))
+        }
+    }
+
+    private func home(_ context: HomeContext, start: @escaping PlaybackAction) -> some View {
         NavigationStack(path: $detailPath) {
             HomeView(
                 model: context.model, app: flow.homeApp, session: context.session, imageLoader: context.images,
-                onDetail: { detailPath.append($0) }, onPlay: { playback = $0 }
+                onDetail: { detailPath.append($0) },
+                onPlay: { value in
+                    guard let id = ItemID(value.item.id) else { return }
+                    start(
+                        PlaybackRequest(itemID: id, startTicks: Ticks.outboundPositionTicks(from: value.position)),
+                        value.returnFocusID ?? "home.resume.item.\(id.value)")
+                }
             )
             .navigationDestination(for: MediaItem.self) { item in
-                // TODO(M07): route this value to the M07 detail destination.
-                VStack(spacing: SpacingToken.l) {
-                    Text(verbatim: item.name).font(.largeTitle)
-                    if let overview = item.overview { Text(verbatim: overview) }
-                    Copy.text(.homeDetailPending)
-                    Button {
-                        playback = HomePlaybackRequest(item: item)
-                    } label: {
-                        Copy.text(.actionPlay)
-                    }
-                    .buttonStyle(.glassProminent)
+                if let librarySession {
+                    ItemDetailScreen(id: item.id, session: librarySession)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("home.detail")
                 }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("home.detail")
-                #if os(tvOS)
-                    .onPlayPauseCommand { playback = HomePlaybackRequest(item: item) }
-                #endif
+            }
+            .navigationDestination(for: ItemID.self) { id in
+                if let librarySession { ItemDetailScreen(id: id.value, session: librarySession) }
             }
         }
+    }
+
+    private func makePlaybackCoordinator() throws -> PlaybackCoordinator {
+        #if DEBUG
+            if HomeMockLaunch.enabled {
+                return MockPlaybackFactory.makeCoordinator(onStopped: { [app = flow.featureApp] in
+                    await app.recordPlaybackStop($0)
+                })
+            }
+        #endif
+        return try flow.makePlaybackCoordinator()
     }
 
     private var settings: some View {

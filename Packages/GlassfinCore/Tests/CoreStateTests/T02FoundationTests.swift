@@ -5,6 +5,34 @@ import Foundation
 import XCTest
 
 final class T02FoundationTests: XCTestCase {
+    func testT07_77_cachedAndProjectedMetadataKeepsDisplayLimits() async throws {
+        let raw = "<b>x</b> &amp;\u{202E}\u{0000}" + String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)
+        let expected = String(("<b>x</b> &amp;" + String(repeating: "👩‍👩‍👧‍👦a\u{0308}", count: 250)).prefix(200))
+        var item = Sample.movie()
+        item.name = raw
+        item.chapters = [ChapterMark(name: nil, start: .zero)]
+        item.chapters[0].name = raw
+        item.detail = ItemMetadata(people: [ItemPerson(name: "Person")], studios: [])
+        item.detail?.people[0].name = raw
+        item.detail?.studios = [raw]
+        let decoded = try JSONDecoder().decode(MediaItem.self, from: JSONEncoder().encode(item))
+        XCTAssertEqual(decoded.name, raw)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshots = HomeSnapshotStore(file: root.appendingPathComponent("home.json"))
+        XCTAssertTrue(snapshots.save(HomeSnapshot(resume: [decoded], nextUp: [decoded], latest: [decoded])))
+        let loaded = try XCTUnwrap(snapshots.load())
+        let projected = await UserDataStore().project([decoded])
+        for shown in loaded.resume + loaded.nextUp + loaded.latest + projected {
+            XCTAssertEqual(shown.name, expected)
+            XCTAssertEqual(shown.name.count, MetadataPolicy.nameMax)
+            XCTAssertEqual(shown.chapters.first?.name, expected)
+            XCTAssertEqual(shown.detail?.people.first?.name, expected)
+            XCTAssertEqual(shown.detail?.studios, [expected])
+        }
+        XCTAssertEqual(decoded.name, raw)
+    }
+
     func testT02_02_loadStateKeepsPreviousAndHidesNonUserErrors() {
         var state = LoadState<[MediaItem]>.idle
         XCTAssertNil(state.value)

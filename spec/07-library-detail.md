@@ -33,6 +33,7 @@ One view with two `focusSection` regions:
 [The selected episode's overview (not focusable)]
 ```
 - Data: `GET /Shows/{seriesId}/Seasons?enableUserData=true` and `GET /Shows/{seriesId}/Episodes?seasonId=…&fields=Overview,PrimaryImageAspectRatio&enableUserData=true`.
+- **Q7-25 follow-up (user 2026-10-27):** show episodes one season at a time. The season picker is always visible when the series has at least one season, including single-season series.
 - **Focus rules** (they apply to every view, and they are checked with UI tests):
   1. When the view opens, the default focus is the "Resume"/"Play" button (fi: "Jatka"/"Toista"). The episode row is already scrolled to the next unplayed or in-progress episode, and the season picker is on that season.
   2. Moving focus to a season in the season picker (not a click) changes the episode row's content (debounce 200 ms). Focus stays in the season picker, and it does not jump to the episode row.

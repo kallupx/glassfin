@@ -17,6 +17,7 @@ public struct ProbeFailureDetail: Sendable, Equatable {
 
 public enum ServerProbeOutcome: Sendable, Equatable {
     case ready(ServerInfo)
+    case serverStarting
     case needsCleartext(ServerInfo)
     case needsCertificate(CertificatePresentation, url: URL)
     /// The user explicitly typed `http://` for a public host or IP. No request is made.
@@ -32,6 +33,7 @@ public enum ServerProbeOutcome: Sendable, Equatable {
 
 public enum ServerCandidateResult: Sendable, Equatable {
     case jellyfin(ServerInfo, startupComplete: Bool)
+    case serverStarting
     case notJellyfin
     case dnsFailure
     case refused
@@ -63,6 +65,8 @@ public enum PublicInfoInterpreter {
 public enum ProbeErrorCopy {
     public static func key(for outcome: ServerProbeOutcome) -> AuthCopy.Key? {
         switch outcome {
+        case .serverStarting:
+            return .serverStarting
         case .notFound:
             return .serverNotFound
         case .notJellyfin:
@@ -88,7 +92,8 @@ public enum ProbeErrorCopy {
         switch outcome {
         case .notFound(let detail), .notJellyfin(let detail):
             return detail.httpSkippedByPolicy
-        case .ready, .needsCleartext, .needsCertificate, .publicHTTPRejected, .unsupported, .setupIncomplete,
+        case .ready, .serverStarting, .needsCleartext, .needsCertificate, .publicHTTPRejected, .unsupported,
+            .setupIncomplete,
             .invalidAddress, .userinfoRejected, .cancelled:
             return false
         }
@@ -128,6 +133,8 @@ public struct ServerProbe: Sendable {
                 certificatePin: certificatePin.flatMap { $0.fingerprint(for: candidate.url) == nil ? nil : $0 })
             if Task.isCancelled { return .cancelled }
             switch result {
+            case .serverStarting:
+                return .serverStarting
             case .jellyfin(let info, let startupComplete):
                 if !startupComplete { return .setupIncomplete(address: candidate.url) }
                 if let failure = ServerVersionGate.failure(for: info.version),
